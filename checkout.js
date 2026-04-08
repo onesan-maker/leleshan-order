@@ -283,6 +283,8 @@
       memberId: app.state.profile ? app.state.profile.userId : null,
       userId: app.state.profile ? app.state.profile.userId : null,
       lineUserId: app.state.profile ? app.state.profile.userId : null,
+      lineDisplayName: app.state.profile ? (app.state.profile.displayName || null) : null,
+      linePictureUrl: app.state.profile ? (app.state.profile.pictureUrl || null) : null,
       paymentMethod: "cash",
       note: app.el.orderNote ? (app.el.orderNote.value || "").trim() : "",
       internal_note: "",
