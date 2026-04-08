@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>樂樂山 取餐看板</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ops.css?v=20260404-1">
+</head>
+<body class="board-page">
+  <div class="ops-page">
+    <div class="board-shell">
+      <header class="ops-topbar board-topbar">
+        <div class="board-brand">
+          <div class="ops-subtitle">樂樂山</div>
+          <h1>取餐看板</h1>
+        </div>
+        <div id="board-clock" class="board-clock"></div>
+      </header>
+
+      <div id="board-error" class="ops-error hidden"></div>
+
+      <main class="board-grid">
+        <section class="board-column">
+          <h2>製作中</h2>
+          <div id="board-processing" class="board-column__list"></div>
+        </section>
+        <section class="board-column board-column--ready">
+          <h2>可取餐</h2>
+          <div id="board-ready" class="board-column__list"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="/config.js?v=20260403-4"></script>
+  <script src="/order-helpers.js?v=20260404-1"></script>
+  <script src="/pickup-board.js?v=20260404-1"></script>
+</body>
+</html>

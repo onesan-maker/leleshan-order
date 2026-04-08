@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>樂樂山 麻辣燙 — 線上點餐</title>
+  <meta name="description" content="樂樂山 麻辣燙線上點餐，椒麻夠味，脆爽上癮。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=20260408-3">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__content">
+        <p class="eyebrow">線上點餐</p>
+        <h1>樂樂山 麻辣燙</h1>
+        <p class="hero__text">椒麻夠味，脆爽上癮</p>
+        <div class="hero__chips">
+          <span>麻辣燙</span>
+          <span>湯滷川味</span>
+          <span>預約取餐</span>
+        </div>
+      </div>
+      <div class="hero__brand">
+        <img src="../logo6.png" alt="樂樂山 Logo" onerror="this.style.display='none'">
+      </div>
+    </header>
+
+    <section class="status-grid">
+      <article class="status-card">
+        <span class="status-card__label">LINE 使用者</span>
+        <strong id="profile-name">尚未登入</strong>
+        <p id="profile-meta">送出訂單前會提示你登入 LINE。</p>
+        <div class="status-card__btns">
+          <button id="member-nav-btn" class="ghost-btn status-card__action hidden" type="button">會員中心</button>
+          <button id="logout-btn" class="ghost-btn status-card__action hidden" type="button">登出</button>
+        </div>
+      </article>
+      <article class="status-card">
+        <div id="storeStatusCard">
+          <div class="card-title">營業狀態</div>
+          <div id="storeStatusText">載入中...</div>
+          <div id="storeStatusSubText"></div>
+        </div>
+      </article>
+      <article class="status-card">
+        <span class="status-card__label">目前總額</span>
+        <strong id="cart-total-top">NT$ 0</strong>
+        <p id="cart-summary-top">購物車目前是空的</p>
+      </article>
+    </section>
+
+    <section id="promo-banner" class="promo-banner hidden">
+      <strong id="promo-banner-title">優惠提醒</strong>
+      <p id="promo-banner-text"></p>
+    </section>
+
+    <main class="content">
+      <section class="step-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STEP 1</p>
+            <h2>選擇口味</h2>
+          </div>
+        </div>
+        <div id="flavor-options" class="choice-grid"></div>
+      </section>
+
+      <section class="step-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STEP 2</p>
+            <h2>選擇套餐或單點</h2>
+          </div>
+        </div>
+        <div id="order-type-options" class="choice-grid"></div>
+        <p class="step-hint">套餐與單點可以同時加，切換後繼續加入即可。</p>
+      </section>
+
+      <section id="combo-section" class="step-card hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STEP 3A</p>
+            <h2>套餐</h2>
+          </div>
+        </div>
+        <div id="combo-root" class="menu-grid"></div>
+      </section>
+
+      <section id="single-section" class="step-card hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STEP 3B</p>
+            <h2>單點</h2>
+          </div>
+        </div>
+        <div id="single-root" class="single-root"></div>
+      </section>
+
+      <div id="order-success-panel" class="hidden"></div>
+
+      <section class="step-card" id="checkout-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STEP 4</p>
+            <h2>結帳與取餐設定</h2>
+          </div>
+        </div>
+        <form id="order-form" class="order-form">
+          <div class="cart-box" id="cart-list-start">
+            <div class="cart-box__head">
+              <strong>購物車明細</strong>
+              <div class="cart-box__head-actions">
+                <span id="cart-summary-inline">購物車目前是空的</span>
+                <a href="#flavor-options" class="cart-box__back-link">繼續選餐點</a>
+              </div>
+            </div>
+            <div id="cart-items" class="cart-items"></div>
+          </div>
+
+          <label class="field">
+            <span>取餐怎麼稱呼您</span>
+            <input id="customer-name" type="text" placeholder="例如：王先生、小美" required>
+          </label>
+
+          <div class="pickup-grid">
+            <label class="field">
+              <span>取餐日期</span>
+              <select id="pickup-date" class="pickup-select" required></select>
+            </label>
+
+            <label class="field">
+              <span>取餐時間</span>
+              <select id="pickup-time" class="pickup-select" required></select>
+            </label>
+          </div>
+          <p id="pickup-reservation-notice" class="pickup-reservation-notice hidden">目前非營業時間，訂單將自動安排為預約取餐，請確認取餐時間。</p>
+
+          <label class="field">
+            <span>訂單備註</span>
+            <textarea id="order-note" rows="3" placeholder="少辣、不加蔥、提早到店等需求可在這裡備註。"></textarea>
+          </label>
+
+          <p id="submit-message" class="submit-message"></p>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <aside class="floating-cart">
+    <div class="floating-cart__meta">
+      <span id="cart-summary-bottom">共 0 項</span>
+      <strong id="cart-total-bottom">NT$ 0</strong>
+    </div>
+    <button id="view-cart-btn-sticky" class="ghost-btn floating-cart__jump-btn" type="button">查看購物車清單</button>
+    <button id="submit-btn" class="primary-btn" type="button">送出訂單</button>
+  </aside>
+
+  <div id="store-status-modal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="store-status-modal-title">
+      <h3 id="store-status-modal-title">目前非營業時間</h3>
+      <p id="store-status-modal-text">仍可先點餐，並預約營業時間取餐。</p>
+      <button id="store-status-modal-close" class="primary-btn modal-card__button" type="button">我知道了</button>
+    </div>
+  </div>
+
+  <div id="login-required-modal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="login-required-modal-title">
+      <h3 id="login-required-modal-title">先登入再送出訂單</h3>
+      <p id="login-required-modal-text">為了自動帶入 LINE 顯示名稱與保留訂單紀錄，送出前請先完成 LINE 登入。</p>
+      <div class="modal-card__actions">
+        <button id="login-required-cancel" class="ghost-btn modal-card__ghost" type="button">稍後再說</button>
+        <button id="login-required-confirm" class="primary-btn modal-card__button" type="button">前往 LINE 登入</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="quantity-modal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="quantity-modal-title">
+      <h3 id="quantity-modal-title">請選擇數量</h3>
+      <p id="quantity-modal-item-name">請選擇品項</p>
+      <p id="quantity-modal-price" class="quantity-modal__price hidden"></p>
+      <div id="quantity-modal-detail" class="quantity-modal__detail hidden">
+        <div class="quantity-modal__detail-row">
+          <span class="quantity-modal__label">類型</span>
+          <strong id="quantity-modal-type">套餐</strong>
+        </div>
+        <label id="quantity-modal-flavor-field" class="field quantity-modal__field hidden">
+          <span>口味</span>
+          <select id="quantity-modal-flavor"></select>
+        </label>
+        <label id="quantity-modal-staple-field" class="field quantity-modal__field hidden">
+          <span>主食</span>
+          <select id="quantity-modal-staple"></select>
+        </label>
+      </div>
+      <div id="quantity-modal-options" class="quantity-modal__options"></div>
+      <div id="quantity-modal-success" class="hidden">
+        <p id="quantity-modal-success-text" class="quantity-modal__success-text"></p>
+        <button id="quantity-modal-confirm" class="primary-btn modal-card__button" type="button">好的</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Orders Overlay -->
+  <div id="my-orders-overlay" class="fullscreen-overlay hidden">
+    <div class="overlay-container">
+      <div class="overlay-header">
+        <h2>我的訂單</h2>
+        <button id="my-orders-close-btn" class="ghost-btn" type="button">關閉</button>
+      </div>
+      <div id="my-orders-list" class="overlay-body"></div>
+    </div>
+  </div>
+
+  <!-- Member Center Overlay -->
+  <div id="member-center-overlay" class="fullscreen-overlay hidden">
+    <div class="overlay-container">
+      <div class="overlay-header">
+        <h2>會員中心</h2>
+        <button id="member-center-close-btn" class="ghost-btn" type="button">關閉</button>
+      </div>
+      <div id="member-points-summary" class="member-summary"></div>
+      <div class="member-tabs">
+        <button id="member-tab-orders" class="member-tab member-tab--active" type="button">我的訂單</button>
+        <button id="member-tab-points" class="member-tab" type="button">點數紀錄</button>
+        <button id="member-tab-info" class="member-tab" type="button">會員資料</button>
+      </div>
+      <div id="member-panel-orders" class="overlay-body">
+        <div id="member-orders-list"></div>
+      </div>
+      <div id="member-panel-points" class="overlay-body hidden">
+        <div id="member-point-history-list"></div>
+      </div>
+      <div id="member-panel-info" class="overlay-body hidden">
+        <div id="member-info-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="./config.js?v=20260403-4"></script>
+  <script src="./defaults.js?v=20260408-1"></script>
+  <script src="./storage.js?v=20260404-1"></script>
+  <script src="./order-helpers.js?v=20260408-3"></script>
+  <script src="./ui.js?v=20260408-3"></script>
+  <script src="./cart.js?v=20260408-2"></script>
+  <script src="./auth.js?v=20260404-1"></script>
+  <script src="./checkout.js?v=20260408-3"></script>
+  <script src="./member.js?v=20260409-1"></script>
+  <script src="./app.js?v=20260408-2"></script>
+</body>
+</html>

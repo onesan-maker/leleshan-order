@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>樂樂山 後台訂單管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ops.css?v=20260404-1">
+</head>
+<body class="ops-page">
+  <div id="auth-loading" class="ops-login-guard">正在驗證員工登入...</div>
+  <div class="ops-shell">
+    <header class="ops-topbar">
+      <div>
+        <h1 class="ops-title">後台訂單管理</h1>
+        <div id="ops-store-meta" class="ops-subtitle"></div>
+        <div id="ops-user-meta" class="ops-meta"></div>
+      </div>
+      <div class="ops-actions">
+        <a class="ghost-btn" href="/admin">回到既有後台</a>
+      </div>
+    </header>
+
+    <section class="ops-panel">
+      <div class="ops-stats">
+        <div class="ops-stat"><span>全部訂單</span><strong id="stat-all">0</strong></div>
+        <div class="ops-stat"><span>進行中</span><strong id="stat-open">0</strong></div>
+        <div class="ops-stat"><span>可取餐</span><strong id="stat-ready">0</strong></div>
+        <div class="ops-stat"><span>已取餐</span><strong id="stat-picked">0</strong></div>
+      </div>
+    </section>
+
+    <section class="ops-panel">
+      <div class="ops-filter-row">
+        <div class="ops-tabs">
+          <button class="ops-tab is-active" type="button" data-admin-filter="all">全部</button>
+          <button class="ops-tab" type="button" data-admin-filter="new">新訂單</button>
+          <button class="ops-tab" type="button" data-admin-filter="cooking">製作中</button>
+          <button class="ops-tab" type="button" data-admin-filter="packing">包裝中</button>
+          <button class="ops-tab" type="button" data-admin-filter="ready">可取餐</button>
+          <button class="ops-tab" type="button" data-admin-filter="picked_up">已取餐</button>
+          <button class="ops-tab" type="button" data-admin-filter="cancelled">已取消</button>
+        </div>
+        <input id="admin-order-search" class="ops-input" type="search" placeholder="搜尋顧客名稱 / 顯示名稱 / 訂單編號">
+      </div>
+    </section>
+
+    <div id="auth-error" class="ops-error hidden"></div>
+    <main id="admin-orders-list" class="ops-grid"></main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="/config.js?v=20260403-4"></script>
+  <script src="/order-helpers.js?v=20260404-1"></script>
+  <script src="/staff-auth.js?v=20260404-1"></script>
+  <script src="/admin-orders.js?v=20260404-1"></script>
+</body>
+</html>

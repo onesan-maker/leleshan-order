@@ -1,0 +1,69 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "kds",
+        "destination": "/kds.html"
+      },
+      {
+        "source": "kds/**",
+        "destination": "/kds.html"
+      },
+      {
+        "source": "packing",
+        "destination": "/packing.html"
+      },
+      {
+        "source": "packing/**",
+        "destination": "/packing.html"
+      },
+      {
+        "source": "pickup-board",
+        "destination": "/pickup-board.html"
+      },
+      {
+        "source": "pickup-board/**",
+        "destination": "/pickup-board.html"
+      },
+      {
+        "source": "admin-orders",
+        "destination": "/admin-orders.html"
+      },
+      {
+        "source": "admin-orders/**",
+        "destination": "/admin-orders.html"
+      },
+      {
+        "source": "admin/login",
+        "destination": "/admin-login.html"
+      },
+      {
+        "source": "admin/login/**",
+        "destination": "/admin-login.html"
+      },
+      {
+        "source": "admin",
+        "destination": "/admin.html"
+      },
+      {
+        "source": "admin/**",
+        "destination": "/admin.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

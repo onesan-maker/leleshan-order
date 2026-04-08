@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>樂樂山 包裝台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ops.css?v=20260404-1">
+</head>
+<body class="ops-page">
+  <div id="auth-loading" class="ops-login-guard">正在驗證員工登入...</div>
+  <div class="ops-shell">
+    <header class="ops-topbar">
+      <div>
+        <h1 class="ops-title">包裝台</h1>
+        <div id="ops-store-meta" class="ops-subtitle"></div>
+        <div id="ops-user-meta" class="ops-meta"></div>
+      </div>
+      <div class="ops-actions">
+        <div class="ops-meta">只顯示 packing / ready，完成或已取餐會即時同步。</div>
+      </div>
+    </header>
+
+    <section class="ops-panel">
+      <div class="ops-stats">
+        <div class="ops-stat"><span>包裝中</span><strong id="stat-packing">0</strong></div>
+        <div class="ops-stat"><span>可取餐</span><strong id="stat-ready">0</strong></div>
+        <div class="ops-stat"><span>顯示中</span><strong id="stat-visible">0</strong></div>
+      </div>
+    </section>
+
+    <section class="ops-panel">
+      <div class="ops-tabs">
+        <button class="ops-tab is-active" type="button" data-packing-filter="all">全部</button>
+        <button class="ops-tab" type="button" data-packing-filter="packing">包裝中</button>
+        <button class="ops-tab" type="button" data-packing-filter="ready">可取餐</button>
+      </div>
+    </section>
+
+    <div id="auth-error" class="ops-error hidden"></div>
+    <main id="packing-list" class="ops-grid"></main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="/config.js?v=20260403-4"></script>
+  <script src="/order-helpers.js?v=20260404-1"></script>
+  <script src="/staff-auth.js?v=20260404-1"></script>
+  <script src="/packing.js?v=20260404-1"></script>
+</body>
+</html>
