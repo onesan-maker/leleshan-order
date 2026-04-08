@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ':*)",
+      "Bash(where python:*)",
+      "Bash(python -c \"print\\('hello'\\)\")",
+      "Bash(C:\\\\Python313\\\\python.exe -c \"print\\('hello'\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(firebase use:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(findstr /n \"admin.js\\\\|admin.css\\\\|member.js\" \"E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\admin.html\")",
+      "Bash(findstr \"v=20260408\" \"E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\admin.html\" \"E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\index.html\")",
+      "Bash(powershell -Command \"\\(Get-Content 'E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\admin.html'\\) -replace 'admin\\\\.css\\\\?v=20260408-8', 'admin.css?v=20260409-1' -replace 'admin\\\\.js\\\\?v=20260408-2', 'admin.js?v=20260409-1' | Set-Content 'E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\admin.html'\")",
+      "Bash(powershell -Command \"\\(Get-Content 'E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\index.html'\\) -replace 'member\\\\.js\\\\?v=20260408-3', 'member.js?v=20260409-1' | Set-Content 'E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\index.html'\")",
+      "Bash(powershell -Command ':*)",
+      "Bash(firebase hosting:releases:list --limit 5)",
+      "Bash(firebase --version)",
+      "Bash(firebase hosting:channel:list)",
+      "Bash(firebase hosting:sites:list)"
+    ]
+  }
+}

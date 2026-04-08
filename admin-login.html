@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>營運後台登入</title>
+  <link rel="stylesheet" href="/admin.css?v=20260408-7">
+</head>
+<body class="admin-auth-body">
+  <main id="admin-login-card" class="admin-auth-card">
+    <h1>營運後台登入</h1>
+    <p>請使用你的 Google 帳號登入。登入後系統會檢查你是否具有後台管理權限。</p>
+    <button id="admin-google-login-btn" class="admin-google-btn" type="button">使用 Google 登入</button>
+    <p id="admin-login-message" class="admin-auth-message"></p>
+  </main>
+
+  <section id="admin-denied-card" class="admin-auth-card admin-access-card hidden" aria-live="polite">
+    <h1>沒有後台權限</h1>
+    <p>此 Google 帳號尚未被加入管理名單</p>
+    <div id="admin-denied-message" class="admin-auth-message"></div>
+    <button id="admin-relogin-btn" class="admin-google-btn" type="button">重新登入</button>
+  </section>
+
+  <script src="/config.js?v=20260403-4"></script>
+  <!-- owner 初始化工具已停用，如需再次啟用可重新掛回 admin-owner-init.js -->
+  <script type="module" src="/admin-login.js?v=20260406-4"></script>
+</body>
+</html>

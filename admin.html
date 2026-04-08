@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>樂樂山營運後台 v1</title>
+  <link rel="stylesheet" href="/admin.css?v=20260409-1">
+</head>
+<body class="admin-body">
+  <section id="admin-access-state" class="admin-auth-body hidden">
+    <div class="admin-auth-card admin-access-card" aria-live="polite">
+      <h1 id="admin-access-title">正在驗證後台權限</h1>
+      <p id="admin-access-description">請稍候，系統正在確認你的管理員身分。</p>
+      <button id="admin-access-relogin-btn" type="button" class="admin-google-btn hidden">重新登入</button>
+    </div>
+  </section>
+
+  <div id="admin-shell" class="admin-shell hidden">
+    <aside class="admin-sidebar">
+      <h1>營運後台 v1</h1>
+      <p id="admin-user-meta">正在確認登入身分...</p>
+      <nav class="admin-nav">
+        <a href="/admin/dashboard" data-view="dashboard">Dashboard</a>
+        <a href="/admin/stores" data-view="stores">門市管理</a>
+        <a href="/admin/categories" data-view="categories">分類管理</a>
+        <a href="/admin/menu" data-view="menu">菜單管理</a>
+        <a href="/admin/combos" data-view="combos">套餐管理</a>
+        <a href="/admin/flavors" data-view="flavors">口味管理</a>
+        <a href="/admin/orders" data-view="orders">訂單管理</a>
+        <a href="/admin-orders">訂單工作台</a>
+        <a href="/admin/inventory" data-view="inventory">庫存管理</a>
+        <a href="/admin/platform-orders" data-view="platform-orders">平台訂單</a>
+        <a href="/admin/users" data-view="users">會員管理</a>
+        <a href="/admin/promotions" data-view="promotions">優惠券管理</a>
+        <a href="/admin/settings" data-view="settings">營業狀態設定</a>
+      </nav>
+      <button id="admin-logout-btn" class="admin-logout-btn" type="button">登出</button>
+    </aside>
+
+    <main class="admin-main">
+      <header class="admin-topbar">
+        <div>
+          <strong>目前門市</strong>
+          <select id="admin-store-select"></select>
+        </div>
+        <div class="admin-topbar-actions">
+          <button id="seed-default-data-btn" type="button">匯入預設菜單</button>
+          <span id="admin-status-message"></span>
+        </div>
+      </header>
+
+      <section id="view-dashboard" class="admin-view">
+        <h2>Dashboard</h2>
+        <div class="admin-cards">
+          <article class="admin-card"><span>今日營業額</span><strong id="metric-revenue">NT$ 0</strong></article>
+          <article class="admin-card"><span>今日訂單數</span><strong id="metric-orders">0</strong></article>
+          <article class="admin-card"><span>平均客單價</span><strong id="metric-average">NT$ 0</strong></article>
+          <article class="admin-card"><span>低庫存品項</span><strong id="metric-low-stock">0</strong></article>
+        </div>
+        <div class="admin-grid-two">
+          <article class="admin-panel">
+            <h3>熱門商品 TOP5</h3>
+            <div id="dashboard-top-items"></div>
+          </article>
+          <article class="admin-panel">
+            <h3>各時段訂單分布</h3>
+            <div id="dashboard-hourly"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-stores" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>門市管理</h2>
+          <button type="button" data-open-form="store">新增門市</button>
+        </div>
+        <div id="stores-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-categories" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>分類管理</h2>
+          <button type="button" data-open-form="category">新增分類</button>
+        </div>
+        <div id="categories-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-menu" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>菜單管理</h2>
+          <button type="button" data-open-form="menu">新增品項</button>
+        </div>
+        <div id="menu-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-combos" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>套餐管理</h2>
+          <button type="button" data-open-form="combo">新增套餐</button>
+        </div>
+        <div id="combos-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-flavors" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>口味管理</h2>
+          <button type="button" data-open-form="flavor">新增口味</button>
+        </div>
+        <div id="flavors-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-orders" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>訂單管理</h2>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button id="orders-show-archived-btn" type="button" class="ghost-btn">顯示封存訂單</button>
+            <button id="orders-refresh-btn" type="button">重新整理</button>
+          </div>
+        </div>
+        <div id="orders-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-inventory" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>庫存管理</h2>
+          <button type="button" data-open-form="inventory">新增庫存紀錄</button>
+        </div>
+        <div id="inventory-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-platform-orders" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>平台訂單</h2>
+        </div>
+        <div class="admin-grid-two">
+          <article class="admin-panel">
+            <h3>匯入區</h3>
+            <div class="admin-form">
+              <label><span>Uber Eats CSV</span><input id="platform-ubereats-file" type="file" accept=".csv,text/csv"></label>
+              <button id="platform-ubereats-import-btn" type="button">匯入 Uber Eats CSV</button>
+              <label><span>Foodpanda CSV</span><input id="platform-foodpanda-file" type="file" accept=".csv,text/csv"></label>
+              <button id="platform-foodpanda-import-btn" type="button">匯入 Foodpanda CSV</button>
+            </div>
+          </article>
+          <article class="admin-panel">
+            <h3>匯入結果 Summary</h3>
+            <div id="platform-import-summary" class="admin-detail-grid"></div>
+          </article>
+        </div>
+
+        <article class="admin-panel">
+          <h3>匯入提醒</h3>
+          <ul class="admin-note-list">
+            <li>相同平台訂單不會重複寫入</li>
+            <li>系統預設略過重複資料，不會自動覆蓋</li>
+            <li>匯入前請確認平台報表日期範圍，避免重複匯入</li>
+            <li>若品項尚未完成 SKU 對應，該訂單不應扣庫存</li>
+            <li>匯入成功不代表已完成對帳，仍需查看待對應品項與失敗資料</li>
+          </ul>
+        </article>
+
+        <div class="admin-grid-two">
+          <article class="admin-panel">
+            <h3>今日平台統計</h3>
+            <div id="platform-today-stats" class="admin-detail-grid"></div>
+          </article>
+          <article class="admin-panel">
+            <h3>最近匯入紀錄</h3>
+            <div id="platform-import-logs" class="admin-list"></div>
+          </article>
+        </div>
+
+        <article class="admin-panel">
+          <h3>待對應品項</h3>
+          <div id="platform-pending-mappings" class="admin-list"></div>
+        </article>
+
+        <article class="admin-panel">
+          <h3>最近平台訂單</h3>
+          <div id="platform-orders-list" class="admin-list"></div>
+        </article>
+
+        <article class="admin-panel">
+          <h3>失敗資料列</h3>
+          <div id="platform-failed-rows" class="admin-list"></div>
+        </article>
+      </section>
+
+      <section id="view-users" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>會員管理</h2>
+          <div class="admin-topbar-actions">
+            <input id="user-search-input" type="text" placeholder="搜尋名稱或 ID..." style="width:200px;padding:8px 12px;border-radius:10px;">
+            <button id="user-search-btn" type="button">搜尋</button>
+          </div>
+        </div>
+        <div id="users-list" class="admin-list admin-list--compact"></div>
+        <div id="user-detail-panel" class="admin-panel hidden">
+          <div class="admin-section-head">
+            <h3 id="user-detail-title">會員詳情</h3>
+            <button id="user-detail-close" type="button" style="background:#6b564b;">關閉</button>
+          </div>
+          <div id="user-detail-info" class="admin-detail-grid"></div>
+          <div class="admin-section-head"><h4>最近訂單</h4></div>
+          <div id="user-detail-orders" class="admin-list admin-list--compact"></div>
+          <div class="admin-section-head"><h4>點數異動</h4></div>
+          <div id="user-detail-points" class="admin-list"></div>
+          <div class="admin-section-head"><h4>手動調整點數</h4></div>
+          <div class="admin-form" style="max-width:400px;">
+            <label><span>調整數量（正數加點、負數扣點）</span><input id="user-point-adjust-amount" type="number" placeholder="例如：10 或 -5"></label>
+            <label><span>原因</span><input id="user-point-adjust-reason" placeholder="例如：補償、活動贈點"></label>
+            <button id="user-point-adjust-btn" type="button">執行點數調整</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-promotions" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>優惠券管理</h2>
+          <button type="button" data-open-form="promotion">新增優惠</button>
+        </div>
+        <div id="promotions-list" class="admin-list"></div>
+      </section>
+
+      <section id="view-settings" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>營業狀態設定</h2>
+          <button type="button" data-open-form="settings">編輯設定</button>
+        </div>
+        <div class="admin-panel">
+          <p id="settings-summary-text">尚未設定營業資訊</p>
+        </div>
+        <div class="admin-section-head">
+          <h3>點數累積規則</h3>
+          <button id="point-rule-save-btn" type="button">儲存規則</button>
+        </div>
+        <div class="admin-panel">
+          <div class="admin-form" style="max-width:480px;">
+            <label class="switch-field"><span>啟用點數累積</span><span class="switch-row"><input id="point-rule-enabled" type="checkbox"><span class="switch-ui"></span><span id="point-rule-enabled-label">未啟用</span></span></label>
+            <label><span>每消費多少元</span><input id="point-rule-amount" type="number" placeholder="例如：100" value="100"></label>
+            <label><span>得幾點</span><input id="point-rule-points" type="number" placeholder="例如：1" value="1"></label>
+            <p id="point-rule-status" style="color:var(--admin-muted);font-size:0.88rem;"></p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="admin-modal" class="admin-modal hidden">
+    <div class="admin-modal__backdrop" data-close-modal="true"></div>
+    <div class="admin-modal__dialog">
+      <div class="admin-modal__head">
+        <h3 id="admin-modal-title">編輯資料</h3>
+        <button id="admin-modal-close" class="admin-modal__close" type="button">關閉</button>
+      </div>
+      <div class="admin-modal__body">
+        <section data-form-panel="store" class="admin-form-panel hidden">
+          <form id="store-form" class="admin-form">
+            <label><span>門市代碼</span><input id="store-id" placeholder="例如：store_1" required></label>
+            <label><span>門市名稱</span><input id="store-name" placeholder="例如：樂樂山新竹店" required></label>
+            <label class="switch-field"><span>門市狀態</span><span class="switch-row"><input id="store-active" type="checkbox" checked><span class="switch-ui"></span><span id="store-active-label">啟用中</span></span></label>
+            <button type="submit">儲存門市</button>
+          </form>
+        </section>
+
+        <section data-form-panel="category" class="admin-form-panel hidden">
+          <form id="category-form" class="admin-form">
+            <label><span>分類編號</span><input id="category-id" placeholder="例如：meat"></label>
+            <label><span>分類名稱</span><input id="category-name" placeholder="例如：肉品" required></label>
+            <label><span>排序</span><input id="category-sort" type="number" placeholder="例如：10"></label>
+            <label class="hidden"><span>類別配色</span><select id="category-bg-color"></select></label><div id="category-theme-options" class="admin-theme-grid"></div>
+            <div id="category-color-preview" class="admin-color-preview"></div>
+            <label class="switch-field"><span>分類狀態</span><span class="switch-row"><input id="category-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="category-enabled-label">啟用中</span></span></label>
+            <button type="submit">儲存分類</button>
+          </form>
+        </section>
+
+        <section data-form-panel="menu" class="admin-form-panel hidden">
+          <form id="menu-form" class="admin-form">
+            <label><span>品項編號</span><input id="menu-id" placeholder="例如：pork-classic"></label>
+            <label><span>品項名稱</span><input id="menu-name" placeholder="例如：豬肉片" required></label>
+            <label><span>售價</span><input id="menu-price" type="number" placeholder="例如：45" required></label>
+            <label><span>分類</span><select id="menu-category"></select></label>
+            <label><span>排序</span><input id="menu-sort" type="number" placeholder="例如：10"></label>
+            <label><span>圖片網址</span><input id="menu-image-url" placeholder="例如：https://example.com/menu.jpg"></label>
+            <label><span>標籤</span><input id="menu-tags" placeholder="例如：招牌,人氣"></label>
+            <label><span>單位顯示</span><input id="menu-unit" placeholder="例如：6 顆"></label>
+            <label><span>品項說明</span><textarea id="menu-description" placeholder="補充這道菜的特色或份量說明"></textarea></label>
+            <label><span>加點選項 JSON</span><textarea id="menu-option-groups" placeholder='例如：[]'></textarea></label>
+            <label class="switch-field"><span>品項狀態</span><span class="switch-row"><input id="menu-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="menu-enabled-label">啟用中</span></span></label>
+            <button type="submit">儲存品項</button>
+          </form>
+        </section>
+
+        <section data-form-panel="combo" class="admin-form-panel hidden">
+          <form id="combo-form" class="admin-form">
+            <label><span>套餐編號</span><input id="combo-id" placeholder="例如：combo-classic"></label>
+            <label><span>套餐名稱</span><input id="combo-name" placeholder="例如：豬肉片套餐" required></label>
+            <label><span>套餐售價</span><input id="combo-price" type="number" placeholder="例如：130" required></label>
+            <label><span>排序</span><input id="combo-sort" type="number" placeholder="例如：10"></label>
+            <label><span>標籤</span><input id="combo-tags" placeholder="例如：套餐,人氣"></label>
+            <label><span>套餐說明</span><textarea id="combo-description" placeholder="補充套餐內容與賣點"></textarea></label>
+            <div class="option-builder">
+              <div class="option-builder__head">
+                <div>
+                  <strong>套餐加購群組</strong>
+                  <p>不再直接編輯 JSON。每個群組都可設定名稱、選擇方式與選項內容。</p>
+                </div>
+                <button id="combo-add-option-btn" type="button">新增群組</button>
+              </div>
+              <div id="combo-option-groups" class="option-list"></div>
+            </div>
+            <label class="switch-field"><span>套餐狀態</span><span class="switch-row"><input id="combo-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="combo-enabled-label">啟用中</span></span></label>
+            <button type="submit">儲存套餐</button>
+          </form>
+        </section>
+
+        <section data-form-panel="flavor" class="admin-form-panel hidden">
+          <form id="flavor-form" class="admin-form">
+            <label><span>口味編號</span><input id="flavor-id" placeholder="例如：red-oil"></label>
+            <label><span>口味名稱</span><input id="flavor-name" placeholder="例如：紅油麻辣" required></label>
+            <label><span>排序</span><input id="flavor-sort" type="number" placeholder="例如：10"></label>
+            <label><span>辣度標示</span><input id="flavor-spicy" placeholder="例如：小辣到中辣"></label>
+            <label><span>口味說明</span><textarea id="flavor-description" placeholder="補充這個口味的特色說明"></textarea></label>
+            <label class="switch-field"><span>口味狀態</span><span class="switch-row"><input id="flavor-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="flavor-enabled-label">啟用中</span></span></label>
+            <button type="submit">儲存口味</button>
+          </form>
+        </section>
+
+        <section data-form-panel="inventory" class="admin-form-panel hidden">
+          <form id="inventory-form" class="admin-form">
+            <label><span>庫存紀錄代碼</span><input id="inventory-id" placeholder="留空則自動帶入門市與品項組合"></label>
+            <label><span>品項編號</span><input id="inventory-item-id" placeholder="例如：pork-classic" required></label>
+            <label><span>目前庫存</span><input id="inventory-stock" type="number" placeholder="例如：99" required></label>
+            <label><span>安全庫存</span><input id="inventory-safe-stock" type="number" placeholder="例如：10" required></label>
+            <button type="submit">儲存庫存</button>
+          </form>
+        </section>
+
+        <section data-form-panel="promotion" class="admin-form-panel hidden">
+          <form id="promotion-form" class="admin-form">
+            <label><span>優惠編號</span><input id="promotion-id" placeholder="例如：promo-free-rice"></label>
+            <label><span>優惠名稱</span><input id="promotion-name" placeholder="例如：滿 150 送白飯" required></label>
+            <label><span>優惠類型</span><select id="promotion-type"><option value="gift">gift</option><option value="discount">discount</option></select></label>
+            <label><span>最低消費金額</span><input id="promotion-min-amount" type="number" placeholder="例如：150"></label>
+            <label><span>回饋類型</span><input id="promotion-reward-type" placeholder="例如：free_item"></label>
+            <label><span>回饋品項編號</span><input id="promotion-reward-item-id" placeholder="例如：rice"></label>
+            <label><span>回饋數值</span><input id="promotion-reward-value" type="number" placeholder="例如：20"></label>
+            <label><span>開始時間</span><input id="promotion-start-at" type="datetime-local"></label>
+            <label><span>結束時間</span><input id="promotion-end-at" type="datetime-local"></label>
+            <label class="switch-field"><span>優惠狀態</span><span class="switch-row"><input id="promotion-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="promotion-enabled-label">啟用中</span></span></label>
+            <button type="submit">儲存優惠</button>
+          </form>
+        </section>
+
+        <section data-form-panel="settings" class="admin-form-panel hidden">
+          <form id="settings-form" class="admin-form">
+            <label class="switch-field"><span>門市營業狀態</span><span class="switch-row"><input id="settings-open" type="checkbox"><span class="switch-ui"></span><span id="settings-open-label">休息中</span></span></label>
+            <label class="switch-field"><span>優惠提示狀態</span><span class="switch-row"><input id="settings-promo-enabled" type="checkbox"><span class="switch-ui"></span><span id="settings-promo-enabled-label">未啟用</span></span></label>
+            <label><span>營業公告</span><input id="settings-open-notice" placeholder="例如：今日正常營業"></label>
+            <label><span>優惠提示文字</span><input id="settings-promo-text" placeholder="例如：滿 150 送白飯 1 份"></label>
+            <label><span>開始接單時間</span><input id="settings-open-from" type="time" placeholder="例如：17:40"></label>
+            <label><span>停止接單時間</span><input id="settings-open-to" type="time" placeholder="例如：22:50"></label>
+            <button type="submit">儲存設定</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="/config.js?v=20260403-4"></script>
+  <script src="/admin-auth-helper.js?v=20260406-1"></script>
+  <script src="/defaults.js?v=20260403-1"></script>
+  <script src="/order-helpers.js?v=20260404-1"></script>
+  <script src="/platform-order-module.js?v=20260403-1"></script>
+  <script src="/platform-api-placeholders.js?v=20260403-1"></script>
+  <script src="/admin.js?v=20260409-1"></script>
+</body>
+</html>

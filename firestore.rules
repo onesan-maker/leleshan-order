@@ -1,0 +1,181 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasAdminDoc() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function adminData() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return hasAdminDoc() && adminData().role in ['owner', 'admin'];
+    }
+
+    function isOwner() {
+      return hasAdminDoc() && adminData().role == 'owner';
+    }
+
+    function isBootstrapOwnerEmail() {
+      return signedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email == 'onesan@gmail.com';
+    }
+
+    function isBootstrapOwnerCreate(uid) {
+      return isBootstrapOwnerEmail()
+        && request.auth.uid == uid
+        && !exists(/databases/$(database)/documents/admins/$(uid))
+        && request.resource.data.keys().hasOnly(['role', 'name', 'createdAt'])
+        && request.resource.data.role == 'owner'
+        && request.resource.data.name == 'Jack'
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function sameStore(storeId) {
+      return isOwner() || (isAdmin() && adminData().storeId == storeId);
+    }
+
+    function canManage(storeId) {
+      return sameStore(storeId) && adminData().role in ['owner', 'admin'];
+    }
+
+    function canReadOrders(storeId) {
+      return sameStore(storeId);
+    }
+
+    function isOwnMemberDoc(userId) {
+      return request.resource.data.lineUserId == userId
+        && request.resource.data.userId == userId;
+    }
+
+    function isPublicBoardStatus(status) {
+      return status in ['cooking', 'packing', 'ready'];
+    }
+
+    function canReadPublicBoard() {
+      return resource.data.storeId is string
+        && isPublicBoardStatus(resource.data.status);
+    }
+
+    match /stores/{storeId} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    match /admins/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow create: if isOwner() || isBootstrapOwnerCreate(uid);
+      allow update, delete: if isOwner();
+    }
+
+    match /categories/{docId} {
+      allow read: if true;
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /menuItems/{docId} {
+      allow read: if true;
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /menu_items/{docId} {
+      allow read: if true;
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /comboTemplates/{docId} {
+      allow read: if true;
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /flavors/{docId} {
+      allow read: if true;
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /promotions/{docId} {
+      allow read: if true;
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /settings/{storeId} {
+      allow read: if true;
+      allow write: if canManage(storeId);
+    }
+
+    match /orders/{orderId} {
+      allow create: if request.resource.data.storeId is string
+        && request.resource.data.status == 'new'
+        && request.resource.data.source in ['liff', 'onsite', 'manual'];
+      allow read: if canReadOrders(resource.data.storeId)
+        || canReadPublicBoard()
+        || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
+      allow update: if canReadOrders(resource.data.storeId)
+        || (resource.data.lineUserId is string
+            && resource.data.lineUserId.size() > 0
+            && request.resource.data.lineUserId == resource.data.lineUserId
+            && (resource.data.status == 'new'
+                && (request.resource.data.status == 'cancelled'
+                    || request.resource.data.customerHidden == true)
+                || request.resource.data.archived == true));
+      allow delete: if isOwner();
+    }
+
+    match /inventory/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.storeId);
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /users/{userId} {
+      allow read: if (isAdmin() && sameStore(resource.data.storeId))
+        || resource.data.lineUserId is string;
+      allow write: if canManage(request.resource.data.storeId)
+        || canManage(resource.data.storeId)
+        || isOwnMemberDoc(userId);
+    }
+
+    match /point_transactions/{docId} {
+      allow read: if (isAdmin() && sameStore(resource.data.storeId))
+        || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /point_logs/{docId} {
+      allow read: if (isAdmin() && sameStore(resource.data.storeId))
+        || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /point_rules/{docId} {
+      allow read: if true;
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /platform_orders/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.store_id);
+      allow write: if canManage(request.resource.data.store_id) || canManage(resource.data.store_id);
+    }
+
+    match /platform_menu_mapping/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.store_id);
+      allow write: if canManage(request.resource.data.store_id) || canManage(resource.data.store_id);
+    }
+
+    match /inventory_movements/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.store_id);
+      allow write: if canManage(request.resource.data.store_id) || canManage(resource.data.store_id);
+    }
+
+    match /import_logs/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.store_id);
+      allow write: if canManage(request.resource.data.store_id) || canManage(resource.data.store_id);
+    }
+  }
+}
