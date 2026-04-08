@@ -2116,9 +2116,24 @@
         { label: "訂單金額", value: "NT$ " + Number(normalizedOrder.total || 0) },
         { label: "品項內容", value: orderItemsSummary(normalizedOrder.items) },
         { label: "建立時間", value: formatDate(normalizedOrder.created_at || normalizedOrder.raw.createdAt) },
-        { label: "預約取餐", value: normalizedOrder.scheduled_pickup_time ? (normalizedOrder.scheduled_pickup_date + " " + normalizedOrder.scheduled_pickup_time) : "未指定" }
+        { label: "預約取餐", value: normalizedOrder.scheduled_pickup_time ? (normalizedOrder.scheduled_pickup_date + " " + normalizedOrder.scheduled_pickup_time) : "未指定" },
+        { label: "接單通知", value: renderNotifStatus(order), html: true }
       ], controls);
     }).join("") || emptyCard(showArchivedOrders ? "沒有封存訂單" : "目前沒有有效訂單");
+  }
+
+  function renderNotifStatus(order) {
+    var ns = order.notificationStatus || {};
+    if (!order.lineUserId) {
+      return '<span style="color:#aaa;font-size:0.8rem;">無 LINE（不推播）</span>';
+    }
+    if (ns.receivedPushSent === true) {
+      return '<span style="color:#27ae60;font-size:0.8rem;">✓ 已發送</span>';
+    }
+    if (ns.receivedPushError) {
+      return '<span style="color:#e74c3c;font-size:0.8rem;" title="' + esc(ns.receivedPushError) + '">✗ 失敗</span>';
+    }
+    return '<span style="color:#f39c12;font-size:0.8rem;">⋯ 待發送</span>';
   }
 
   async function updateOrder(id, status) {

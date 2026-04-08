@@ -217,6 +217,13 @@
       memberId: resolve(options.memberId, resolve(options.userId, null)),
       userId: resolve(options.userId, null),
       lineUserId: resolve(options.lineUserId, null),
+      lineDisplayName: resolve(options.lineDisplayName, null),
+      linePictureUrl: resolve(options.linePictureUrl, null),
+      notificationStatus: {
+        receivedPushSent: false,
+        receivedPushSentAt: null,
+        receivedPushError: null
+      },
       userName: resolve(options.customer_name, ""),
       paymentMethod: resolve(options.paymentMethod, "cash"),
       inventoryAdjusted: false,
