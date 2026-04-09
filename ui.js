@@ -66,6 +66,7 @@
     el.viewCartBtnSticky = document.getElementById("view-cart-btn-sticky");
     el.cartListStart = document.getElementById("cart-list-start");
     el.pickupReservationNotice = document.getElementById("pickup-reservation-notice");
+    el.memberNavBtn = document.getElementById("member-nav-btn");
   }
 
   function bindModalDismiss(app, overlay, closeFn) {
@@ -131,11 +132,13 @@
       app.el.profileName.textContent = app.state.profile.displayName || "LINE 使用者";
       app.el.profileMeta.textContent = "已登入 LINE，可直接送出訂單";
       app.el.logoutBtn.classList.remove("hidden");
+      if (app.el.memberNavBtn) app.el.memberNavBtn.classList.remove("hidden");
       setCustomerNamePlaceholder(app, true);
     } else {
       app.el.profileName.textContent = "尚未登入";
       app.el.profileMeta.textContent = "送出訂單前會提示你登入 LINE。";
       app.el.logoutBtn.classList.add("hidden");
+      if (app.el.memberNavBtn) app.el.memberNavBtn.classList.add("hidden");
       setCustomerNamePlaceholder(app, false);
     }
   }
