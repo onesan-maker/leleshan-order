@@ -172,19 +172,23 @@ button {
 /* ── My Orders overlay ─────────────────────────────────────── */
 
 .my-orders__card-wrapper {
-  max-height: 80vh;
-  overflow: hidden;
-  display: flex;
+  /* Override .modal-card's display:grid so flex layout works */
+  display: flex !important;
   flex-direction: column;
   padding: 0;
+  max-height: 85vh;
+  overflow: hidden;
+  /* Ensure the card itself is sized by the overlay */
+  align-self: center;
 }
 
 .my-orders__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 0;
+  padding: 20px 24px 12px;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
 }
 
 .my-orders__header h3 {
@@ -211,14 +215,17 @@ button {
 .my-orders__subtitle {
   color: var(--muted);
   font-size: 0.82rem;
-  margin: 4px 24px 12px;
+  margin: 8px 24px 0;
   flex-shrink: 0;
 }
 
 .my-orders__list {
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   flex: 1;
-  padding: 0 20px 20px;
+  /* min-height:0 is required for flex children to shrink & scroll */
+  min-height: 0;
+  padding: 12px 20px 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;

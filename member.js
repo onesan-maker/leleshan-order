@@ -119,7 +119,7 @@
         .collection('orders')
         .where('lineUserId', '==', lineUserId)
         .orderBy('createdAt', 'desc')
-        .limit(5)
+        .limit(10)
         .get();
 
       if (snapshot.empty) {
