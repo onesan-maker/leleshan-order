@@ -131,13 +131,11 @@
       app.el.profileName.textContent = app.state.profile.displayName || "LINE 使用者";
       app.el.profileMeta.textContent = "已登入 LINE，可直接送出訂單";
       app.el.logoutBtn.classList.remove("hidden");
-      if (app.el.memberNavBtn) app.el.memberNavBtn.classList.remove("hidden");
       setCustomerNamePlaceholder(app, true);
     } else {
       app.el.profileName.textContent = "尚未登入";
       app.el.profileMeta.textContent = "送出訂單前會提示你登入 LINE。";
       app.el.logoutBtn.classList.add("hidden");
-      if (app.el.memberNavBtn) app.el.memberNavBtn.classList.add("hidden");
       setCustomerNamePlaceholder(app, false);
     }
   }
@@ -322,15 +320,18 @@
     }, 1400);
   }
 
-  function showOrderSuccess(app, cartSnapshot, pickupLabel) {
+  function showOrderSuccess(app, pickupNumber, cartSnapshot, pickupLabel) {
     if (!app.el.submitMessage) return;
+    var numDisplay = pickupNumber
+      ? "取餐號碼 " + escapeHtml(String(pickupNumber))
+      : "訂單已送出";
     var itemLines = (cartSnapshot || []).map(function (item) {
       var label = escapeHtml(item.name);
       if (item.flavorName) label += "（" + escapeHtml(item.flavorName) + "）";
       return label + " ×" + item.quantity;
     }).join("、");
     app.el.submitMessage.innerHTML =
-      "<strong>✓ 訂單已送出</strong>" +
+      "<strong>✓ " + numDisplay + "</strong>" +
       (pickupLabel ? "<br>取餐時間：" + escapeHtml(pickupLabel) : "") +
       (itemLines ? "<br><small class='order-success-items'>" + itemLines + "</small>" : "");
     app.el.submitMessage.className = "submit-message success";

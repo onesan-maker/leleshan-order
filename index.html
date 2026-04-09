@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260408-3">
+  <link rel="stylesheet" href="./styles.css?v=20260410-1">
 </head>
 <body>
   <div class="page-shell">
@@ -34,7 +34,6 @@
         <strong id="profile-name">尚未登入</strong>
         <p id="profile-meta">送出訂單前會提示你登入 LINE。</p>
         <div class="status-card__btns">
-          <button id="member-nav-btn" class="ghost-btn status-card__action hidden" type="button">會員中心</button>
           <button id="logout-btn" class="ghost-btn status-card__action hidden" type="button">登出</button>
         </div>
       </article>
@@ -98,8 +97,6 @@
         </div>
         <div id="single-root" class="single-root"></div>
       </section>
-
-      <div id="order-success-panel" class="hidden"></div>
 
       <section class="step-card" id="checkout-section">
         <div class="section-heading">
@@ -169,7 +166,7 @@
   <div id="login-required-modal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="login-required-modal-title">
       <h3 id="login-required-modal-title">先登入再送出訂單</h3>
-      <p id="login-required-modal-text">為了自動帶入 LINE 顯示名稱與保留訂單紀錄，送出前請先完成 LINE 登入。</p>
+      <p id="login-required-modal-text">送出訂單需要先完成 LINE 登入，以便自動帶入取餐稱呼。</p>
       <div class="modal-card__actions">
         <button id="login-required-cancel" class="ghost-btn modal-card__ghost" type="button">稍後再說</button>
         <button id="login-required-confirm" class="primary-btn modal-card__button" type="button">前往 LINE 登入</button>
@@ -204,54 +201,17 @@
     </div>
   </div>
 
-  <!-- My Orders Overlay -->
-  <div id="my-orders-overlay" class="fullscreen-overlay hidden">
-    <div class="overlay-container">
-      <div class="overlay-header">
-        <h2>我的訂單</h2>
-        <button id="my-orders-close-btn" class="ghost-btn" type="button">關閉</button>
-      </div>
-      <div id="my-orders-list" class="overlay-body"></div>
-    </div>
-  </div>
-
-  <!-- Member Center Overlay -->
-  <div id="member-center-overlay" class="fullscreen-overlay hidden">
-    <div class="overlay-container">
-      <div class="overlay-header">
-        <h2>會員中心</h2>
-        <button id="member-center-close-btn" class="ghost-btn" type="button">關閉</button>
-      </div>
-      <div id="member-points-summary" class="member-summary"></div>
-      <div class="member-tabs">
-        <button id="member-tab-orders" class="member-tab member-tab--active" type="button">我的訂單</button>
-        <button id="member-tab-points" class="member-tab" type="button">點數紀錄</button>
-        <button id="member-tab-info" class="member-tab" type="button">會員資料</button>
-      </div>
-      <div id="member-panel-orders" class="overlay-body">
-        <div id="member-orders-list"></div>
-      </div>
-      <div id="member-panel-points" class="overlay-body hidden">
-        <div id="member-point-history-list"></div>
-      </div>
-      <div id="member-panel-info" class="overlay-body hidden">
-        <div id="member-info-content"></div>
-      </div>
-    </div>
-  </div>
-
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="./config.js?v=20260403-4"></script>
   <script src="./defaults.js?v=20260408-1"></script>
   <script src="./storage.js?v=20260404-1"></script>
-  <script src="./order-helpers.js?v=20260408-3"></script>
-  <script src="./ui.js?v=20260408-3"></script>
+  <script src="./order-helpers.js?v=20260410-1"></script>
+  <script src="./ui.js?v=20260410-1"></script>
   <script src="./cart.js?v=20260408-2"></script>
   <script src="./auth.js?v=20260404-1"></script>
-  <script src="./checkout.js?v=20260408-3"></script>
-  <script src="./member.js?v=20260409-1"></script>
-  <script src="./app.js?v=20260408-2"></script>
+  <script src="./checkout.js?v=20260410-1"></script>
+  <script src="./app.js?v=20260410-1"></script>
 </body>
 </html>

@@ -16,7 +16,14 @@
       "Bash(firebase hosting:releases:list --limit 5)",
       "Bash(firebase --version)",
       "Bash(firebase hosting:channel:list)",
-      "Bash(firebase hosting:sites:list)"
+      "Bash(firebase hosting:sites:list)",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(gcloud projects:*)",
+      "Bash(firebase functions:delete sendOrderReceivedPush --region asia-east1 --force)",
+      "Bash(firebase functions:artifacts:setpolicy --force)",
+      "Bash(firebase functions:config:set line.channel_access_token=\"QKVB4aucEsd0bkKsc8oNOPmmBI78T25tagNm76wT6WlmRZRI2Mw++0T8uxzuL1NR4wUtR7E6O1SXxFJaiIHBjRWkRojzryQGa86r8+hwFnpR42Dtfb3ZTIULxUG6Rxt91dwh6pXFLqNmudIVXLVCegdB04t89/1O/w1cDnyilFU=\")",
+      "Bash(firebase experiments:enable legacyRuntimeConfigCommands)"
     ]
   }
 }

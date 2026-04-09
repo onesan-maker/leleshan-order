@@ -2147,14 +2147,18 @@
           + '</select><button type="button" data-order-save="' + esc(order.id) + '">更新狀態</button>'
           + archiveBtnHtml + markTestBtn + permDeleteBtn + '</div>';
       }
+      var pickupNumDisplay = order.pickupNumber
+        ? '<strong style="font-size:1.1rem;color:var(--accent,#8B1A1A);">取餐號碼 ' + esc(order.pickupNumber) + '</strong>'
+        : '<span style="color:#aaa;font-size:0.85rem;">舊單</span>';
       return buildCard(normalizedOrder.display_name || normalizedOrder.customer_name || normalizedOrder.id, [
-        { label: "訂單編號", value: order.id },
+        { label: "取餐號碼", value: pickupNumDisplay, html: true },
         { label: "訂單狀態", value: statusPill(meta.label, meta.tone === "ready" || meta.tone === "picked") + archivedBadge + testBadge, html: true },
         { label: "訂單金額", value: "NT$ " + Number(normalizedOrder.total || 0) },
         { label: "品項內容", value: orderItemsSummary(normalizedOrder.items) },
         { label: "建立時間", value: formatDate(normalizedOrder.created_at || normalizedOrder.raw.createdAt) },
         { label: "預約取餐", value: normalizedOrder.scheduled_pickup_time ? (normalizedOrder.scheduled_pickup_date + " " + normalizedOrder.scheduled_pickup_time) : "未指定" },
-        { label: "接單通知", value: renderNotifStatus(order), html: true }
+        { label: "接單通知", value: renderNotifStatus(order), html: true },
+        { label: "系統單號", value: '<span style="font-size:0.7rem;color:#bbb;word-break:break-all;">' + esc(order.id) + '</span>', html: true }
       ], controls);
     }).join("") || emptyCard(showTestOrdersOnly ? "沒有測試訂單" : showArchivedOrders ? "沒有封存訂單" : "目前沒有有效訂單");
   }

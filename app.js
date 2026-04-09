@@ -47,7 +47,6 @@
     window.LeLeShanCart.init(app);
     window.LeLeShanAuth.init(app);
     window.LeLeShanCheckout.init(app);
-    if (window.LeLeShanMember) window.LeLeShanMember.init(app);
     app.modules.ui = window.LeLeShanUI;
     app.modules.ui.updateStoreStatusUI(app, STATUS.LOADING);
     app.modules.ui.renderProfile(app);
