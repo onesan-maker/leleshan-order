@@ -184,8 +184,23 @@
     if (ordersShowArchivedBtn) {
       ordersShowArchivedBtn.addEventListener("click", function () {
         showArchivedOrders = !showArchivedOrders;
+        if (showArchivedOrders) showTestOrdersOnly = false;
         renderOrders();
       });
+    }
+
+    var ordersShowTestBtn = document.getElementById("orders-show-test-btn");
+    if (ordersShowTestBtn) {
+      ordersShowTestBtn.addEventListener("click", function () {
+        showTestOrdersOnly = !showTestOrdersOnly;
+        if (showTestOrdersOnly) showArchivedOrders = false;
+        renderOrders();
+      });
+    }
+
+    var ordersDeleteTestBtn = document.getElementById("orders-delete-test-btn");
+    if (ordersDeleteTestBtn) {
+      ordersDeleteTestBtn.addEventListener("click", deleteTestOrders);
     }
 
     var pointRuleSaveBtn = document.getElementById("point-rule-save-btn");
@@ -309,6 +324,12 @@
     if (storesLink) {
       storesLink.style.display = isOwner() ? "block" : "none";
     }
+
+    // 測試訂單管理按鈕：僅 owner 可見
+    var showTestBtn = document.getElementById("orders-show-test-btn");
+    if (showTestBtn) showTestBtn.style.display = isOwner() ? "" : "none";
+    var deleteTestBtn = document.getElementById("orders-delete-test-btn");
+    if (deleteTestBtn) deleteTestBtn.style.display = isOwner() ? "" : "none";
   }
 
   function setAccessState(title, description, showRetry) {
@@ -803,6 +824,7 @@
 
   var selectedUserId = null;
   var showArchivedOrders = false;
+  var showTestOrdersOnly = false;
 
   function renderSettingsSummary() {
     document.getElementById("settings-open").checked = !!(data.settings && data.settings.isOpen);
@@ -845,6 +867,7 @@
     var orderArchiveId = event.target.getAttribute("data-order-archive");
     var orderUnarchiveId = event.target.getAttribute("data-order-unarchive");
     var orderPermDeleteId = event.target.getAttribute("data-order-perm-delete");
+    var orderMarkTestId = event.target.getAttribute("data-order-mark-test");
 
     if (themeButton) {
       var select = document.getElementById("category-bg-color");
@@ -920,6 +943,11 @@
 
     if (orderPermDeleteId) {
       permanentDeleteOrder(orderPermDeleteId);
+      return;
+    }
+
+    if (orderMarkTestId) {
+      markAsTest(orderMarkTestId);
       return;
     }
   }
@@ -2082,10 +2110,13 @@
   }
 
   function renderOrders() {
-    var btn = document.getElementById("orders-show-archived-btn");
-    if (btn) btn.textContent = showArchivedOrders ? "隱藏封存訂單" : "顯示封存訂單";
+    var archiveBtn = document.getElementById("orders-show-archived-btn");
+    if (archiveBtn) archiveBtn.textContent = showArchivedOrders ? "隱藏封存訂單" : "顯示封存訂單";
+    var testFilterBtn = document.getElementById("orders-show-test-btn");
+    if (testFilterBtn) testFilterBtn.textContent = showTestOrdersOnly ? "顯示全部訂單" : "只顯示測試訂單";
 
     var displayed = data.orders.filter(function (order) {
+      if (showTestOrdersOnly) return order.isTest === true;
       return showArchivedOrders ? !!order.archived : !order.archived;
     });
 
@@ -2095,31 +2126,37 @@
       var archivedBadge = order.archived
         ? '<span style="background:#e5e5e5;color:#888;border-radius:4px;padding:1px 6px;font-size:0.75rem;margin-left:4px;">封存</span>'
         : "";
+      var testBadge = order.isTest === true
+        ? '<span style="background:#ff6b35;color:#fff;border-radius:4px;padding:1px 6px;font-size:0.75rem;margin-left:4px;font-weight:600;">測試單</span>'
+        : "";
       var controls = "";
       if (canManage()) {
-        var archiveBtn = !order.archived
+        var archiveBtnHtml = !order.archived
           ? '<button type="button" data-order-archive="' + esc(order.id) + '" style="background:#f5f5f5;color:#666;">封存</button>'
           : '<button type="button" data-order-unarchive="' + esc(order.id) + '" style="background:#f5f5f5;color:#666;">取消封存</button>';
         var permDeleteBtn = isOwner()
           ? '<button type="button" data-order-perm-delete="' + esc(order.id) + '" style="background:#fdecea;color:#c0392b;">永久刪除</button>'
+          : "";
+        var markTestBtn = (isOwner() && order.isTest !== true)
+          ? '<button type="button" data-order-mark-test="' + esc(order.id) + '" style="background:#fff3e0;color:#e65100;border:1px solid #ffb74d;">標記測試單</button>'
           : "";
         controls = '<div class="admin-order-actions"><select data-order-status="' + esc(order.id) + '">'
           + ["new", "cooking", "packing", "ready", "picked_up", "cancelled"].map(function (status) {
             return '<option value="' + status + '"' + (normalizedOrder.status === status ? " selected" : "") + ">" + esc(orderStatusText(status)) + "</option>";
           }).join("")
           + '</select><button type="button" data-order-save="' + esc(order.id) + '">更新狀態</button>'
-          + archiveBtn + permDeleteBtn + '</div>';
+          + archiveBtnHtml + markTestBtn + permDeleteBtn + '</div>';
       }
       return buildCard(normalizedOrder.display_name || normalizedOrder.customer_name || normalizedOrder.id, [
         { label: "訂單編號", value: order.id },
-        { label: "訂單狀態", value: statusPill(meta.label, meta.tone === "ready" || meta.tone === "picked") + archivedBadge, html: true },
+        { label: "訂單狀態", value: statusPill(meta.label, meta.tone === "ready" || meta.tone === "picked") + archivedBadge + testBadge, html: true },
         { label: "訂單金額", value: "NT$ " + Number(normalizedOrder.total || 0) },
         { label: "品項內容", value: orderItemsSummary(normalizedOrder.items) },
         { label: "建立時間", value: formatDate(normalizedOrder.created_at || normalizedOrder.raw.createdAt) },
         { label: "預約取餐", value: normalizedOrder.scheduled_pickup_time ? (normalizedOrder.scheduled_pickup_date + " " + normalizedOrder.scheduled_pickup_time) : "未指定" },
         { label: "接單通知", value: renderNotifStatus(order), html: true }
       ], controls);
-    }).join("") || emptyCard(showArchivedOrders ? "沒有封存訂單" : "目前沒有有效訂單");
+    }).join("") || emptyCard(showTestOrdersOnly ? "沒有測試訂單" : showArchivedOrders ? "沒有封存訂單" : "目前沒有有效訂單");
   }
 
   function renderNotifStatus(order) {
@@ -2188,6 +2225,55 @@
     } catch (error) {
       console.error("[AdminOrders] Permanent delete failed.", error);
       msg("永久刪除失敗：" + (error.message || error));
+    }
+  }
+
+  async function markAsTest(id) {
+    if (!isOwner()) { msg("僅 owner 可標記測試單"); return; }
+    try {
+      await db.collection("orders").doc(id).set({
+        isTest: true,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      var order = data.orders.find(function (o) { return o.id === id; });
+      if (order) order.isTest = true;
+      renderOrders();
+      msg("已標記為測試單");
+    } catch (error) {
+      console.error("[AdminOrders] markAsTest failed.", error);
+      msg("標記失敗：" + (error.message || error));
+    }
+  }
+
+  async function deleteTestOrders() {
+    if (!isOwner()) { msg("僅 owner 可刪除測試訂單"); return; }
+    var confirmed = window.confirm("確定要刪除所有測試訂單？此操作無法復原，正式訂單不會受影響。");
+    if (!confirmed) return;
+    try {
+      // 分批查詢 isTest === true，每批最多 300 筆
+      var deleted = 0;
+      var hasMore = true;
+      while (hasMore) {
+        var snap = await db.collection("orders")
+          .where("isTest", "==", true)
+          .limit(300)
+          .get();
+        if (snap.empty) { hasMore = false; break; }
+        var batch = db.batch();
+        snap.docs.forEach(function (doc) { batch.delete(doc.ref); });
+        await batch.commit();
+        deleted += snap.docs.length;
+        if (snap.docs.length < 300) hasMore = false;
+      }
+      // 更新本地快取
+      data.orders = data.orders.filter(function (o) { return o.isTest !== true; });
+      showTestOrdersOnly = false;
+      renderOrders();
+      window.alert("測試訂單已刪除（共 " + deleted + " 筆）");
+      msg("已刪除 " + deleted + " 筆測試訂單");
+    } catch (error) {
+      console.error("[AdminOrders] deleteTestOrders failed.", error);
+      msg("刪除失敗：" + (error.message || error));
     }
   }
 
