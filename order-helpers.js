@@ -235,7 +235,9 @@
       pickupDateTimeISO: resolve(options.scheduled_pickup_at, ""),
       storeStatusAtCheckout: resolve(options.storeStatusAtCheckout, ""),
       appliedPromotion: resolve(options.appliedPromotion, null),
-      isTest: resolve(options.isTest, false)
+      isTest: resolve(options.isTest, false),
+      pickupNumber: resolve(options.pickupNumber, null),
+      pickupSequence: resolve(options.pickupSequence, null)
     };
     return payload;
   }

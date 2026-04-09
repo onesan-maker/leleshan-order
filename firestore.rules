@@ -110,6 +110,12 @@ service cloud.firestore {
       allow write: if canManage(storeId);
     }
 
+    // 每日取餐號碼計數器，下單時 transaction 讀寫，需公開可寫
+    match /order_counters/{dateStr} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     match /orders/{orderId} {
       allow create: if request.resource.data.storeId is string
         && request.resource.data.status == 'new'

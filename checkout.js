@@ -249,6 +249,9 @@
 
     var totalPrice = app.modules.cart.totalPrice();
     var ref = app.state.db.collection("orders").doc();
+    var todayStr = getTodayDateStr();
+    var counterRef = app.state.db.collection("order_counters").doc(todayStr);
+
     var payload = window.LeLeShanOrders.buildCreatePayload({
       id: ref.id,
       storeId: app.state.storeId,
@@ -280,7 +283,6 @@
       subtotal: totalPrice,
       total: totalPrice,
       status: "new",
-      memberId: app.state.profile ? app.state.profile.userId : null,
       userId: app.state.profile ? app.state.profile.userId : null,
       lineUserId: app.state.profile ? app.state.profile.userId : null,
       lineDisplayName: app.state.profile ? (app.state.profile.displayName || null) : null,
@@ -293,7 +295,6 @@
       scheduled_pickup_at: buildPickupDateTimeISO(app.state.pickupDateValue, app.state.pickupTime),
       pickupDateLabel: app.state.pickupDateLabel,
       storeStatusAtCheckout: app.state.storeOpenStatus,
-      earnedPoints: Math.floor(totalPrice / 100),
       appliedPromotion: app.state.appliedPromotion ? {
         promoId: app.state.appliedPromotion.id,
         name: app.state.appliedPromotion.name,
@@ -302,14 +303,32 @@
       } : null
     });
 
+    var pickupNumber = null;
+
     try {
-      console.log("[Order] Writing order to Firestore.", payload);
-      await ref.set(payload, { merge: true });
-      console.log("[Order] Firestore write success.", { documentId: ref.id });
+      console.log("[Order] Writing order with transaction.", { docId: ref.id, date: todayStr });
+
+      // Transaction：原子取得流水號 + 寫入訂單，確保不重號
+      await app.state.db.runTransaction(function (tx) {
+        return tx.get(counterRef).then(function (counterDoc) {
+          var seq = counterDoc.exists ? ((counterDoc.data().seq || 0) + 1) : 1;
+          pickupNumber = String(seq).padStart(3, "0");
+          // 更新每日計數器
+          tx.set(counterRef, {
+            seq: seq,
+            date: todayStr,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          // 寫入訂單（含取餐號碼）
+          payload.pickupNumber = pickupNumber;
+          payload.pickupSequence = seq;
+          tx.set(ref, payload);
+        });
+      });
+
+      console.log("[Order] Firestore write success.", { documentId: ref.id, pickupNumber: pickupNumber });
       var pickupLabel = (app.state.pickupDateLabel || app.state.pickupDateValue || "") + (app.state.pickupTime ? " " + app.state.pickupTime : "");
       var cartSnapshot = app.state.cart.slice();
-
-      upsertMember(app, ref.id, totalPrice, customerName);
 
       app.state.cart = [];
       if (app.el.orderForm) app.el.orderForm.reset();
@@ -322,9 +341,7 @@
       }
       app.modules.ui.renderProfile(app);
       app.modules.cart.renderCart();
-      if (app.modules.member) {
-        app.modules.member.showOrderSuccess(ref.id, cartSnapshot, pickupLabel);
-      }
+      app.modules.ui.showOrderSuccess(app, pickupNumber, cartSnapshot, pickupLabel);
       clearPendingCheckoutState(app);
       window.LeLeShanStorage.clearCheckoutDraft();
       if (app.el.submitMessage) {
@@ -339,6 +356,14 @@
       app.state.submitting = false;
       app.modules.ui.syncControls(app);
     }
+  }
+
+  function getTodayDateStr() {
+    var now = new Date();
+    // 使用台灣時間（UTC+8）計算日期
+    var tzOffset = 8 * 60;
+    var local = new Date(now.getTime() + (tzOffset + now.getTimezoneOffset()) * 60000);
+    return local.getFullYear() + "-" + pad(local.getMonth() + 1) + "-" + pad(local.getDate());
   }
 
   function parseDateValue(value) {
@@ -382,36 +407,6 @@
     return left.getFullYear() === right.getFullYear()
       && left.getMonth() === right.getMonth()
       && left.getDate() === right.getDate();
-  }
-
-  function upsertMember(app, orderId, totalAmount, customerName) {
-    if (!app.state.profile || !app.state.profile.userId || !app.state.db) return;
-    var userId = app.state.profile.userId;
-    app.state.db.collection("users").doc(userId).set({
-      memberId: userId,
-      userId: userId,
-      storeId: app.state.storeId,
-      name: customerName || app.state.profile.displayName || "",
-      displayName: app.state.profile.displayName || "",
-      lineUserId: userId,
-      totalSpent: firebase.firestore.FieldValue.increment(totalAmount),
-      totalOrders: firebase.firestore.FieldValue.increment(1),
-      lastOrderAt: firebase.firestore.FieldValue.serverTimestamp(),
-      lastOrderId: orderId,
-      points: firebase.firestore.FieldValue.increment(0),
-      currentPoints: firebase.firestore.FieldValue.increment(0),
-      totalEarnedPoints: firebase.firestore.FieldValue.increment(0),
-      usedPoints: firebase.firestore.FieldValue.increment(0),
-      totalUsedPoints: firebase.firestore.FieldValue.increment(0),
-      couponWallet: [],
-      tier: "standard",
-      tags: [],
-      status: "active",
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true }).catch(function (error) {
-      console.error("[Checkout] Upsert member failed.", error);
-    });
   }
 
   function detail(error) {
