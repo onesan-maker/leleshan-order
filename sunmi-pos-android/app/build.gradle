@@ -1,0 +1,56 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace         'com.example.sunmipos'
+    compileSdk        34
+
+    defaultConfig {
+        applicationId   "com.example.sunmipos"
+        minSdk          22          // SUNMI T2 runs Android 7.1+
+        targetSdk       34
+        versionCode     1
+        versionName     "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled   false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // AIDL 支援（預設已啟用，明確宣告較安全）
+    buildFeatures {
+        aidl true
+    }
+}
+
+dependencies {
+    // AppCompat（提供 AppCompatActivity、Theme）
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+
+    // Material Components
+    implementation 'com.google.android.material:material:1.11.0'
+
+    // RecyclerView
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    // ConstraintLayout（備用）
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // ------------------------------------------------------------------
+    // SUNMI Printer SDK
+    // SUNMI 官方 AIDL 透過系統 service 綁定，不需要額外 .aar / .jar。
+    // AIDL 檔案已置於 src/main/aidl/woyou/aidlservice/cjt/ 目錄下，
+    // AGP 會自動編譯成 Java stub。
+    // 如果 SUNMI 提供 .aar 形式的 SDK，將 .aar 放入 app/libs/ 並加入：
+    //   implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
+    // ------------------------------------------------------------------
+}

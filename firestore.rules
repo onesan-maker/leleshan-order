@@ -56,7 +56,7 @@ service cloud.firestore {
     }
 
     function isPublicBoardStatus(status) {
-      return status in ['cooking', 'packing', 'ready'];
+      return status in ['cooking', 'packing', 'ready', 'preparing', 'accepted'];
     }
 
     function canReadPublicBoard() {
@@ -119,7 +119,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if request.resource.data.storeId is string
         && request.resource.data.status == 'new'
-        && request.resource.data.source in ['liff', 'onsite', 'manual'];
+        && request.resource.data.source in ['liff', 'onsite', 'pos', 'manual', 'ubereats', 'foodpanda'];
       allow read: if canReadOrders(resource.data.storeId)
         || canReadPublicBoard()
         || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
@@ -132,6 +132,37 @@ service cloud.firestore {
                     || request.resource.data.customerHidden == true)
                 || request.resource.data.archived == true));
       allow delete: if isOwner();
+    }
+
+    // order_items：每筆訂單品項明細（可公開建立，管理員可讀）
+    match /order_items/{docId} {
+      allow read: if canReadOrders(resource.data.storeId)
+        || (resource.data.storeId is string);
+      allow create: if request.resource.data.storeId is string
+        && request.resource.data.orderId is string;
+      allow update, delete: if canManage(resource.data.storeId);
+    }
+
+    // order_events：訂單事件記錄（可公開建立，管理員可讀）
+    match /order_events/{docId} {
+      allow read: if canReadOrders(resource.data.storeId)
+        || (resource.data.storeId is string);
+      allow create: if request.resource.data.storeId is string
+        && request.resource.data.orderId is string;
+      allow update, delete: if canManage(resource.data.storeId);
+    }
+
+    // notifications：推播記錄（僅 Cloud Functions 寫入，管理員可讀）
+    match /notifications/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.storeId);
+      allow write: if false;
+    }
+
+    // customers：顧客資料（管理員可讀寫）
+    match /customers/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.storeId);
+      allow write: if canManage(request.resource.data.storeId)
+        || canManage(resource.data.storeId);
     }
 
     match /inventory/{docId} {

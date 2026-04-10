@@ -323,8 +323,43 @@
           payload.pickupNumber = pickupNumber;
           payload.pickupSequence = seq;
           tx.set(ref, payload);
+          // 寫入 order_events: order_created
+          var eventRef = app.state.db.collection("order_events").doc();
+          tx.set(eventRef, window.LeLeShanOrders.buildOrderEventPayload({
+            orderId:   ref.id,
+            storeId:   payload.storeId || "",
+            type:      "order_created",
+            actorType: "customer",
+            actorId:   payload.lineUserId || "",
+            actorName: payload.customer_name || "",
+            fromStatus: null,
+            toStatus:   "new",
+            message:    "LIFF 建單，取餐號碼 " + pickupNumber
+          }));
         });
       });
+
+      // 建單成功後，批次寫入 order_items（不在 transaction 內，避免讀寫限制）
+      try {
+        var itemsPayload = window.LeLeShanOrders.buildOrderItemsPayload({
+          orderId: ref.id,
+          storeId: payload.storeId || "",
+          source:  "liff",
+          items:   payload.items || []
+        });
+        if (itemsPayload.length) {
+          var batch = app.state.db.batch();
+          itemsPayload.forEach(function (itemDoc) {
+            var itemRef = app.state.db.collection("order_items").doc();
+            batch.set(itemRef, itemDoc);
+          });
+          batch.commit().catch(function (e) {
+            console.warn("[Order] order_items write failed (non-critical).", e);
+          });
+        }
+      } catch (e) {
+        console.warn("[Order] order_items batch skipped.", e);
+      }
 
       console.log("[Order] Firestore write success.", { documentId: ref.id, pickupNumber: pickupNumber });
       var pickupLabel = (app.state.pickupDateLabel || app.state.pickupDateValue || "") + (app.state.pickupTime ? " " + app.state.pickupTime : "");

@@ -123,11 +123,15 @@
 
   function actionButtons(order) {
     var actions = [];
-    if (order.status === "new") actions.push(button(order.id, "開始製作", "cooking", "primary-btn"));
-    if (order.status === "cooking") actions.push(button(order.id, "送往包裝", "packing", "secondary-btn"));
-    if (order.status === "packing") actions.push(button(order.id, "標記完成", "ready", "primary-btn"));
-    if (order.status === "ready") actions.push(button(order.id, "已取餐", "picked_up", "secondary-btn"));
-    if (["new", "cooking", "packing", "ready"].indexOf(order.status) >= 0) {
+    if (order.status === "new")       actions.push(button(order.id, "確認接單", "accepted",  "secondary-btn"));
+    if (order.status === "new")       actions.push(button(order.id, "直接製作", "preparing",  "primary-btn"));
+    if (order.status === "accepted")  actions.push(button(order.id, "開始製作", "preparing",  "primary-btn"));
+    if (order.status === "preparing") actions.push(button(order.id, "餐點完成", "ready",      "primary-btn"));
+    if (order.status === "ready")     actions.push(button(order.id, "完成取餐", "completed",  "secondary-btn"));
+    // legacy fallbacks
+    if (order.status === "cooking")   actions.push(button(order.id, "餐點完成", "ready",      "primary-btn"));
+    if (order.status === "packing")   actions.push(button(order.id, "標記完成", "ready",      "primary-btn"));
+    if (["new","accepted","preparing","cooking","packing","ready"].indexOf(order.status) >= 0) {
       actions.push(button(order.id, "取消訂單", "cancelled", "danger-btn"));
     }
     return actions.join("");

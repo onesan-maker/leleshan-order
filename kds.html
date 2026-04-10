@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>樂樂山 KDS</title>
+  <title>樂樂山 KDS 廚房出單</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/ops.css?v=20260404-1">
+  <link rel="stylesheet" href="/ops.css?v=20260410-3">
 </head>
 <body class="ops-page">
   <div id="auth-loading" class="ops-login-guard">正在驗證員工登入...</div>
@@ -19,14 +19,15 @@
         <div id="ops-user-meta" class="ops-meta"></div>
       </div>
       <div class="ops-actions">
-        <div class="ops-meta">只顯示 new / cooking，狀態變更會即時寫回 Firestore。</div>
+        <div class="ops-meta" id="kds-last-update">即時更新中</div>
       </div>
     </header>
 
     <section class="ops-panel">
       <div class="ops-stats">
-        <div class="ops-stat"><span>新訂單</span><strong id="stat-new">0</strong></div>
-        <div class="ops-stat"><span>製作中</span><strong id="stat-cooking">0</strong></div>
+        <div class="ops-stat"><span>待處理</span><strong id="stat-pending">0</strong></div>
+        <div class="ops-stat"><span>製作中</span><strong id="stat-preparing">0</strong></div>
+        <div class="ops-stat"><span>可取餐</span><strong id="stat-ready">0</strong></div>
         <div class="ops-stat"><span>顯示中</span><strong id="stat-visible">0</strong></div>
       </div>
     </section>
@@ -34,8 +35,9 @@
     <section class="ops-panel">
       <div class="ops-tabs">
         <button class="ops-tab is-active" type="button" data-kds-filter="all">全部</button>
-        <button class="ops-tab" type="button" data-kds-filter="new">新訂單</button>
-        <button class="ops-tab" type="button" data-kds-filter="cooking">製作中</button>
+        <button class="ops-tab" type="button" data-kds-filter="pending">待處理</button>
+        <button class="ops-tab" type="button" data-kds-filter="preparing">製作中</button>
+        <button class="ops-tab" type="button" data-kds-filter="ready">可取餐</button>
       </div>
     </section>
 
@@ -47,8 +49,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="/config.js?v=20260403-4"></script>
-  <script src="/order-helpers.js?v=20260404-1"></script>
+  <script src="/order-helpers.js?v=20260410-3"></script>
   <script src="/staff-auth.js?v=20260404-1"></script>
-  <script src="/kds.js?v=20260404-1"></script>
+  <script src="/kds.js?v=20260410-3"></script>
 </body>
 </html>
