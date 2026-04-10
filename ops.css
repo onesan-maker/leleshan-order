@@ -435,6 +435,39 @@ button {
   }
 }
 
+/* ── KDS: 取餐號碼 & 來源標籤 ──────────────────────────────── */
+
+.kds-pickup-num {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #8B1A1A;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.order-card__head-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kds-source {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  margin-right: 4px;
+}
+
+.kds-source--liff      { background: #06c755; }
+.kds-source--pos       { background: #2c7be5; }
+.kds-source--manual    { background: #888; }
+.kds-source--ubereats  { background: #1e9b48; }
+.kds-source--foodpanda { background: #d40b57; }
+
 @media (max-width: 920px) {
   .ops-topbar,
   .board-topbar {

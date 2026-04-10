@@ -1,31 +1,38 @@
 (function () {
-  var PUBLIC_BOARD_STATUSES = ["cooking", "packing", "ready"];
-  var ACTIVE_QUEUE_STATUSES = ["new", "cooking", "packing"];
+  var PUBLIC_BOARD_STATUSES = ["cooking", "packing", "ready", "preparing"];
+  var ACTIVE_QUEUE_STATUSES = ["new", "accepted", "preparing", "cooking", "packing"];
+  var KDS_ACTIVE_STATUSES = ["new", "accepted", "preparing", "ready"];
   var STATUS_META = {
-    new: { label: "新訂單", tone: "new" },
-    cooking: { label: "製作中", tone: "cooking" },
-    packing: { label: "包裝中", tone: "packing" },
-    ready: { label: "可取餐", tone: "ready" },
-    completed: { label: "已完成", tone: "picked" },
-    picked_up: { label: "已取餐", tone: "picked" },
-    cancelled: { label: "已取消", tone: "cancelled" }
+    new:       { label: "新訂單",  tone: "new" },
+    accepted:  { label: "已確認",  tone: "accepted" },
+    preparing: { label: "製作中",  tone: "cooking" },
+    cooking:   { label: "製作中",  tone: "cooking" },
+    packing:   { label: "包裝中",  tone: "packing" },
+    ready:     { label: "可取餐",  tone: "ready" },
+    completed: { label: "已完成",  tone: "picked" },
+    picked_up: { label: "已取餐",  tone: "picked" },
+    cancelled: { label: "已取消",  tone: "cancelled" }
   };
   var LEGACY_STATUS_MAP = {
-    preparing: "cooking",
-    done: "ready"
+    cooking:   "preparing",
+    packing:   "preparing",
+    picked_up: "completed",
+    done:      "ready"
   };
   var SOURCE_LABELS = {
-    liff: "你訂",
-    onsite: "現場顧客",
-    uber: "UberEats",
+    liff:      "LINE訂",
+    pos:       "現場",
+    ubereats:  "UberEats",
     foodpanda: "Foodpanda",
-    manual: "人工建立"
+    manual:    "人工建立"
   };
   var STATUS_DEFAULT_MINUTES = {
-    new: 5,
-    cooking: 6,
-    packing: 2,
-    ready: 0,
+    new:       3,
+    accepted:  2,
+    preparing: 8,
+    cooking:   8,
+    packing:   2,
+    ready:     0,
     completed: 0,
     picked_up: 0,
     cancelled: 0
@@ -172,6 +179,7 @@
       pointsGranted: !!data.pointsGranted,
       userId: resolve(data.userId, ""),
       lineUserId: resolve(data.lineUserId, ""),
+      pickupNumber: resolve(data.pickupNumber, ""),
       raw: data
     };
     normalized.display_name = deriveDisplayName(normalized);
@@ -206,7 +214,7 @@
       scheduled_pickup_date: resolve(options.scheduled_pickup_date, ""),
       scheduled_pickup_time: resolve(options.scheduled_pickup_time, ""),
       scheduled_pickup_at: resolve(options.scheduled_pickup_at, ""),
-      estimated_minutes: STATUS_DEFAULT_MINUTES[status],
+      estimated_minutes: STATUS_DEFAULT_MINUTES[status] != null ? STATUS_DEFAULT_MINUTES[status] : 3,
       queue_number: resolve(options.queue_number, Date.now()),
       created_at: createdAt,
       updated_at: createdAt,
@@ -222,10 +230,17 @@
       notificationStatus: {
         receivedPushSent: false,
         receivedPushSentAt: null,
-        receivedPushError: null
+        receivedPushError: null,
+        readyPushSent: false,
+        readyPushSentAt: null,
+        readyPushError: null,
+        cancelledPushSent: false,
+        cancelledPushSentAt: null,
+        cancelledPushError: null
       },
       userName: resolve(options.customer_name, ""),
       paymentMethod: resolve(options.paymentMethod, "cash"),
+      paymentStatus: resolve(options.paymentStatus, "pending"),
       inventoryAdjusted: false,
       pointsGranted: false,
       earnedPoints: Number(resolve(options.earnedPoints, Math.floor(total / 100))),
@@ -242,6 +257,45 @@
     return payload;
   }
 
+  function buildOrderItemsPayload(options) {
+    var orderId = options.orderId;
+    var storeId = options.storeId;
+    var source = options.source || "liff";
+    var createdAt = serverTimestamp();
+    return (options.items || []).map(function (item) {
+      return {
+        orderId: orderId,
+        storeId: storeId,
+        menuItemId: resolve(item.sku || item.itemId, ""),
+        name: resolve(item.name, ""),
+        qty: Number(item.qty || 0),
+        unitPrice: Number(item.unit_price || item.price || 0),
+        lineTotal: Number(item.subtotal || 0),
+        flavor: resolve(item.flavor || item.flavorName, ""),
+        staple: resolve(item.staple || item.stapleName, ""),
+        selectedOptions: Array.isArray(item.options) ? item.options : [],
+        notes: resolve(item.item_note || item.itemNote || item.note, ""),
+        source: source,
+        createdAt: createdAt
+      };
+    });
+  }
+
+  function buildOrderEventPayload(options) {
+    return {
+      orderId: options.orderId || "",
+      storeId: options.storeId || "",
+      type: options.type || "status_changed",
+      actorType: options.actorType || "system",
+      actorId: options.actorId || "",
+      actorName: options.actorName || "",
+      fromStatus: options.fromStatus || null,
+      toStatus: options.toStatus || null,
+      message: options.message || "",
+      createdAt: serverTimestamp()
+    };
+  }
+
   function sortOrdersByCreatedAsc(list) {
     return list.slice().sort(function (left, right) {
       return toMillis(left.created_at) - toMillis(right.created_at);
@@ -252,12 +306,11 @@
     var status = mapLegacyStatus(order.status);
     if (status === "ready" || status === "completed" || status === "picked_up" || status === "cancelled") return 0;
     if (typeof order.estimated_minutes === "number" && order.estimated_minutes >= 0) return order.estimated_minutes;
-    if (status === "packing") return 2;
-    if (status === "cooking") {
+    if (status === "preparing" || status === "packing") {
       var elapsed = elapsedMinutes(order.started_at || order.created_at);
       return Math.max(3, 8 - Math.min(5, Math.floor(elapsed / 2)));
     }
-
+    if (status === "accepted") return 2;
     var queue = sortOrdersByCreatedAsc(orders || []).filter(function (item) {
       return ACTIVE_QUEUE_STATUSES.indexOf(mapLegacyStatus(item.status)) >= 0
         && toMillis(item.created_at) <= toMillis(order.created_at);
@@ -276,7 +329,7 @@
     if (status === "picked_up") return "已取餐";
     if (status === "cancelled") return "已取消";
     var minutes = estimateMinutes(order, orders);
-    if (status === "packing" && minutes <= 1) return "即將完成";
+    if ((status === "preparing" || status === "packing") && minutes <= 1) return "即將完成";
     if (minutes <= 0) return "即將完成";
     return "約 " + minutes + " 分";
   }
@@ -290,13 +343,16 @@
       status: nextStatus,
       updated_at: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      estimated_minutes: STATUS_DEFAULT_MINUTES[nextStatus]
+      estimated_minutes: STATUS_DEFAULT_MINUTES[nextStatus] != null ? STATUS_DEFAULT_MINUTES[nextStatus] : 0
     };
     if (!order.created_at && !order.raw.createdAt && !order.raw.created_at) {
       updates.created_at = serverTimestamp();
       updates.createdAt = serverTimestamp();
     }
-    if (nextStatus === "cooking" && !order.started_at) {
+    if (nextStatus === "accepted") {
+      updates.accepted_at = serverTimestamp();
+    }
+    if ((nextStatus === "preparing" || nextStatus === "cooking") && !order.started_at) {
       updates.started_at = serverTimestamp();
       updates.startedAt = serverTimestamp();
     }
@@ -347,11 +403,7 @@
     var orderId = options.orderId;
     var storeId = options.storeId;
     var nextStatus = mapLegacyStatus(options.nextStatus);
-    console.log("[Orders] Updating status.", {
-      orderId: orderId,
-      storeId: storeId,
-      nextStatus: nextStatus
-    });
+    console.log("[Orders] Updating status.", { orderId: orderId, storeId: storeId, nextStatus: nextStatus });
     var ref = db.collection("orders").doc(orderId);
     await db.runTransaction(async function (tx) {
       var snap = await tx.get(ref);
@@ -359,8 +411,10 @@
       var order = normalizeOrder(snap.data(), snap.id);
       if (storeId && order.storeId !== storeId) throw new Error("訂單不屬於目前門市");
 
+      var prevStatus = order.status;
       var updates = buildTimelineUpdates(order, nextStatus);
-      if (!order.inventoryAdjusted && ["cooking", "packing", "ready", "picked_up"].indexOf(nextStatus) >= 0) {
+
+      if (!order.inventoryAdjusted && ["accepted", "preparing", "cooking", "packing", "ready", "picked_up"].indexOf(nextStatus) >= 0) {
         order.items.forEach(function (item) {
           var sku = item.sku || item.itemId;
           if (!sku || !item.qty) return;
@@ -376,8 +430,8 @@
 
       if (!order.pointsGranted && nextStatus === "completed" && order.userId) {
         var pointRule = options.pointRule || { amountPerPoint: 100, pointsPerUnit: 1 };
-        var amountPerPoint = Number(pointRule.amountPerPoint || pointRule.spendX_getY && pointRule.spendX_getY.x || 100) || 100;
-        var pointsPerUnit = Number(pointRule.pointsPerUnit || pointRule.spendX_getY && pointRule.spendX_getY.y || 1) || 1;
+        var amountPerPoint = Number(pointRule.amountPerPoint || (pointRule.spendX_getY && pointRule.spendX_getY.x) || 100) || 100;
+        var pointsPerUnit = Number(pointRule.pointsPerUnit || (pointRule.spendX_getY && pointRule.spendX_getY.y) || 1) || 1;
         var earnedPoints = Math.floor(Number(order.total || 0) / amountPerPoint) * pointsPerUnit;
         var userRef = db.collection("users").doc(order.userId);
         var userSnap = await tx.get(userRef);
@@ -414,7 +468,6 @@
         var txnId = "pt_" + orderId + "_" + Date.now();
         tx.set(db.collection("point_transactions").doc(txnId), pointLogPayload);
         tx.set(db.collection("point_logs").doc(txnId), pointLogPayload);
-
         updates.pointsGranted = true;
         updates.earnedPoints = earnedPoints;
       }
@@ -422,6 +475,20 @@
       if (options.actorUid) updates.last_status_actor_uid = options.actorUid;
       if (options.actorName) updates.last_status_actor_name = options.actorName;
       tx.set(ref, updates, { merge: true });
+
+      // Write order_event for status change
+      var eventRef = db.collection("order_events").doc();
+      tx.set(eventRef, buildOrderEventPayload({
+        orderId: orderId,
+        storeId: order.storeId,
+        type: "status_changed",
+        actorType: options.actorType || "staff",
+        actorId: options.actorUid || "",
+        actorName: options.actorName || "",
+        fromStatus: prevStatus,
+        toStatus: nextStatus,
+        message: ""
+      }));
     });
   }
 
@@ -448,11 +515,14 @@
   window.LeLeShanOrders = {
     PUBLIC_BOARD_STATUSES: PUBLIC_BOARD_STATUSES,
     ACTIVE_QUEUE_STATUSES: ACTIVE_QUEUE_STATUSES,
+    KDS_ACTIVE_STATUSES: KDS_ACTIVE_STATUSES,
     mapLegacyStatus: mapLegacyStatus,
     sourceLabel: sourceLabel,
     normalizeItem: normalizeItem,
     normalizeOrder: normalizeOrder,
     buildCreatePayload: buildCreatePayload,
+    buildOrderItemsPayload: buildOrderItemsPayload,
+    buildOrderEventPayload: buildOrderEventPayload,
     sortOrdersByCreatedAsc: sortOrdersByCreatedAsc,
     estimateMinutes: estimateMinutes,
     etaText: etaText,
