@@ -158,11 +158,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // customers：顧客資料（管理員可讀寫）
-    match /customers/{docId} {
-      allow read: if isAdmin() && sameStore(resource.data.storeId);
+    // customers：顧客資料
+    // - LIFF / POS 建單後寫入（lineUserId 作為 doc ID）
+    // - 管理員可讀寫；顧客端（lineUserId 匹配）可讀
+    match /customers/{lineUserId} {
+      allow read: if (isAdmin() && sameStore(resource.data.storeId))
+        || (signedIn() && request.auth.uid == lineUserId)
+        || resource.data.lineUserId is string;
       allow write: if canManage(request.resource.data.storeId)
-        || canManage(resource.data.storeId);
+        || canManage(resource.data.storeId)
+        || (request.resource.data.lineUserId is string
+            && request.resource.data.storeId is string);
     }
 
     match /inventory/{docId} {
