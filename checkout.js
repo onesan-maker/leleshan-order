@@ -361,6 +361,29 @@
         console.warn("[Order] order_items batch skipped.", e);
       }
 
+      // customers upsert（有 lineUserId 時記錄顧客資料）
+      try {
+        var lineUid = app.state.profile && app.state.profile.userId;
+        if (lineUid) {
+          var ts = firebase.firestore.FieldValue.serverTimestamp();
+          app.state.db.collection("customers").doc(lineUid).set({
+            lineUserId:    lineUid,
+            storeId:       payload.storeId || app.state.storeId,
+            name:          customerName || "",
+            displayName:   (app.state.profile && app.state.profile.displayName) || "",
+            pictureUrl:    (app.state.profile && app.state.profile.pictureUrl) || "",
+            lastOrderId:   ref.id,
+            lastOrderAt:   ts,
+            updatedAt:     ts,
+            createdAt:     ts
+          }, { merge: true }).catch(function (e) {
+            console.warn("[Order] customers upsert failed (non-critical).", e);
+          });
+        }
+      } catch (e) {
+        console.warn("[Order] customers upsert skipped.", e);
+      }
+
       console.log("[Order] Firestore write success.", { documentId: ref.id, pickupNumber: pickupNumber });
       var pickupLabel = (app.state.pickupDateLabel || app.state.pickupDateValue || "") + (app.state.pickupTime ? " " + app.state.pickupTime : "");
       var cartSnapshot = app.state.cart.slice();

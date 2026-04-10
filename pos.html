@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>樂樂山 POS 現場點餐</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ops.css?v=20260410-4">
+  <style>
+    .pos-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
+    .pos-menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .pos-menu-tile { background: var(--surface, #fff); border: 2px solid transparent; border-radius: 12px;
+      padding: 14px 10px; cursor: pointer; text-align: center; transition: border-color .15s, background .15s; }
+    .pos-menu-tile:hover { border-color: var(--accent, #8B1A1A); }
+    .pos-menu-tile__name { font-weight: 700; font-size: .95rem; }
+    .pos-menu-tile__price { color: var(--accent, #8B1A1A); font-size: .85rem; margin-top: 4px; }
+    .pos-cart { background: var(--surface, #fff); border-radius: 16px; padding: 16px;
+      position: sticky; top: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .pos-cart__title { font-weight: 900; font-size: 1.05rem; }
+    .pos-cart__items { display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
+    .pos-cart-item { display: flex; align-items: center; gap: 8px; font-size: .88rem; }
+    .pos-cart-item__name { flex: 1; }
+    .pos-cart-item__qty-btn { background: var(--surface, #eee); border: none; border-radius: 6px;
+      width: 26px; height: 26px; font-size: 1rem; cursor: pointer; font-weight: 700; }
+    .pos-cart-item__qty { font-weight: 700; min-width: 20px; text-align: center; }
+    .pos-cart-item__price { color: var(--muted, #888); white-space: nowrap; }
+    .pos-cart__total { font-size: 1.1rem; font-weight: 900; text-align: right; border-top: 1px solid var(--border, #eee); padding-top: 10px; }
+    .pos-cart__fields { display: flex; flex-direction: column; gap: 8px; }
+    .pos-cart__fields label { font-size: .82rem; font-weight: 700; color: var(--muted); }
+    .pos-cart__fields input, .pos-cart__fields select { width: 100%; padding: 7px 10px; border: 1px solid var(--border, #ddd);
+      border-radius: 8px; font-size: .9rem; box-sizing: border-box; }
+    .pos-submit-btn { width: 100%; padding: 13px; background: var(--accent, #8B1A1A);
+      color: #fff; border: none; border-radius: 10px; font-size: 1rem; font-weight: 900; cursor: pointer; }
+    .pos-submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .pos-status { font-size: .85rem; padding: 8px 12px; border-radius: 8px; background: #f0f0f0;
+      color: #333; text-align: center; }
+    .pos-status.ok   { background: #d4edda; color: #155724; }
+    .pos-status.err  { background: #f8d7da; color: #721c24; }
+    .pos-section-title { font-weight: 700; font-size: .8rem; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
+    .pos-empty { color: var(--muted, #aaa); font-size: .85rem; text-align: center; padding: 10px 0; }
+    @media (max-width: 700px) {
+      .pos-layout { grid-template-columns: 1fr; }
+      .pos-cart { position: static; }
+    }
+  </style>
+</head>
+<body class="ops-page">
+  <div id="auth-loading" class="ops-login-guard">正在驗證員工登入...</div>
+  <div class="ops-shell">
+    <header class="ops-topbar">
+      <div>
+        <h1 class="ops-title">POS 現場點餐</h1>
+        <div id="ops-store-meta" class="ops-subtitle"></div>
+        <div id="ops-user-meta" class="ops-meta"></div>
+      </div>
+    </header>
+    <div id="auth-error" class="ops-error hidden"></div>
+
+    <div class="pos-layout">
+      <!-- 左側：菜單 -->
+      <div>
+        <div id="pos-menu-loading" class="ops-meta">載入菜單中...</div>
+        <div id="pos-menu-root"></div>
+      </div>
+
+      <!-- 右側：購物車 -->
+      <aside class="pos-cart">
+        <div class="pos-cart__title">購物車</div>
+        <div id="pos-cart-items" class="pos-cart__items">
+          <div class="pos-empty">尚未選取品項</div>
+        </div>
+        <div class="pos-cart__total" id="pos-cart-total">合計：NT$0</div>
+
+        <div class="pos-cart__fields">
+          <label>顧客稱呼（選填）
+            <input id="pos-customer-name" type="text" placeholder="王先生、小美…">
+          </label>
+          <label>LINE ID（選填，有則發送通知）
+            <input id="pos-line-user-id" type="text" placeholder="Uxxxxxxxxxxxxxxx">
+          </label>
+          <label>取餐時間（選填）
+            <input id="pos-pickup-time" type="time">
+          </label>
+          <label>備註
+            <input id="pos-note" type="text" placeholder="少辣、不加蔥…">
+          </label>
+        </div>
+
+        <button class="pos-submit-btn" id="pos-submit-btn" type="button" disabled>送出訂單</button>
+        <div id="pos-status" class="pos-status" style="display:none"></div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="/config.js?v=20260403-4"></script>
+  <script src="/order-helpers.js?v=20260410-4"></script>
+  <script src="/staff-auth.js?v=20260404-1"></script>
+  <script src="/pos.js?v=20260410-4"></script>
+</body>
+</html>

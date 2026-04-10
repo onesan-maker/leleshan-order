@@ -225,15 +225,120 @@
     return "fallback_" + stableHash(text);
   }
 
+  // ── Normalize platform_order → unified orders payload ──────────
+  // placeholder：將外賣平台原始資料轉成與 LIFF / POS 一致的 orders 格式
+  // 呼叫端：admin.js 完成匯入後，可呼叫此函式建立 unified order
+  function normalizeToUnifiedOrder(platformOrder, menuMapping, storeId) {
+    // menuMapping：{ platform_item_name → { menuItemId, name, unitPrice } }
+    var mappedItems = (platformOrder.normalized_items || []).map(function (pi) {
+      var key     = buildMappingKey(platformOrder.platform, storeId, pi.platform_item_name, pi.platform_item_id);
+      var mapped  = menuMapping[key] || null;
+      return {
+        sku:        mapped ? mapped.menuItemId : "",
+        itemId:     mapped ? mapped.menuItemId : "",
+        type:       "single",
+        name:       mapped ? mapped.name : pi.platform_item_name,
+        qty:        Number(pi.quantity || 1),
+        flavor:     "",
+        staple:     "",
+        options:    (pi.modifiers || []).map(function (m) { return { name: m, value: m, price: 0 }; }),
+        unit_price: mapped ? Number(mapped.unitPrice || 0) : Number(pi.unit_price || 0),
+        price:      mapped ? Number(mapped.unitPrice || 0) : Number(pi.unit_price || 0),
+        subtotal:   Number(pi.subtotal || 0),
+        item_note:  pi.notes || "",
+        _unmapped:  !mapped  // 標記未匹配品項，供後續補充
+      };
+    });
+
+    var total = Number(platformOrder.total_amount || platformOrder.subtotal_amount || 0);
+
+    return {
+      // 統一 orders 欄位
+      storeId:               storeId,
+      source:                platformOrder.platform === "ubereats" ? "ubereats" : "foodpanda",
+      label:                 platformOrder.platform === "ubereats" ? "UberEats" : "Foodpanda",
+      display_name:          (platformOrder.platform || "") + " " + (platformOrder.customer_name || ""),
+      customer_name:         platformOrder.customer_name || "",
+      customer_phone:        "",
+      lineUserId:            null,
+      status:                "new",
+      items:                 mappedItems,
+      subtotal:              Number(platformOrder.subtotal_amount || total),
+      total:                 total,
+      note:                  "",
+      internal_note:         "",
+      scheduled_pickup_date: "",
+      scheduled_pickup_time: "",
+      scheduled_pickup_at:   "",
+      paymentMethod:         "platform",
+      paymentStatus:         "paid",
+      isTest:                false,
+      // 平台原始資料保留
+      _platformOrderId:      platformOrder.platform_order_id || "",
+      _platformOrderDocId:   platformOrder.id || "",
+      _platform:             platformOrder.platform || "",
+      _hasUnmappedItems:     mappedItems.some(function (i) { return i._unmapped; })
+    };
+  }
+
+  // ── platform_orders schema reference ────────────────────────
+  // 這個物件是 platform_orders collection 的欄位說明（不寫入 Firestore，僅文件用途）
+  var PLATFORM_ORDER_SCHEMA = {
+    // 識別
+    id:                 "string  — doc ID（po_xxxxxxxx）",
+    platform:           "string  — ubereats | foodpanda",
+    store_id:           "string  — storeId（門市）",
+    platform_store_id:  "string  — 平台門市代碼",
+    platform_order_id:  "string  — 平台訂單號",
+    // 金額
+    subtotal_amount:    "number",
+    total_amount:       "number",
+    delivery_fee:       "number",
+    service_fee:        "number",
+    discount_amount:    "number",
+    refund_amount:      "number",
+    // 顧客
+    customer_name:      "string",
+    // 品項
+    normalized_items:   "array   — [{ platform_item_name, platform_item_id, quantity, unit_price, subtotal, modifiers, notes, mapping_key }]",
+    // 匯入
+    source_file_name:   "string",
+    import_status:      "string  — pending | mapped | imported | failed",
+    unified_order_id:   "string  — 對應 orders doc ID（匯入後填入）",
+    // 時間
+    order_time:         "timestamp",
+    createdAt:          "timestamp",
+    updatedAt:          "timestamp"
+  };
+
+  // ── platform_menu_mapping schema reference ───────────────────
+  var PLATFORM_MENU_MAPPING_SCHEMA = {
+    id:                 "string  — map_xxxxxxxx",
+    store_id:           "string",
+    platform:           "string  — ubereats | foodpanda",
+    platform_item_name: "string  — 平台品名（原始）",
+    platform_item_id:   "string",
+    menuItemId:         "string  — 對應本地 menu_items doc ID",
+    name:               "string  — 本地品名",
+    unitPrice:          "number",
+    confirmed:          "boolean — 人工確認過的 mapping",
+    createdAt:          "timestamp",
+    updatedAt:          "timestamp"
+  };
+
   window.PlatformOrderModule = {
     parseCsvText: parseCsvText,
     normalizeParsedRows: normalizeParsedRows,
+    normalizeToUnifiedOrder: normalizeToUnifiedOrder,
     computeFileHash: computeFileHash,
     buildMappingKey: buildMappingKey,
     buildOrderDocId: buildOrderDocId,
     buildMovementDocId: buildMovementDocId,
     buildItemKey: buildItemKey,
     parseNumber: parseNumber,
-    parseDateValue: parseDateValue
+    parseDateValue: parseDateValue,
+    // Schema references（供開發時查閱）
+    PLATFORM_ORDER_SCHEMA: PLATFORM_ORDER_SCHEMA,
+    PLATFORM_MENU_MAPPING_SCHEMA: PLATFORM_MENU_MAPPING_SCHEMA
   };
 })();

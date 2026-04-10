@@ -17,6 +17,14 @@
     ],
     "rewrites": [
       {
+        "source": "pos",
+        "destination": "/pos.html"
+      },
+      {
+        "source": "pos/**",
+        "destination": "/pos.html"
+      },
+      {
         "source": "kds",
         "destination": "/kds.html"
       },
