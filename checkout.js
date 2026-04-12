@@ -137,6 +137,10 @@
   function saveCheckoutDraftState(app) {
     window.LeLeShanStorage.saveCheckoutDraft({
       cart: app.state.cart,
+      cartGroups: app.state.cartGroups,
+      activeGroupId: app.state.activeGroupId,
+      portionMode: app.state.portionMode,
+      portionPromptDismissed: app.state.portionPromptDismissed,
       form: snapshotCheckoutForm(app)
     });
   }
@@ -146,6 +150,14 @@
     if (Array.isArray(pending.cart)) return false;
     var draft = window.LeLeShanStorage.loadCheckoutDraft();
     if (!Array.isArray(draft.cart) || !draft.form) return false;
+    if (draft.cartGroups && draft.cartGroups.length) {
+      app.state.cartGroups = draft.cartGroups;
+      app.state.activeGroupId = draft.activeGroupId || (draft.cartGroups[0] && draft.cartGroups[0].id) || "g-a";
+    }
+    if (draft.portionMode !== undefined) {
+      app.state.portionMode = !!draft.portionMode;
+      app.state.portionPromptDismissed = !!draft.portionPromptDismissed;
+    }
     applyRestoredCheckoutState(app, draft.cart, draft.form, false);
     console.log("[Checkout] General checkout draft restored.", {
       cartItems: app.state.cart.length,
@@ -156,7 +168,11 @@
   }
 
   function applyRestoredCheckoutState(app, cartSnapshot, formSnapshot, preferProfileDisplayName) {
-    app.state.cart = window.LeLeShanStorage.cloneJSON(cartSnapshot || []);
+    var defaultGroupId = (app.state.cartGroups && app.state.cartGroups[0] && app.state.cartGroups[0].id) || "g-a";
+    app.state.cart = (window.LeLeShanStorage.cloneJSON(cartSnapshot || [])).map(function (item) {
+      if (!item.groupId) item.groupId = defaultGroupId;
+      return item;
+    });
     if (typeof formSnapshot.pickupDate === "string" && formSnapshot.pickupDate) {
       app.state.pickupDateValue = formSnapshot.pickupDate;
       app.state.pickupDateLabel = formSnapshot.pickupDateLabel || formSnapshot.pickupDate;
@@ -243,6 +259,7 @@
       return;
     }
     if (!validatePickupSelection(app)) return;
+    if (!app.modules.cart.validateGiftSelection()) return;
 
     app.state.submitting = true;
     app.modules.ui.syncControls(app);
@@ -250,6 +267,35 @@
     var totalPrice = app.modules.cart.totalPrice();
     var ref = app.state.db.collection("orders").doc();
     var todayStr = getTodayDateStr();
+
+    // Build order groups from cart
+    var cartGroupsList = app.state.cartGroups || [{ id: "g-a", label: "A點" }];
+    var firstGroupId = (cartGroupsList[0] && cartGroupsList[0].id) || "g-a";
+    var groupedMap = {};
+    app.state.cart.forEach(function (item) {
+      if (item.isGift) return;
+      var gid = item.groupId || firstGroupId;
+      if (!groupedMap[gid]) groupedMap[gid] = [];
+      groupedMap[gid].push(item);
+    });
+    var orderGroups = cartGroupsList.map(function (g) {
+      return {
+        id: g.id,
+        label: g.label,
+        items: (groupedMap[g.id] || []).map(function (item) {
+          var qty = Number(item.quantity || 0);
+          var unitPrice = Number(item.unitPrice || 0);
+          return {
+            sku: item.itemId, itemId: item.itemId, type: item.type || "",
+            name: item.name, qty: qty,
+            flavor: item.flavorName || "", staple: item.stapleName || "",
+            options: item.options || [],
+            unit_price: unitPrice, subtotal: unitPrice * qty,
+            item_note: item.itemNote || ""
+          };
+        })
+      };
+    }).filter(function (g) { return g.items.length > 0; });
     var counterRef = app.state.db.collection("order_counters").doc(todayStr);
 
     var payload = window.LeLeShanOrders.buildCreatePayload({
@@ -266,6 +312,10 @@
           sku: item.itemId,
           itemId: item.itemId,
           type: item.type || "",
+          isGift: !!item.isGift,
+          giftType: item.giftType || "",
+          giftSlot: item.giftSlot || "",
+          giftLabel: item.giftLabel || "",
           name: item.name,
           qty: quantity,
           flavorId: item.flavorId || "",
@@ -300,7 +350,9 @@
         name: app.state.appliedPromotion.name,
         type: app.state.appliedPromotion.type,
         reward: app.state.appliedPromotion.reward || {}
-      } : null
+      } : null,
+      giftPromotionResult: app.modules.cart.giftPromotionResult(),
+      groups: orderGroups
     });
 
     var pickupNumber = null;
@@ -389,6 +441,10 @@
       var cartSnapshot = app.state.cart.slice();
 
       app.state.cart = [];
+      app.state.cartGroups = [{ id: "g-a", label: "A點" }];
+      app.state.activeGroupId = "g-a";
+      app.state.portionMode = false;
+      app.state.portionPromptDismissed = false;
       if (app.el.orderForm) app.el.orderForm.reset();
       initializePickupSelection(app);
       app.modules.ui.renderPickupDateOptions(app);

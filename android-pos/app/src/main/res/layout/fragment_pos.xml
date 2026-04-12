@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  左側（weight=6）：菜單
+  右側（weight=4）：購物車
+
+  底部覆蓋層 llOrderSheet：今日訂單追加選單（預設 GONE）
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+
+        <!-- ===== 左側：菜單 ===== -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="6"
+            android:orientation="vertical"
+            android:background="#FFFFFF">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="點餐選單"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@color/colorPrimaryDark"
+                android:textColor="#FFFFFF" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvMenu"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="6dp"
+                android:clipToPadding="false" />
+        </LinearLayout>
+
+        <!-- ===== 右側：購物車 ===== -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="4"
+            android:orientation="vertical"
+            android:background="#FAFAFA">
+
+            <!-- 模式標籤 -->
+            <TextView
+                android:id="@+id/tvModeLabel"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:text="新訂單"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:background="@color/colorPrimary" />
+
+            <!-- 顧客稱呼 -->
+            <EditText
+                android:id="@+id/etCustomerName"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:hint="顧客稱呼（必填）"
+                android:textSize="17sp"
+                android:padding="10dp"
+                android:inputType="text"
+                android:background="@android:color/white"
+                android:layout_marginHorizontal="4dp"
+                android:layout_marginTop="4dp" />
+
+            <!-- 購物車列表 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvCart"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:padding="4dp"
+                android:clipToPadding="false" />
+
+            <!-- 備註 -->
+            <EditText
+                android:id="@+id/etOrderNote"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:hint="備註（選填）"
+                android:textSize="15sp"
+                android:padding="8dp"
+                android:background="@android:color/white"
+                android:layout_marginHorizontal="4dp"
+                android:layout_marginTop="2dp" />
+
+            <!-- 合計 -->
+            <TextView
+                android:id="@+id/tvTotal"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="NT$0"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:gravity="center_vertical|end"
+                android:paddingHorizontal="12dp"
+                android:textColor="#1B5E20"
+                android:background="#E8F5E9" />
+
+            <!-- 工具列：清空 / 加份 / 追加 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnClearCart"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="清空"
+                    android:textSize="14sp"
+                    android:backgroundTint="#757575"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnNextGroup"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="＋分份"
+                    android:textSize="14sp"
+                    android:backgroundTint="#0288D1"
+                    android:textColor="#FFFFFF" />
+
+                <Button
+                    android:id="@+id/btnAppendMode"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="追加訂單"
+                    android:textSize="14sp"
+                    android:backgroundTint="#F57F17"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <!-- 送出 -->
+            <Button
+                android:id="@+id/btnSubmit"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="送出訂單"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="@color/colorAccent" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===== 今日訂單覆蓋層（追加用）===== -->
+    <LinearLayout
+        android:id="@+id/llOrderSheet"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:padding="32dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="選擇追加訂單"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvTodayOrders"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <Button
+                android:id="@+id/btnCloseSheet"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="取消"
+                android:backgroundTint="#757575"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>

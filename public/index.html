@@ -1,87 +1,178 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Welcome to Firebase Hosting</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>叫號顯示</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Microsoft JhengHei", sans-serif;
+      }
 
-    <!-- update the version number as needed -->
-    <script defer src="/__/firebase/12.11.0/firebase-app-compat.js"></script>
-    <!-- include only the Firebase features as you need -->
-    <script defer src="/__/firebase/12.11.0/firebase-auth-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-database-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-firestore-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-functions-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-messaging-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-storage-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-analytics-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-remote-config-compat.js"></script>
-    <script defer src="/__/firebase/12.11.0/firebase-performance-compat.js"></script>
-    <!-- 
-      initialize the SDK after all desired features are loaded, set useEmulator to false
-      to avoid connecting the SDK to running emulators.
-    -->
-    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+      * {
+        box-sizing: border-box;
+      }
 
-    <style media="screen">
-      body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
-      #message { background: white; max-width: 360px; margin: 100px auto 16px; padding: 32px 24px; border-radius: 3px; }
-      #message h2 { color: #ffa100; font-weight: bold; font-size: 16px; margin: 0 0 8px; }
-      #message h1 { font-size: 22px; font-weight: 300; color: rgba(0,0,0,0.6); margin: 0 0 16px;}
-      #message p { line-height: 140%; margin: 16px 0 24px; font-size: 14px; }
-      #message a { display: block; text-align: center; background: #039be5; text-transform: uppercase; text-decoration: none; color: white; padding: 16px; border-radius: 4px; }
-      #message, #message a { box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
-      #load { color: rgba(0,0,0,0.4); text-align: center; font-size: 13px; }
-      @media (max-width: 600px) {
-        body, #message { margin-top: 0; background: white; box-shadow: none; }
-        body { border-top: 16px solid #ffa100; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #ffffff;
+        color: #111111;
+      }
+
+      main {
+        width: min(92vw, 980px);
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0 0 18px;
+        font-size: clamp(3rem, 10vw, 6rem);
+      }
+
+      p {
+        margin: 0;
+        font-size: clamp(1.5rem, 4vw, 2.4rem);
+      }
+
+      button {
+        margin-top: 36px;
+        padding: 18px 32px;
+        border: 0;
+        border-radius: 16px;
+        background: #111;
+        color: #fff;
+        font-size: 1.5rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      #hint {
+        margin-top: 16px;
+        color: #666;
+        font-size: 1rem;
       }
     </style>
   </head>
   <body>
-    <div id="message">
-      <h2>Welcome</h2>
-      <h1>Firebase Hosting Setup Complete</h1>
-      <p>You're seeing this because you've successfully setup Firebase Hosting. Now it's time to go build something extraordinary!</p>
-      <a target="_blank" href="https://firebase.google.com/docs/hosting/">Open Hosting Documentation</a>
-    </div>
-    <p id="load">Firebase SDK Loading&hellip;</p>
+    <main>
+      <h1 id="call-text">等待叫號</h1>
+      <p>請留意現場叫號</p>
+      <button id="enable-audio" type="button">啟用聲音</button>
+      <p id="hint">點擊後才會播放提示音與語音</p>
+    </main>
 
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        const loadEl = document.querySelector('#load');
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
-        // // The Firebase SDK is initialized and available here!
-        //
-        // firebase.auth().onAuthStateChanged(user => { });
-        // firebase.database().ref('/path/to/ref').on('value', snapshot => { });
-        // firebase.firestore().doc('/foo/bar').get().then(() => { });
-        // firebase.functions().httpsCallable('yourFunction')().then(() => { });
-        // firebase.messaging().requestPermission().then(() => { });
-        // firebase.storage().ref('/path/to/ref').getDownloadURL().then(() => { });
-        // firebase.analytics(); // call to activate
-        // firebase.analytics().logEvent('tutorial_completed');
-        // firebase.performance(); // call to activate
-        //
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+      import { doc, getFirestore, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+      import { firebaseConfig } from "./config.js";
 
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const callRef = doc(db, "call", "current");
+
+      const callText = document.getElementById("call-text");
+      const enableAudioButton = document.getElementById("enable-audio");
+      const hint = document.getElementById("hint");
+      const dingAudio = new Audio("./ding.mp3");
+
+      let audioEnabled = false;
+      let lastNumber = null;
+
+      function updateDisplay(number) {
+        callText.textContent = Number.isFinite(number) ? `${number}號請取餐` : "等待叫號";
+      }
+
+      async function playFallbackDing() {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+        if (!AudioContextClass) {
+          return;
+        }
+
+        const audioContext = new AudioContextClass();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.value = 880;
+        gainNode.gain.value = 0.001;
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        gainNode.gain.exponentialRampToValueAtTime(0.25, audioContext.currentTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.35);
+        oscillator.stop(audioContext.currentTime + 0.36);
+
+        await new Promise((resolve) => {
+          oscillator.onended = resolve;
+        });
+
+        await audioContext.close();
+      }
+
+      async function playDing() {
         try {
-          let app = firebase.app();
-          let features = [
-            'auth', 
-            'database', 
-            'firestore',
-            'functions',
-            'messaging', 
-            'storage', 
-            'analytics', 
-            'remoteConfig',
-            'performance',
-          ].filter(feature => typeof app[feature] === 'function');
-          loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
-        } catch (e) {
-          console.error(e);
-          loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
+          dingAudio.currentTime = 0;
+          await dingAudio.play();
+          await new Promise((resolve) => {
+            const done = () => {
+              dingAudio.removeEventListener("ended", done);
+              resolve();
+            };
+
+            dingAudio.addEventListener("ended", done, { once: true });
+          });
+        } catch (error) {
+          await playFallbackDing();
+        }
+      }
+
+      function speakNumber(number) {
+        return new Promise((resolve) => {
+          const utterance = new SpeechSynthesisUtterance(`${number}號請取餐`);
+          utterance.lang = "zh-TW";
+          utterance.rate = 1;
+          utterance.onend = resolve;
+          utterance.onerror = resolve;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utterance);
+        });
+      }
+
+      async function announce(number) {
+        if (!audioEnabled || !Number.isFinite(number)) {
+          return;
+        }
+
+        await playDing();
+        await speakNumber(number);
+      }
+
+      enableAudioButton.addEventListener("click", () => {
+        audioEnabled = true;
+        hint.textContent = "聲音已啟用";
+      });
+
+      onSnapshot(callRef, async (snapshot) => {
+        const data = snapshot.data();
+        const number = Number.isFinite(data?.number) ? data.number : null;
+
+        updateDisplay(number);
+
+        if (lastNumber === null) {
+          lastNumber = number;
+          return;
+        }
+
+        if (number !== lastNumber) {
+          lastNumber = number;
+          await announce(number);
         }
       });
     </script>

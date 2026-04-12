@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260410-3">
+  <link rel="stylesheet" href="./styles.css?v=20260412-10">
 </head>
 <body>
   <div class="page-shell">
@@ -79,25 +79,27 @@
         <p class="step-hint">套餐與單點可以同時加，切換後繼續加入即可。</p>
       </section>
 
-      <section id="combo-section" class="step-card hidden">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">STEP 3A</p>
-            <h2>套餐</h2>
+      <div id="step3-section">
+        <section id="combo-section" class="step-card hidden">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">STEP 3A</p>
+              <h2>套餐</h2>
+            </div>
           </div>
-        </div>
-        <div id="combo-root" class="menu-grid"></div>
-      </section>
+          <div id="combo-root" class="menu-grid"></div>
+        </section>
 
-      <section id="single-section" class="step-card hidden">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">STEP 3B</p>
-            <h2>單點</h2>
+        <section id="single-section" class="step-card hidden">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">STEP 3B</p>
+              <h2>單點</h2>
+            </div>
           </div>
-        </div>
-        <div id="single-root" class="single-root"></div>
-      </section>
+          <div id="single-root" class="single-root"></div>
+        </section>
+      </div>
 
       <section class="step-card" id="checkout-section">
         <div class="section-heading">
@@ -115,7 +117,9 @@
                 <a href="#flavor-options" class="cart-box__back-link">繼續選餐點</a>
               </div>
             </div>
+            <div id="cart-group-selector" class="cart-group-selector"></div>
             <div id="cart-items" class="cart-items"></div>
+            <div id="gift-selection-panel" class="hidden"></div>
           </div>
 
           <label class="field">
@@ -145,6 +149,21 @@
         </form>
       </section>
     </main>
+  </div>
+
+  <div id="order-success-screen" class="order-success-screen hidden">
+    <div class="oss-card">
+      <div class="oss-icon">✅</div>
+      <h2 class="oss-title">訂購成功！</h2>
+      <div class="oss-number-wrap">
+        <p class="oss-number-label">取餐號碼</p>
+        <p class="oss-number" id="order-success-number">—</p>
+      </div>
+      <p class="oss-label" id="order-success-label"></p>
+      <div class="oss-items" id="order-success-items"></div>
+      <p class="oss-total">合計：<strong id="order-success-total">NT$ 0</strong></p>
+      <button type="button" id="order-success-back-btn" class="primary-btn oss-back-btn">回到點餐畫面</button>
+    </div>
   </div>
 
   <aside class="floating-cart">
@@ -194,10 +213,10 @@
           <select id="quantity-modal-staple"></select>
         </label>
       </div>
+      <div id="quantity-modal-portion" class="quantity-modal__portion hidden"></div>
       <div id="quantity-modal-options" class="quantity-modal__options"></div>
       <div id="quantity-modal-success" class="hidden">
         <p id="quantity-modal-success-text" class="quantity-modal__success-text"></p>
-        <button id="quantity-modal-confirm" class="primary-btn modal-card__button" type="button">好的</button>
       </div>
     </div>
   </div>
@@ -219,12 +238,12 @@
   <script src="./config.js?v=20260403-4"></script>
   <script src="./defaults.js?v=20260408-1"></script>
   <script src="./storage.js?v=20260404-1"></script>
-  <script src="./order-helpers.js?v=20260410-3"></script>
-  <script src="./ui.js?v=20260410-2"></script>
-  <script src="./cart.js?v=20260408-2"></script>
+  <script src="./order-helpers.js?v=20260411-1"></script>
+  <script src="./ui.js?v=20260412-10"></script>
+  <script src="./cart.js?v=20260412-5"></script>
   <script src="./auth.js?v=20260404-1"></script>
-  <script src="./checkout.js?v=20260410-4"></script>
+  <script src="./checkout.js?v=20260412-1"></script>
   <script src="./member.js?v=20260410-2"></script>
-  <script src="./app.js?v=20260410-2"></script>
+  <script src="./app.js?v=20260412-1"></script>
 </body>
 </html>

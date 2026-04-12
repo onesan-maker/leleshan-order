@@ -240,6 +240,30 @@ button {
   padding-left: 18px;
 }
 
+.order-card__group-block {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 4px solid #f97316;
+  margin-top: 10px;
+}
+.order-card__group-block:first-of-type {
+  margin-top: 0;
+}
+
+.order-card__group-label {
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  color: #fb923c;
+  line-height: 1.2;
+  padding: 0;
+  margin: 0;
+}
+
 .order-card__note {
   padding: 12px 14px;
   border-radius: 16px;

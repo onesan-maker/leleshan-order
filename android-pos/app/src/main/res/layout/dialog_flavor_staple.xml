@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- 標題 -->
+        <TextView
+            android:id="@+id/tvDialogTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="選擇口味"
+            android:textSize="19sp"
+            android:textStyle="bold"
+            android:paddingBottom="10dp" />
+
+        <!-- 口味：大按鈕（由 code 動態填入） -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="口味"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/colorPrimary"
+            android:paddingBottom="6dp" />
+
+        <LinearLayout
+            android:id="@+id/llFlavorButtons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <!-- 主食（套餐才顯示） -->
+        <LinearLayout
+            android:id="@+id/llStapleSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="主食"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="#388E3C"
+                android:paddingBottom="6dp" />
+
+            <RadioGroup
+                android:id="@+id/rgStaple"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </LinearLayout>
+
+        <!-- 數量 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="14dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="數量"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnQtyMinus"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:text="－"
+                android:textSize="22sp"
+                android:backgroundTint="@color/colorPrimary" />
+
+            <TextView
+                android:id="@+id/tvQty"
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="1"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+
+            <Button
+                android:id="@+id/btnQtyPlus"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:text="＋"
+                android:textSize="22sp"
+                android:backgroundTint="@color/colorPrimary" />
+        </LinearLayout>
+
+        <!-- 備註 -->
+        <EditText
+            android:id="@+id/etItemNotes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="品項備註（選填）"
+            android:textSize="15sp"
+            android:layout_marginTop="10dp"
+            android:inputType="text" />
+
+        <!-- 按鈕列 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="14dp">
+
+            <Button
+                android:id="@+id/btnCancel"
+                android:layout_width="0dp"
+                android:layout_height="54dp"
+                android:layout_weight="1"
+                android:text="取消"
+                android:textSize="16sp"
+                android:backgroundTint="#757575"
+                android:textColor="#FFFFFF"
+                android:layout_marginEnd="6dp" />
+
+            <!-- 非套餐快速加入（1 tap） -->
+            <Button
+                android:id="@+id/btnQuickAdd"
+                android:layout_width="0dp"
+                android:layout_height="54dp"
+                android:layout_weight="1"
+                android:text="快速加入"
+                android:textSize="16sp"
+                android:backgroundTint="#0288D1"
+                android:textColor="#FFFFFF"
+                android:layout_marginEnd="6dp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnConfirm"
+                android:layout_width="0dp"
+                android:layout_height="54dp"
+                android:layout_weight="1"
+                android:text="加入購物車"
+                android:textSize="16sp"
+                android:backgroundTint="@color/colorAccent"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

@@ -169,7 +169,7 @@
     var helpers    = window.LeLeShanOrders;
     var meta       = helpers.statusMeta(order.status);
     var sourceTag  = SOURCE_LABELS[order.source] || "現場";
-    var items      = helpers.itemSummary(order.items, 8);
+    var itemsGroups = order.groups && order.groups.length > 1 ? order.groups : null;
     var scheduled  = helpers.isFutureScheduled(order);
     var pickupStr  = order.scheduled_pickup_time
       ? (order.scheduled_pickup_date + " " + order.scheduled_pickup_time)
@@ -222,9 +222,26 @@
       '  <div class="timeline">',
       '    <span>取餐：' + esc(pickupStr) + '</span>',
       '  </div>',
-      '  <ol class="order-card__items">',
-      items.map(function (line) { return '    <li>' + esc(line) + '</li>'; }).join("\n"),
-      '  </ol>',
+      itemsGroups
+        ? itemsGroups.map(function (g, gIdx) {
+            var displayLabel = "第" + (gIdx + 1) + "份";
+            var gLines = (g.items || []).map(function (i) {
+              var detail = [];
+              if (i.flavor) detail.push(i.flavor);
+              if (i.staple) detail.push("主食：" + i.staple);
+              var suffix = detail.length ? "（" + detail.join("／") + "）" : "";
+              return esc((i.name || "") + " x" + Number(i.qty || 0) + suffix);
+            });
+            return '  <div class="order-card__group-block">' +
+              '<div class="order-card__group-label">' + esc(displayLabel) + '</div>' +
+              '<ol class="order-card__items">' +
+              gLines.map(function (line) { return '<li>' + line + '</li>'; }).join("") +
+              '</ol>' +
+              '</div>';
+          }).join("\n")
+        : '  <ol class="order-card__items">\n' +
+          helpers.itemSummary(order.items, 8).map(function (line) { return '    <li>' + esc(line) + '</li>'; }).join("\n") +
+          '\n  </ol>',
       '  <div class="order-card__note">備註：' + esc(order.note || "無") + '</div>',
       '  <div class="order-card__actions">' + actions.join("") + '</div>',
       '</article>'

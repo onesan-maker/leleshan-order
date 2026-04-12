@@ -23,7 +23,18 @@
       "Bash(firebase functions:delete sendOrderReceivedPush --region asia-east1 --force)",
       "Bash(firebase functions:artifacts:setpolicy --force)",
       "Bash(firebase functions:config:set line.channel_access_token=\"QKVB4aucEsd0bkKsc8oNOPmmBI78T25tagNm76wT6WlmRZRI2Mw++0T8uxzuL1NR4wUtR7E6O1SXxFJaiIHBjRWkRojzryQGa86r8+hwFnpR42Dtfb3ZTIULxUG6Rxt91dwh6pXFLqNmudIVXLVCegdB04t89/1O/w1cDnyilFU=\")",
-      "Bash(firebase experiments:enable legacyRuntimeConfigCommands)"
+      "Bash(firebase experiments:enable legacyRuntimeConfigCommands)",
+      "Bash(python3 -c ':*)",
+      "Bash(powershell -Command \"Get-Content 'E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\ui.js' | Select-Object -Skip 326 -First 17\")",
+      "Bash(node seed-gift-rules.js)",
+      "Bash(firebase login:list)",
+      "Bash(grep -E \"\\\\.\\(html|js|css\\)$\")",
+      "Bash(dir \"E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\\\\public\")",
+      "Bash(dir \"E:\\\\OneDrive\\\\桌面\\\\紅頤坊\\\\樂樂山\\\\liff-ordering\")",
+      "Bash(firebase firestore:get \"menu_items\" --project leleshan-order)",
+      "Bash(sed -i \"s/styles.css?v=20260412-7/styles.css?v=20260412-8/\" index.html)",
+      "Bash(sed -i \"s/ui.js?v=20260412-3/ui.js?v=20260412-4/\" index.html)",
+      "Bash(sed -i \"s/cart.js?v=20260412-2/cart.js?v=20260412-3/\" index.html)"
     ]
   }
 }
