@@ -52,6 +52,59 @@
     }) || { id: "", name: "" };
   }
 
+  function allSingleItems(app) {
+    var list = [];
+    app.state.singleCategories.forEach(function (category) {
+      category.items.forEach(function (item) {
+        list.push(item);
+      });
+    });
+    return list;
+  }
+
+  function matchesNamedItem(item, name) {
+    return !!(item && (item.name === name || String(item.name || "").indexOf(name) >= 0));
+  }
+
+  function recommendGapFillItem(app, gap) {
+    var items = allSingleItems(app).filter(function (item) {
+      return Number(item && item.price || 0) <= Number(gap || 0) + 20;
+    });
+    if (!items.length) return null;
+    return items.sort(function (left, right) {
+      var leftDiff = Math.abs(Number(left.price || 0) - Number(gap || 0));
+      var rightDiff = Math.abs(Number(right.price || 0) - Number(gap || 0));
+      if (leftDiff !== rightDiff) return leftDiff - rightDiff;
+      return Number(left.price || 0) - Number(right.price || 0);
+    })[0] || null;
+  }
+
+  function recommendBoostItems(app) {
+    var names = ["玉米筍", "王子麵", "白飯"];
+    var items = allSingleItems(app);
+    return names.map(function (name) {
+      return items.find(function (item) { return matchesNamedItem(item, name); }) || null;
+    }).filter(Boolean).slice(0, 3);
+  }
+
+  function hasPendingStapleSelection(app) {
+    var result = app.state.giftPromotionResult || null;
+    if (!result || !result.enabled || !result.entitlement) return false;
+    var selectedStaples = (result.selectedGifts || []).filter(function (item) {
+      return item.giftType === "staple";
+    }).length;
+    return Number(result.entitlement.stapleCount || 0) > selectedStaples;
+  }
+
+  function maybeShowFirstAddNudge(app, hadItemsBefore) {
+    if (hadItemsBefore || app.state.firstAddNudgeShown) return;
+    app.state.firstAddNudgeShown = true;
+    var actions = recommendBoostItems(app).slice(0, 2).map(function (item) {
+      return { label: "+ " + item.name, itemId: item.id };
+    });
+    window.LeLeShanUI.showToast("再加一個更剛好 👍", actions, 2200);
+  }
+
   function getComboOptions(app, combo) {
     var group = (combo.optionGroups || []).find(function (item) {
       return item.id === "staple" || item.name === "主食";
@@ -237,7 +290,7 @@
     if (current.vegetableCount) summaryParts.push("蔬菜 " + selectedVegetables + "/" + current.vegetableCount);
     return {
       id: "gift-promo",
-      name: "單點滿額贈品",
+      name: "自由單點滿額贈品",
       type: "gift_selection",
       enabled: current.enabled,
       singleAmount: current.singleAmount,
@@ -307,7 +360,7 @@
       type: "combo",
       id: combo.id,
       name: combo.name,
-      displayType: "套餐",
+      displayType: "🔥 套餐（最划算）",
       basePrice: Number(combo.price || 0),
       flavorId: flavor.id || "",
       flavorName: flavor.name || "",
@@ -380,6 +433,7 @@
   // quickAdd: directly add item to cart without modal or flavor validation
   function quickAddSingle(app, id) {
     if (!allowOrder(app)) return;
+    var hadItemsBefore = !!app.state.cart.length;
     var match = null;
     app.state.singleCategories.forEach(function (category) {
       category.items.forEach(function (item) {
@@ -425,7 +479,8 @@
       return i.itemId === match.id && i.type === "single" && !i.flavorId;
     });
     var qty = cartItem ? cartItem.quantity : 1;
-    window.LeLeShanUI.showToast("已加入 " + match.name + " ×" + qty);
+    window.LeLeShanUI.showToast("✔ 已加入 " + match.name + " ×" + qty);
+    maybeShowFirstAddNudge(app, hadItemsBefore);
   }
 
   function requestAddSingle(app, id) {
@@ -468,6 +523,7 @@
   function addCombo(app, selection, quantity) {
     quantity = Number(quantity || 1);
     if (!allowOrder(app) || !ensureFlavor(app)) return;
+    var hadItemsBefore = !!app.state.cart.length;
 
     var combo = app.state.comboItems.find(function (item) {
       return item.id === selection.id;
@@ -489,7 +545,7 @@
       flavorName: selection.flavorName || "",
       stapleId: staple.id || selection.stapleId || "",
       stapleName: staple.name || "",
-      comboLabel: selection.displayType || "套餐",
+      comboLabel: selection.displayType || "🔥 套餐（最划算）",
       priceAdjustment: Number(staple.price || 0),
       categoryName: "",
       quantity: quantity,
@@ -502,12 +558,14 @@
 
     renderCart(app);
     app.modules.checkout.saveCheckoutDraftState();
+    maybeShowFirstAddNudge(app, hadItemsBefore);
   }
 
   function addSingle(app, selection, quantity) {
     quantity = Number(quantity || 1);
     if (!allowOrder(app)) return;
     if (selection.requiresFlavor !== false && !ensureFlavor(app)) return;
+    var hadItemsBefore = !!app.state.cart.length;
 
     var match = null;
     app.state.singleCategories.forEach(function (category) {
@@ -555,6 +613,7 @@
 
     renderCart(app);
     app.modules.checkout.saveCheckoutDraftState();
+    maybeShowFirstAddNudge(app, hadItemsBefore);
   }
 
   function buildCartMetaSummary(item) {
@@ -694,7 +753,7 @@
     var meta = buildCartMetaSummary(item);
     var type = normalizeCartType(item.type);
     var badge = "";
-    if (type === "combo") badge = '<span class="cart-receipt__badge">' + escapeHtml(item.comboLabel || "套餐") + "</span>";
+    if (type === "combo") badge = '<span class="cart-receipt__badge">' + escapeHtml(item.comboLabel || "🔥 套餐（最划算）") + "</span>";
     if (type === "gift") badge = '<span class="cart-receipt__badge">' + escapeHtml(item.comboLabel || "優惠贈品") + "</span>";
 
     // In portion mode, show group-assign buttons for single items
@@ -725,7 +784,7 @@
       + '<div class="cart-receipt__qty-ctrl">'
       + '<button class="cart-receipt__qty-btn" type="button" data-qty-dec="' + escapeHtml(item.uid) + '">−</button>'
       + '<span class="cart-receipt__qty">×' + quantity + '</span>'
-      + '<button class="cart-receipt__qty-btn" type="button" data-qty-inc="' + escapeHtml(item.uid) + '">＋</button>'
+      + '<button class="cart-receipt__qty-btn" type="button" data-qty-inc="' + escapeHtml(item.uid) + '">+1</button>'
       + '</div>'
       + '<span class="cart-receipt__subtotal">NT$\u00a0' + subtotal + '</span>'
       + '</div>'
@@ -913,7 +972,7 @@
     var portionContext = app.state.portionMode ? { portionMode: true, groups: groups } : null;
 
     if (!app.state.cart.length) {
-      app.el.cartItems.innerHTML = '<p class="empty-cart">尚未加入任何品項。<br>請在上方選擇口味，再加入套餐或單點。</p>';
+      app.el.cartItems.innerHTML = '<p class="empty-cart">尚未加入任何品項。<br>請在上方選擇口味，再加入🔥 套餐（最划算）或自由單點。</p>';
     } else {
       var html = '<div class="cart-receipt">';
       if (showGroups) {
@@ -1003,7 +1062,30 @@
     if (app.el.cartTotalBottom) app.el.cartTotalBottom.textContent = "NT$\u00a0" + total;
     if (app.el.cartSummaryBottom) app.el.cartSummaryBottom.textContent = summary;
     if (app.el.cartSummaryInline) app.el.cartSummaryInline.textContent = summary;
+    var singleAmount = Number(app.state.giftPromotionResult && app.state.giftPromotionResult.singleAmount || 0);
+    var gap = Math.max(0, 150 - singleAmount);
+    var gapItem = gap > 0 ? recommendGapFillItem(app, gap) : null;
+    var boostItems = singleAmount >= 80 && singleAmount < 150 ? recommendBoostItems(app).slice(0, 3) : [];
+    var upsellMainHtml = singleAmount < 150
+      ? '還差 ' + gap + ' 元送主食 🎯' + (gapItem ? ' <button type="button" class="cart-boost-hint__action" data-gap-fill="' + escapeHtml(gapItem.id) + '">補差額 👉</button>' : '')
+      : '🎉 已達滿額！記得選主食';
+    var boostLineHtml = boostItems.length
+      ? '<div class="cart-boost-hint__line">推薦補差：' + boostItems.map(function (item) {
+        return '<button type="button" class="cart-boost-hint__chip" data-gap-add="' + escapeHtml(item.id) + '">+ ' + escapeHtml(item.name) + ' NT$' + Number(item.price || 0) + '</button>';
+      }).join("") + '</div>'
+      : '';
+    var stapleWarnHtml = singleAmount >= 150 && hasPendingStapleSelection(app)
+      ? '<div class="cart-boost-hint__line">👉 主食還沒選 ⚠️</div>'
+      : '';
+    if (app.el.upsellProgressBottom) app.el.upsellProgressBottom.innerHTML = upsellMainHtml + stapleWarnHtml;
+    if (app.el.upsellProgressInline) app.el.upsellProgressInline.innerHTML = upsellMainHtml + boostLineHtml + stapleWarnHtml;
     if (app.el.viewCartBtnSticky) app.el.viewCartBtnSticky.classList.toggle("hidden", !app.state.cart.length);
+    Array.prototype.slice.call(document.querySelectorAll("[data-gap-fill],[data-gap-add]")).forEach(function (button) {
+      button.addEventListener("click", function () {
+        var itemId = button.getAttribute("data-gap-fill") || button.getAttribute("data-gap-add");
+        if (itemId) quickAddSingle(app, itemId);
+      });
+    });
 
     app.state.appliedPromotion = computePromotion(app);
     app.modules.ui.updatePromoBanner(app);

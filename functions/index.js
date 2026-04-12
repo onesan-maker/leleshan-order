@@ -7,7 +7,7 @@
  *   4. 所有推播結果記錄到 notifications / order_events
  *
  * 設定 LINE token：
- *   firebase functions:config:set line.channel_access_token="YOUR_TOKEN"
+ *   firebase functions:config:set line.channel_access_token="<set-in-shell>"
  *   firebase deploy --only functions
  */
 
@@ -284,6 +284,11 @@ function buildCancelledMessage(order, orderId) {
 // ── 工具函式 ─────────────────────────────────────────────────────
 
 function getLineToken() {
+  const envToken =
+    process.env.LINE_CHANNEL_ACCESS_TOKEN ||
+    process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN ||
+    "";
+  if (envToken) return envToken;
   try {
     const cfg = functions.config();
     return cfg.line && cfg.line.channel_access_token || "";

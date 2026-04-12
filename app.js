@@ -35,7 +35,8 @@
       storeClosedModalShown: false,
       pendingCheckoutRestored: false,
       activeModal: null,
-      pendingCartSelection: null
+      pendingCartSelection: null,
+      firstAddNudgeShown: false
     },
     el: {},
     modules: {}

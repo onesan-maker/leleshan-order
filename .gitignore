@@ -64,6 +64,25 @@ node_modules/
 
 # dotenv environment variables file
 .env
+.env.local
+.env.*
+!.env.sample
 
 # dataconnect generated files
 .dataconnect
+
+# Local app/runtime config
+config.js
+public/config.js
+functions/.env
+functions/.env.local
+functions/.runtimeconfig.json
+
+# Local assistant / machine settings
+.claude/settings.local.json
+
+# Local secret scanning metadata
+.secrets.baseline
+Lib/
+Scripts/
+pyvenv.cfg

@@ -1,4 +1,5 @@
 window.APP_CONFIG = {
+  // Copy to ignored `config.js` only when you need a local override.
   liffId: "YOUR_LIFF_ID",
   firebaseConfig: {
     apiKey: "YOUR_FIREBASE_API_KEY",

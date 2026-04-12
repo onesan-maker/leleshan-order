@@ -1,4 +1,5 @@
 ﻿(function () {
+  var activeApp = null;
   var CATEGORY_COLOR_OPTIONS = [
     { value: "cream", label: "奶油米", bgColor: "#F7F1E3", buttonColor: "#B9853C", textColor: "#5A3418", buttonTextColor: "#FFFFFF" },
     { value: "warm-beige", label: "暖米色", bgColor: "#EFE3D3", buttonColor: "#A66A46", textColor: "#5B3723", buttonTextColor: "#FFFFFF" },
@@ -14,6 +15,7 @@
   var DEFAULT_CATEGORY_COLOR = "warm-beige";
 
   function init(app) {
+    activeApp = app;
     var el = app.el;
     el.profileName = document.getElementById("profile-name");
     el.profileMeta = document.getElementById("profile-meta");
@@ -39,6 +41,8 @@
     el.cartTotalBottom = document.getElementById("cart-total-bottom");
     el.cartSummaryBottom = document.getElementById("cart-summary-bottom");
     el.cartSummaryInline = document.getElementById("cart-summary-inline");
+    el.upsellProgressBottom = document.getElementById("upsell-progress-bottom");
+    el.upsellProgressInline = document.getElementById("upsell-progress-inline");
     el.floatingCart = document.querySelector(".floating-cart");
     el.promoBanner = document.getElementById("promo-banner");
     el.promoBannerText = document.getElementById("promo-banner-text");
@@ -112,7 +116,7 @@
         app.el.storeStatusSubText.innerText = meta.subtitle || "目前尚未開始營業。";
       } else {
         app.el.storeStatusText.innerText = "🔴 今日休息";
-        app.el.storeStatusSubText.innerText = meta.subtitle || "今天沒有營業時段。";
+        app.el.storeStatusSubText.innerText = meta.subtitle || "目前休息中，可預約取餐";
       }
     } else if (status === app.STATUS.LOADING) {
       app.el.storeStatusText.innerText = "⏳ 正在確認營業狀態";
@@ -162,7 +166,7 @@
     app.el.storeStatusModal.setAttribute("aria-hidden", "false");
     app.state.activeModal = "store-status";
     if (app.el.storeStatusModalTitle) app.el.storeStatusModalTitle.textContent = "目前非營業時間";
-    if (app.el.storeStatusModalText) app.el.storeStatusModalText.textContent = "仍可先點餐，並預約營業時間取餐。";
+    if (app.el.storeStatusModalText) app.el.storeStatusModalText.textContent = "目前休息中，可預約取餐";
   }
 
   function closeStoreStatusModal(app) {
@@ -213,7 +217,7 @@
     app.el.quantityModalDetail.style.display = showDetail ? "" : "none";
 
     if (app.el.quantityModalType) {
-      app.el.quantityModalType.textContent = isCombo ? "套餐" : "";
+      app.el.quantityModalType.textContent = isCombo ? "🔥 套餐（最划算）" : "";
       if (app.el.quantityModalType.parentElement) {
         app.el.quantityModalType.parentElement.classList.toggle("hidden", !isCombo);
       }
@@ -439,9 +443,10 @@
     app.el.quantityModalSuccess.classList.remove("hidden");
     if (app.el.quantityModalDetail) app.el.quantityModalDetail.style.display = "none";
     var label = selection && selection.type === "combo"
-      ? '已加入 ' + quantity + '份 ' + (selection.name || "") + '（套餐）'
+      ? '已加入 ' + quantity + '份 ' + (selection.name || "") + '（🔥 套餐（最划算））'
       : '已加入 ' + quantity + '份 ' + (((selection && selection.name) || ""));
     app.el.quantityModalSuccessText.textContent = label;
+    showToast("✔ 已加入 " + (((selection && selection.name) || "")) + " ×" + quantity);
     setTimeout(function () {
       if (app.state.activeModal === "quantity-select") closeQuantityModal(app);
     }, 1000);
@@ -602,8 +607,8 @@
   function renderOrderTypes(app) {
     if (!app.el.orderTypeOptions) return;
     var types = [
-      { id: "combo", name: "套餐", desc: "可選主食，適合一次搭配完成。" },
-      { id: "single", name: "單點", desc: "自由加點喜歡的單品。" }
+      { id: "combo", name: "🔥 套餐（最划算）", desc: "可選主食，適合一次搭配完成。" },
+      { id: "single", name: "自由單點", desc: "自由加點喜歡的單品。" }
     ];
     app.el.orderTypeOptions.innerHTML = types.map(function (type) {
       var disabled = !app.state.selectedFlavor;
@@ -629,7 +634,7 @@
       var options = app.modules.cart.getComboOptions(item).map(function (option) {
         return '<option value="' + option.id + '">' + escapeHtml(option.name) + (option.price ? " +NT$" + option.price : "") + "</option>";
       }).join("");
-      return '<article class="item-card item-card--combo"><div class="item-card__body"><h3>' + escapeHtml(item.name) + '</h3><p class="item-card__meta">' + escapeHtml(item.description || "") + '</p></div><div class="item-card__footer"><strong class="item-card__price">NT$ ' + Number(item.price || 0) + '</strong><label class="option-group"><span>主食</span><select id="staple-' + item.id + '">' + options + '</select></label><button class="secondary-btn secondary-btn--full" type="button" data-add-combo="' + item.id + '">加入套餐</button></div></article>';
+      return '<article class="item-card item-card--combo"><div class="item-card__body"><h3>' + escapeHtml(item.name) + '</h3><p class="item-card__meta">' + escapeHtml(item.description || "") + '</p></div><div class="item-card__footer"><strong class="item-card__price">NT$ ' + Number(item.price || 0) + '</strong><label class="option-group"><span>主食</span><select id="staple-' + item.id + '">' + options + '</select></label><button class="secondary-btn secondary-btn--full" type="button" data-add-combo="' + item.id + '">加入🔥 套餐（最划算）</button></div></article>';
     }).join("");
 
     Array.prototype.slice.call(app.el.comboRoot.querySelectorAll("[data-add-combo]")).forEach(function (button) {
@@ -639,12 +644,55 @@
     });
   }
 
+  function renderSingleTile(item, theme) {
+    var priceText = 'NT$ ' + Number(item.price || 0) + (item.unit ? ' / ' + escapeHtml(item.unit) : '');
+    return '<article class="menu-tile"><div class="menu-tile__body"><strong>' + escapeHtml(item.name) + '</strong>' + (item.unit ? '<span>' + escapeHtml(item.unit) + '</span>' : '') + '</div><div class="menu-tile__footer"><strong>' + priceText + '</strong><button class="mini-btn menu-tile__add-btn" type="button" data-add-single="' + item.id + '" data-category-theme="' + escapeHtml(theme.value) + '" data-button-color="' + escapeHtml(theme.buttonColor) + '" data-button-text-color="' + escapeHtml(theme.buttonTextColor) + '">加入</button></div></article>';
+  }
+
+  function singlePriorityRank(name) {
+    var names = ["玉米筍", "毛肚", "王子麵", "白飯"];
+    var idx = names.findIndex(function (item) {
+      return name === item || String(name || "").indexOf(item) >= 0;
+    });
+    return idx >= 0 ? idx : 999;
+  }
+
+  function sortSingleItemsForDisplay(items) {
+    return (items || []).slice().sort(function (left, right) {
+      var leftRank = singlePriorityRank(left && left.name);
+      var rightRank = singlePriorityRank(right && right.name);
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return String(left && left.name || "").localeCompare(String(right && right.name || ""), "zh-Hant");
+    });
+  }
+
+  function findPopularAddOns(app) {
+    var names = ["玉米筍", "毛肚", "王子麵", "白飯"];
+    var flat = [];
+    app.state.singleCategories.forEach(function (category) {
+      var theme = resolveCategoryTheme(category.colorTheme || category.bgColor || category.themeColor);
+      category.items.forEach(function (item) {
+        flat.push({ item: item, theme: theme });
+      });
+    });
+    return names.map(function (name) {
+      return flat.find(function (entry) {
+        return entry.item && (entry.item.name === name || String(entry.item.name || "").indexOf(name) >= 0);
+      }) || null;
+    }).filter(Boolean);
+  }
+
   function renderSingleItems(app) {
     if (!app.el.singleRoot) return;
-    app.el.singleRoot.innerHTML = app.state.singleCategories.map(function (category) {
+    var popular = findPopularAddOns(app);
+    var popularHtml = popular.length
+      ? '<section class="category-card category-card--tinted recommend-strip-section"><div class="category-card__head"><h3>大家都會加 👍</h3></div><div class="recommend-strip">' + popular.map(function (entry) { return renderSingleTile(entry.item, entry.theme); }).join("") + '</div></section>'
+      : "";
+    app.el.singleRoot.innerHTML = popularHtml + app.state.singleCategories.map(function (category) {
       var theme = resolveCategoryTheme(category.colorTheme || category.bgColor || category.themeColor);
-      return '<section class="category-card category-card--tinted" data-category-theme="' + escapeHtml(theme.value) + '" style="background:' + theme.bgColor + ";color:" + theme.textColor + '"><div class="category-card__head"><h3>' + escapeHtml(category.title) + '</h3><span class="option-pill">' + category.items.length + ' 項</span></div><div class="menu-tile-grid">' + category.items.map(function (item) {
-        return '<article class="menu-tile"><div class="menu-tile__body"><strong>' + escapeHtml(item.name) + '</strong>' + (item.unit ? '<span>' + escapeHtml(item.unit) + '</span>' : '') + '</div><div class="menu-tile__footer"><strong>NT$ ' + Number(item.price || 0) + '</strong><button class="mini-btn menu-tile__add-btn" type="button" data-add-single="' + item.id + '" data-category-theme="' + escapeHtml(theme.value) + '" data-button-color="' + escapeHtml(theme.buttonColor) + '" data-button-text-color="' + escapeHtml(theme.buttonTextColor) + '">加入</button></div></article>';
+      var sortedItems = sortSingleItemsForDisplay(category.items);
+      return '<section class="category-card category-card--tinted" data-category-theme="' + escapeHtml(theme.value) + '" style="background:' + theme.bgColor + ";color:" + theme.textColor + '"><div class="category-card__head"><h3>' + escapeHtml(category.title) + '</h3><span class="option-pill">' + sortedItems.length + ' 項</span></div><div class="menu-tile-grid">' + sortedItems.map(function (item) {
+        return renderSingleTile(item, theme);
       }).join("") + "</div></section>";
     }).join("");
 
@@ -667,7 +715,7 @@
     });
   }
 
-  function showToast(message) {
+  function showToast(message, actions, timeoutMs) {
     var el = document.getElementById("lls-toast");
     if (!el) {
       el = document.createElement("div");
@@ -675,10 +723,18 @@
       el.className = "toast-msg";
       document.body.appendChild(el);
     }
-    el.textContent = message;
+    el.classList.toggle("toast-msg--actions", Array.isArray(actions) && actions.length > 0);
+    el.innerHTML = '<div class="toast-msg__text">' + escapeHtml(message || "") + '</div>' + ((actions || []).length ? '<div class="toast-msg__actions">' + actions.map(function (action) {
+      return '<button type="button" class="toast-msg__action" data-toast-add="' + escapeHtml(action.itemId || "") + '">' + escapeHtml(action.label || "") + '</button>';
+    }).join("") + '</div>' : '');
+    Array.prototype.slice.call(el.querySelectorAll("[data-toast-add]")).forEach(function (button) {
+      button.addEventListener("click", function () {
+        if (activeApp && activeApp.modules && activeApp.modules.cart) activeApp.modules.cart.quickAddSingle(button.getAttribute("data-toast-add"));
+      });
+    });
     el.classList.add("toast-msg--visible");
     clearTimeout(el._timer);
-    el._timer = setTimeout(function () { el.classList.remove("toast-msg--visible"); }, 2200);
+    el._timer = setTimeout(function () { el.classList.remove("toast-msg--visible"); }, Number(timeoutMs || 1200));
   }
 
   function renderPickupDateOptions(app) {
@@ -1183,5 +1239,3 @@
     showToast: showToast
   };
 })();
-
-

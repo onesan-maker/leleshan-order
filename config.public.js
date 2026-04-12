@@ -10,7 +10,7 @@ window.APP_CONFIG = {
     measurementId: "G-RD1HL8ZFKV"
   },
   store: {
-    name: "樂樂山 湯滷川味",
+    name: "璅?撅?皝舀遠撌",
     orderCollection: "orders",
     siteUrl: "https://leleshan-order.web.app",
     defaultStoreId: "store_1"

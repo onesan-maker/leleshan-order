@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260412-10">
+  <link rel="stylesheet" href="./styles.css?v=20260413-2">
 </head>
 <body>
   <div class="page-shell">
@@ -72,11 +72,11 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">STEP 2</p>
-            <h2>選擇套餐或單點</h2>
+            <h2>選擇🔥 套餐（最划算）或自由單點</h2>
           </div>
         </div>
         <div id="order-type-options" class="choice-grid"></div>
-        <p class="step-hint">套餐與單點可以同時加，切換後繼續加入即可。</p>
+        <p class="step-hint">🔥 套餐（最划算）與自由單點可以同時加，切換後繼續加入即可。</p>
       </section>
 
       <div id="step3-section">
@@ -84,7 +84,7 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">STEP 3A</p>
-              <h2>套餐</h2>
+              <h2>🔥 套餐（最划算）</h2>
             </div>
           </div>
           <div id="combo-root" class="menu-grid"></div>
@@ -94,7 +94,7 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">STEP 3B</p>
-              <h2>單點</h2>
+              <h2>自由單點</h2>
             </div>
           </div>
           <div id="single-root" class="single-root"></div>
@@ -145,6 +145,7 @@
             <textarea id="order-note" rows="3" placeholder="少辣、不加蔥、提早到店等需求可在這裡備註。"></textarea>
           </label>
 
+          <div id="upsell-progress-inline" class="cart-boost-hint"></div>
           <p id="submit-message" class="submit-message"></p>
         </form>
       </section>
@@ -170,6 +171,7 @@
     <div class="floating-cart__meta">
       <span id="cart-summary-bottom">共 0 項</span>
       <strong id="cart-total-bottom">NT$ 0</strong>
+      <div id="upsell-progress-bottom" class="floating-cart__upsell"></div>
     </div>
     <button id="view-cart-btn-sticky" class="ghost-btn floating-cart__jump-btn" type="button">查看購物車清單</button>
     <button id="submit-btn" class="primary-btn" type="button">送出訂單</button>
@@ -178,7 +180,7 @@
   <div id="store-status-modal" class="modal-overlay hidden" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="store-status-modal-title">
       <h3 id="store-status-modal-title">目前非營業時間</h3>
-      <p id="store-status-modal-text">仍可先點餐，並預約營業時間取餐。</p>
+      <p id="store-status-modal-text">目前休息中，可預約取餐</p>
       <button id="store-status-modal-close" class="primary-btn modal-card__button" type="button">我知道了</button>
     </div>
   </div>
@@ -202,7 +204,7 @@
       <div id="quantity-modal-detail" class="quantity-modal__detail hidden">
         <div class="quantity-modal__detail-row">
           <span class="quantity-modal__label">類型</span>
-          <strong id="quantity-modal-type">套餐</strong>
+          <strong id="quantity-modal-type">🔥 套餐（最划算）</strong>
         </div>
         <label id="quantity-modal-flavor-field" class="field quantity-modal__field hidden">
           <span>口味</span>
@@ -235,12 +237,12 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
-  <script src="./config.js?v=20260403-4"></script>
+  <script src="./config.public.js?v=20260413-1"></script>
   <script src="./defaults.js?v=20260408-1"></script>
   <script src="./storage.js?v=20260404-1"></script>
   <script src="./order-helpers.js?v=20260411-1"></script>
-  <script src="./ui.js?v=20260412-10"></script>
-  <script src="./cart.js?v=20260412-5"></script>
+  <script src="./ui.js?v=20260413-2"></script>
+  <script src="./cart.js?v=20260413-2"></script>
   <script src="./auth.js?v=20260404-1"></script>
   <script src="./checkout.js?v=20260412-1"></script>
   <script src="./member.js?v=20260410-2"></script>
