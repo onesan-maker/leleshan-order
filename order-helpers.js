@@ -120,9 +120,15 @@
     return {
       sku: resolve(item && (item.sku || item.itemId), ""),
       itemId: resolve(item && (item.itemId || item.sku), ""),
+      type: resolve(item && item.type, ""),
+      isGift: !!(item && item.isGift),
+      giftType: resolve(item && item.giftType, ""),
+      giftSlot: resolve(item && item.giftSlot, ""),
+      giftLabel: resolve(item && item.giftLabel, ""),
       name: resolve(item && item.name, "未命名品項"),
       qty: qty,
       flavor: resolve(item && item.flavor, resolve(item && item.flavorName, "")),
+      staple: resolve(item && item.staple, resolve(item && item.stapleName, "")),
       options: Array.isArray(item && item.options) ? item.options : [],
       unit_price: unitPrice,
       price: unitPrice,
@@ -180,6 +186,8 @@
       userId: resolve(data.userId, ""),
       lineUserId: resolve(data.lineUserId, ""),
       pickupNumber: resolve(data.pickupNumber, ""),
+      giftPromotionResult: resolve(data.giftPromotionResult, null),
+      groups: Array.isArray(data.groups) ? data.groups : null,
       raw: data
     };
     normalized.display_name = deriveDisplayName(normalized);
@@ -250,9 +258,11 @@
       pickupDateTimeISO: resolve(options.scheduled_pickup_at, ""),
       storeStatusAtCheckout: resolve(options.storeStatusAtCheckout, ""),
       appliedPromotion: resolve(options.appliedPromotion, null),
+      giftPromotionResult: resolve(options.giftPromotionResult, null),
       isTest: resolve(options.isTest, false),
       pickupNumber: resolve(options.pickupNumber, null),
-      pickupSequence: resolve(options.pickupSequence, null)
+      pickupSequence: resolve(options.pickupSequence, null),
+      groups: resolve(options.groups, null)
     };
     return payload;
   }
@@ -267,6 +277,11 @@
         orderId: orderId,
         storeId: storeId,
         menuItemId: resolve(item.sku || item.itemId, ""),
+        type: resolve(item.type, ""),
+        isGift: !!item.isGift,
+        giftType: resolve(item.giftType, ""),
+        giftSlot: resolve(item.giftSlot, ""),
+        giftLabel: resolve(item.giftLabel, ""),
         name: resolve(item.name, ""),
         qty: Number(item.qty || 0),
         unitPrice: Number(item.unit_price || item.price || 0),
@@ -501,12 +516,13 @@
     var lines = normalized.slice(0, maxLines || normalized.length).map(function (item) {
       var detail = [];
       if (item.flavor) detail.push(item.flavor);
+      if (item.staple) detail.push("主食：" + item.staple);
       if (Array.isArray(item.options) && item.options.length) {
         detail.push(item.options.map(function (option) {
-          return typeof option === "string" ? option : option.name || option.label || "";
+          return typeof option === "string" ? option : (option.value ? option.name + "：" + option.value : option.name || option.label || "");
         }).filter(Boolean).join(" / "));
       }
-      return item.name + " x" + Number(item.qty || 0) + (detail.length ? " (" + detail.join("、") + ")" : "");
+      return item.name + " x" + Number(item.qty || 0) + (detail.length ? "（" + detail.join("／") + "）" : "");
     });
     if (normalized.length > lines.length) lines.push("...還有 " + (normalized.length - lines.length) + " 項");
     return lines;

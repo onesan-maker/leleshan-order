@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>樂樂山營運後台 v1</title>
-  <link rel="stylesheet" href="/admin.css?v=20260409-1">
+  <link rel="stylesheet" href="/admin.css?v=20260412-2">
 </head>
 <body class="admin-body">
   <section id="admin-access-state" class="admin-auth-body hidden">
@@ -31,7 +31,7 @@
         <a href="/admin/inventory" data-view="inventory">庫存管理</a>
         <a href="/admin/platform-orders" data-view="platform-orders">平台訂單</a>
         <a href="/admin/users" data-view="users">會員管理</a>
-        <a href="/admin/promotions" data-view="promotions">優惠券管理</a>
+        <a href="/admin/promotions" data-view="promotions">優惠管理</a>
         <a href="/admin/settings" data-view="settings">營業狀態設定</a>
       </nav>
       <button id="admin-logout-btn" class="admin-logout-btn" type="button">登出</button>
@@ -218,7 +218,25 @@
 
       <section id="view-promotions" class="admin-view hidden">
         <div class="admin-section-head">
-          <h2>優惠券管理</h2>
+          <h2>優惠管理</h2>
+        </div>
+
+        <div class="admin-section-head">
+          <h3>滿額贈送規則</h3>
+          <button id="gift-promo-save-btn" type="button">儲存所有規則</button>
+        </div>
+        <div class="admin-panel">
+          <div class="admin-form" style="max-width:760px;">
+            <label class="switch-field"><span>啟用滿額贈送活動</span><span class="switch-row"><input id="gift-promo-enabled" type="checkbox"><span class="switch-ui"></span><span id="gift-promo-enabled-label">未啟用</span></span></label>
+            <p style="margin:6px 0 0;color:var(--admin-muted);font-size:.83rem;">滿額計算僅計「非套餐、非主食類」單點。主食類贈品（type=staple）的品項不會被計入滿額門檻。</p>
+            <div id="gift-promo-rules-list" style="margin-top:16px;"></div>
+            <button type="button" id="gift-promo-add-rule-btn" style="margin-top:10px;padding:6px 14px;border:1px dashed #bbb;border-radius:7px;background:#f5f5f5;cursor:pointer;font-size:.88rem;">＋ 新增金額區間</button>
+            <p id="gift-promo-status" style="color:var(--admin-muted);font-size:0.88rem;margin-top:10px;"></p>
+          </div>
+        </div>
+
+        <div class="admin-section-head">
+          <h3>其他優惠券</h3>
           <button type="button" data-open-form="promotion">新增優惠</button>
         </div>
         <div id="promotions-list" class="admin-list"></div>
@@ -279,6 +297,7 @@
 
         <section data-form-panel="menu" class="admin-form-panel hidden">
           <form id="menu-form" class="admin-form">
+            <input type="hidden" id="menu-original-id">
             <label><span>品項編號</span><input id="menu-id" placeholder="例如：pork-classic"></label>
             <label><span>品項名稱</span><input id="menu-name" placeholder="例如：豬肉片" required></label>
             <label><span>售價</span><input id="menu-price" type="number" placeholder="例如：45" required></label>
@@ -289,6 +308,9 @@
             <label><span>單位顯示</span><input id="menu-unit" placeholder="例如：6 顆"></label>
             <label><span>品項說明</span><textarea id="menu-description" placeholder="補充這道菜的特色或份量說明"></textarea></label>
             <label><span>加點選項 JSON</span><textarea id="menu-option-groups" placeholder='例如：[]'></textarea></label>
+            <label class="switch-field"><span>主食類（不計入滿額）</span><span class="switch-row"><input id="menu-is-staple" type="checkbox"><span class="switch-ui"></span><span id="menu-is-staple-label">非主食</span></span></label>
+            <label class="switch-field"><span>需要選口味</span><span class="switch-row"><input id="menu-requires-flavor" type="checkbox" checked><span class="switch-ui"></span><span id="menu-requires-flavor-label">需要選口味</span></span></label>
+            <label class="switch-field"><span>快速加購（不開 modal）</span><span class="switch-row"><input id="menu-quick-add" type="checkbox"><span class="switch-ui"></span><span id="menu-quick-add-label">標準模式</span></span></label>
             <label class="switch-field"><span>品項狀態</span><span class="switch-row"><input id="menu-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="menu-enabled-label">啟用中</span></span></label>
             <button type="submit">儲存品項</button>
           </form>
@@ -363,6 +385,8 @@
             <label><span>優惠提示文字</span><input id="settings-promo-text" placeholder="例如：滿 150 送白飯 1 份"></label>
             <label><span>開始接單時間</span><input id="settings-open-from" type="time" placeholder="例如：17:40"></label>
             <label><span>停止接單時間</span><input id="settings-open-to" type="time" placeholder="例如：22:50"></label>
+            <label class="switch-field"><span>啟用滿額贈送</span><span class="switch-row"><input id="settings-gift-enabled" type="checkbox"><span class="switch-ui"></span><span id="settings-gift-enabled-label">未啟用</span></span></label>
+            <p style="margin:4px 0 0;color:var(--admin-muted);font-size:.84rem;">贈品區間與品項請至「滿額贈送設定」區塊管理。</p>
             <button type="submit">儲存設定</button>
           </form>
         </section>
@@ -376,9 +400,9 @@
   <script src="/config.js?v=20260403-4"></script>
   <script src="/admin-auth-helper.js?v=20260406-1"></script>
   <script src="/defaults.js?v=20260403-1"></script>
-  <script src="/order-helpers.js?v=20260404-1"></script>
+  <script src="/order-helpers.js?v=20260411-1"></script>
   <script src="/platform-order-module.js?v=20260403-1"></script>
   <script src="/platform-api-placeholders.js?v=20260403-1"></script>
-  <script src="/admin.js?v=20260409-1"></script>
+  <script src="/admin.js?v=20260412-2"></script>
 </body>
 </html>

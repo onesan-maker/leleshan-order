@@ -25,6 +25,7 @@
     el.comboRoot = document.getElementById("combo-root");
     el.singleRoot = document.getElementById("single-root");
     el.cartItems = document.getElementById("cart-items");
+    el.giftSelectionPanel = document.getElementById("gift-selection-panel");
     el.customerName = document.getElementById("customer-name");
     el.orderNote = document.getElementById("order-note");
     el.pickupDate = document.getElementById("pickup-date");
@@ -59,6 +60,7 @@
     el.quantityModalFlavor = document.getElementById("quantity-modal-flavor");
     el.quantityModalStapleField = document.getElementById("quantity-modal-staple-field");
     el.quantityModalStaple = document.getElementById("quantity-modal-staple");
+    el.quantityModalPortion = document.getElementById("quantity-modal-portion");
     el.quantityModalOptions = document.getElementById("quantity-modal-options");
     el.quantityModalSuccess = document.getElementById("quantity-modal-success");
     el.quantityModalSuccessText = document.getElementById("quantity-modal-success-text");
@@ -201,7 +203,14 @@
       return { id: flavor.id, name: flavor.name };
     });
 
-    app.el.quantityModalDetail.classList.remove("hidden");
+    // 口味欄位：只有 requiresFlavor !== false 且有口味選項才顯示（與 unit 無關）
+    var showFlavor = payload.requiresFlavor !== false && flavorOptions.length > 0;
+    // 主食欄位：只有套餐才顯示
+    var showStaple = isCombo && payload.stapleOptions && payload.stapleOptions.length > 0;
+    // detail 區塊：只有有東西要顯示才顯示
+    // 注意：直接用 style.display 以免 display:grid 的 CSS 比 .hidden 優先序更高而蓋掉
+    var showDetail = isCombo || showFlavor || showStaple;
+    app.el.quantityModalDetail.style.display = showDetail ? "" : "none";
 
     if (app.el.quantityModalType) {
       app.el.quantityModalType.textContent = isCombo ? "套餐" : "";
@@ -211,17 +220,18 @@
     }
 
     if (app.el.quantityModalFlavorField && app.el.quantityModalFlavor) {
-      if (flavorOptions.length) {
+      if (showFlavor) {
         app.el.quantityModalFlavorField.classList.remove("hidden");
         fillSelectOptions(app.el.quantityModalFlavor, flavorOptions, payload.flavorId);
       } else {
+        // requiresFlavor=false 或無口味選項：完全隱藏口味區塊
         app.el.quantityModalFlavorField.classList.add("hidden");
         app.el.quantityModalFlavor.innerHTML = "";
       }
     }
 
     if (app.el.quantityModalStapleField && app.el.quantityModalStaple) {
-      if (isCombo && payload.stapleOptions && payload.stapleOptions.length) {
+      if (showStaple) {
         app.el.quantityModalStapleField.classList.remove("hidden");
         fillSelectOptions(app.el.quantityModalStaple, payload.stapleOptions, payload.stapleId);
       } else {
@@ -267,6 +277,119 @@
     app.el.quantityModalPrice.classList.remove("hidden");
   }
 
+  function portionGroupLabel(index) {
+    return "第" + (index + 1) + "份";
+  }
+
+  function renderPortionSection(app, payload) {
+    var el = app.el.quantityModalPortion;
+    if (!el) return;
+
+    // Only for single items
+    if (!payload || payload.type !== "single") {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+      return;
+    }
+
+    el.classList.remove("hidden");
+
+    var PRESET_LABELS = ["A點", "B點", "C點"];
+    var inPortionMode = app.state.portionMode;
+
+    // Default: if already in portion mode, pre-select active group; otherwise direct add
+    var initialTargetGroupId = inPortionMode
+      ? (app.state.activeGroupId || ((app.state.cartGroups[0]) && app.state.cartGroups[0].id) || "g-a")
+      : null;
+    if (app.state.pendingCartSelection) {
+      app.state.pendingCartSelection.targetGroupId = initialTargetGroupId;
+    }
+
+    function buildGroupButtons(targetGroupId) {
+      var gs = app.state.cartGroups || [];
+      var html = gs.map(function (g, idx) {
+        var active = targetGroupId === g.id ? " qm-group-btn--active" : "";
+        return '<button class="qm-group-btn' + active + '" type="button" data-qm-group="' + escapeHtml(g.id) + '">' + escapeHtml(portionGroupLabel(idx)) + '</button>';
+      }).join("");
+      if (gs.length < PRESET_LABELS.length) {
+        var nextLabel = PRESET_LABELS[gs.length];
+        html += '<button class="qm-group-add-btn" type="button" data-qm-add="' + escapeHtml(nextLabel) + '">＋ 新增一位</button>';
+      }
+      return html;
+    }
+
+    function rebind(targetGroupId) {
+      var inner = el.querySelector(".qm-groups-inner");
+      if (inner) inner.innerHTML = buildGroupButtons(targetGroupId);
+      Array.prototype.slice.call(el.querySelectorAll("[data-qm-group]")).forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var gid = btn.getAttribute("data-qm-group");
+          if (app.state.pendingCartSelection) app.state.pendingCartSelection.targetGroupId = gid;
+          rebind(gid);
+        });
+      });
+      Array.prototype.slice.call(el.querySelectorAll("[data-qm-add]")).forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var label = btn.getAttribute("data-qm-add");
+          var newId = "g-" + Math.random().toString(36).slice(2, 8);
+          (app.state.cartGroups = app.state.cartGroups || []).push({ id: newId, label: label });
+          if (app.state.pendingCartSelection) app.state.pendingCartSelection.targetGroupId = newId;
+          rebind(newId);
+        });
+      });
+    }
+
+    var isSplit = inPortionMode;
+    var directActive = !isSplit ? " qm-toggle-btn--active" : "";
+    var splitActive  =  isSplit ? " qm-toggle-btn--active" : "";
+
+    // Pre-build group buttons for split view
+    var groupsHtml = buildGroupButtons(initialTargetGroupId);
+
+    el.innerHTML = ''
+      + '<div class="qm-portion-header">這份給誰？</div>'
+      + '<div class="qm-portion-toggle">'
+      + '<button class="qm-toggle-btn' + directActive + '" type="button" data-portion-mode="direct">直接加入</button>'
+      + '<button class="qm-toggle-btn' + splitActive  + '" type="button" data-portion-mode="split">分給不同人</button>'
+      + '</div>'
+      + '<div class="qm-portion-groups' + (isSplit ? "" : " hidden") + '">'
+      + '<div class="qm-groups-inner">' + groupsHtml + '</div>'
+      + '</div>';
+
+    var directBtn = el.querySelector('[data-portion-mode="direct"]');
+    var splitBtn  = el.querySelector('[data-portion-mode="split"]');
+    var groupsEl  = el.querySelector(".qm-portion-groups");
+
+    if (directBtn) directBtn.addEventListener("click", function () {
+      directBtn.classList.add("qm-toggle-btn--active");
+      splitBtn.classList.remove("qm-toggle-btn--active");
+      groupsEl.classList.add("hidden");
+      if (app.state.pendingCartSelection) app.state.pendingCartSelection.targetGroupId = null;
+    });
+
+    if (splitBtn) splitBtn.addEventListener("click", function () {
+      splitBtn.classList.add("qm-toggle-btn--active");
+      directBtn.classList.remove("qm-toggle-btn--active");
+
+      // Ensure at least 2 groups
+      var gs = app.state.cartGroups || [];
+      if (gs.length < 2) {
+        var nextLabel = PRESET_LABELS[gs.length] || "D點";
+        var newId = "g-" + Math.random().toString(36).slice(2, 8);
+        (app.state.cartGroups = app.state.cartGroups || []).push({ id: newId, label: nextLabel });
+      }
+
+      // Default to first group
+      var targetId = (app.state.cartGroups[0] && app.state.cartGroups[0].id) || "g-a";
+      if (app.state.pendingCartSelection) app.state.pendingCartSelection.targetGroupId = targetId;
+
+      groupsEl.classList.remove("hidden");
+      rebind(targetId);
+    });
+
+    rebind(initialTargetGroupId);
+  }
+
   function openQuantityModal(app, payload) {
     if (!app.el.quantityModal || !payload) return;
     app.state.activeModal = "quantity-select";
@@ -285,6 +408,7 @@
     app.el.quantityModalSuccess.classList.add("hidden");
     app.el.quantityModalOptions.classList.remove("hidden");
     renderQuantityModalDetail(app, payload);
+    renderPortionSection(app, payload);
     if (app.el.quantityModalFlavor) {
       app.el.quantityModalFlavor.onchange = function () {
         updateQuantityModalPrice(app, payload);
@@ -297,7 +421,7 @@
     }
     updateQuantityModalPrice(app, payload);
     app.el.quantityModalOptions.innerHTML = [1, 2, 3, 4, 5].map(function (quantity) {
-      return '<button type="button" class="quantity-modal__choice" data-quantity-choice="' + quantity + '">' + quantity + '</button>';
+      return '<button type="button" class="quantity-modal__choice" data-quantity-choice="' + quantity + '">' + quantity + '份</button>';
     }).join("");
     Array.prototype.slice.call(app.el.quantityModalOptions.querySelectorAll("[data-quantity-choice]")).forEach(function (button) {
       button.addEventListener("click", function () {
@@ -313,31 +437,59 @@
       button.disabled = true;
     });
     app.el.quantityModalSuccess.classList.remove("hidden");
-    if (app.el.quantityModalDetail) app.el.quantityModalDetail.classList.add("hidden");
+    if (app.el.quantityModalDetail) app.el.quantityModalDetail.style.display = "none";
     var label = selection && selection.type === "combo"
-      ? '已加入「' + (selection.name || "") + '（套餐）」x' + quantity
-      : '已加入「' + ((selection && selection.name) || "") + '」x' + quantity;
+      ? '已加入 ' + quantity + '份 ' + (selection.name || "") + '（套餐）'
+      : '已加入 ' + quantity + '份 ' + (((selection && selection.name) || ""));
     app.el.quantityModalSuccessText.textContent = label;
     setTimeout(function () {
       if (app.state.activeModal === "quantity-select") closeQuantityModal(app);
-    }, 1400);
+    }, 1000);
   }
 
   function showOrderSuccess(app, pickupNumber, cartSnapshot, pickupLabel) {
-    if (!app.el.submitMessage) return;
-    var numDisplay = pickupNumber
-      ? "取餐號碼 " + escapeHtml(String(pickupNumber))
-      : "訂單已送出";
-    var itemLines = (cartSnapshot || []).map(function (item) {
-      var label = escapeHtml(item.name);
-      if (item.flavorName) label += "（" + escapeHtml(item.flavorName) + "）";
-      return label + " ×" + item.quantity;
-    }).join("、");
-    app.el.submitMessage.innerHTML =
-      "<strong>✓ " + numDisplay + "</strong>" +
-      (pickupLabel ? "<br>取餐時間：" + escapeHtml(pickupLabel) : "") +
-      (itemLines ? "<br><small class='order-success-items'>" + itemLines + "</small>" : "");
-    app.el.submitMessage.className = "submit-message success";
+    var screen = document.getElementById('order-success-screen');
+    if (!screen) {
+      if (!app.el.submitMessage) return;
+      var numDisplay = pickupNumber ? '取餐號碼 ' + escapeHtml(String(pickupNumber)) : '訂單已送出';
+      var itemLines = (cartSnapshot || []).map(function (item) { return escapeHtml(item.name) + ' x' + item.quantity; }).join('、');
+      app.el.submitMessage.innerHTML = '<strong>✓ ' + numDisplay + '</strong>' + (pickupLabel ? '<br>取餐時間：' + escapeHtml(pickupLabel) : '') + (itemLines ? '<br><small class="order-success-items">' + itemLines + '</small>' : '');
+      app.el.submitMessage.className = 'submit-message success';
+      return;
+    }
+
+    var numEl = document.getElementById('order-success-number');
+    if (numEl) numEl.textContent = pickupNumber ? String(pickupNumber) : '—';
+
+    var labelEl = document.getElementById('order-success-label');
+    if (labelEl) labelEl.textContent = pickupLabel ? '取餐時間：' + pickupLabel : '';
+
+    var total = (cartSnapshot || []).reduce(function (sum, item) { return sum + Number(item.price || 0); }, 0);
+    var totalEl = document.getElementById('order-success-total');
+    if (totalEl) totalEl.textContent = 'NT$ ' + total;
+
+    var itemsEl = document.getElementById('order-success-items');
+    if (itemsEl) {
+      var regularItems = (cartSnapshot || []).filter(function (item) { return !item.isGift; });
+      var giftItems = (cartSnapshot || []).filter(function (item) { return !!item.isGift; });
+      itemsEl.innerHTML = regularItems.map(function (item) {
+        var meta = item.flavorName ? '（' + escapeHtml(item.flavorName) + '）' : '';
+        return '<div class="oss-item"><span>' + escapeHtml(item.name) + meta + ' x' + Number(item.quantity || 0) + '</span><span>NT$ ' + Number(item.price || 0) + '</span></div>';
+      }).join('') + (giftItems.length ? '<div class="oss-gifts">贈品：' + giftItems.map(function (i) { return escapeHtml(i.name); }).join('、') + '</div>' : '');
+    }
+
+    // Enter success page-state: hide everything except success screen
+    document.body.classList.add('success-mode');
+    if (app.el.submitMessage) { app.el.submitMessage.textContent = ''; app.el.submitMessage.className = 'submit-message'; }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    var backBtn = document.getElementById('order-success-back-btn');
+    if (backBtn) {
+      backBtn.onclick = function () {
+        document.body.classList.remove('success-mode');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+    }
   }
 
   function closeQuantityModal(app) {
@@ -347,7 +499,8 @@
     if (app.state.activeModal === "quantity-select") app.state.activeModal = null;
     app.state.pendingCartSelection = null;
     app.el.quantityModalOptions.innerHTML = "";
-    if (app.el.quantityModalDetail) app.el.quantityModalDetail.classList.add("hidden");
+    if (app.el.quantityModalDetail) app.el.quantityModalDetail.style.display = "none";
+    if (app.el.quantityModalPortion) { app.el.quantityModalPortion.classList.add("hidden"); app.el.quantityModalPortion.innerHTML = ""; }
     if (app.el.quantityModalFlavor) app.el.quantityModalFlavor.onchange = null;
     if (app.el.quantityModalStaple) app.el.quantityModalStaple.onchange = null;
   }
@@ -398,7 +551,14 @@
   function updatePromoBanner(app) {
     if (!app.el.promoBanner || !app.el.promoBannerText) return;
     var text = "";
-    if (app.state.appliedPromotion) text = "已符合優惠：" + app.state.appliedPromotion.name;
+    if (app.state.appliedPromotion && app.state.appliedPromotion.type === "gift_selection") {
+      var result = app.state.appliedPromotion;
+      var selectedCount = Array.isArray(result.selectedGifts) ? result.selectedGifts.length : 0;
+      var requiredCount = Number(result.entitlement && result.entitlement.stapleCount || 0) + Number(result.entitlement && result.entitlement.vegetableCount || 0);
+      text = result.incomplete
+        ? "已達贈品門檻，請先選完贈品再送單。"
+        : "本次滿額贈送已選擇完成，共 " + selectedCount + " / " + requiredCount + " 份。";
+    } else if (app.state.appliedPromotion) text = "已符合優惠：" + app.state.appliedPromotion.name;
     else if (app.state.settings && app.state.settings.promoEnabled && app.state.settings.promoText) text = app.state.settings.promoText;
     if (!text) {
       app.el.promoBanner.classList.add("hidden");
@@ -421,15 +581,20 @@
         renderFlavorOptions(app);
         renderOrderTypes(app);
         setMessage(app, "");
-        if (app.el.orderTypeOptions) {
-          requestAnimationFrame(function () {
-            var target = app.el.orderTypeOptions.closest ? (app.el.orderTypeOptions.closest(".step-card") || app.el.orderTypeOptions) : app.el.orderTypeOptions;
-            if (target) {
-              target.scrollIntoView({ behavior: "smooth", block: "start" });
-              setTimeout(function () { window.scrollBy({ top: -72, left: 0, behavior: "smooth" }); }, 200);
-            }
-          });
-        }
+        setTimeout(function () {
+          var step3 = document.getElementById("step3-section");
+          if (step3) {
+            step3.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+            step3.classList.add("highlight-step");
+            setTimeout(function () {
+              step3.classList.remove("highlight-step");
+            }, 1200);
+            setTimeout(function () { window.scrollBy({ top: -72, left: 0, behavior: "smooth" }); }, 200);
+          }
+        }, 150);
       });
     });
   }
@@ -485,10 +650,35 @@
 
     applyCategoryButtonThemes(app.el.singleRoot);
     Array.prototype.slice.call(app.el.singleRoot.querySelectorAll("[data-add-single]")).forEach(function (button) {
+      var itemId = button.getAttribute("data-add-single");
       button.addEventListener("click", function () {
-        app.modules.cart.requestAddSingle(button.getAttribute("data-add-single"));
+        var isQuick = false;
+        app.state.singleCategories.forEach(function (cat) {
+          cat.items.forEach(function (it) {
+            if (it.id === itemId && it.quickAdd === true) isQuick = true;
+          });
+        });
+        if (isQuick) {
+          app.modules.cart.quickAddSingle(itemId);
+        } else {
+          app.modules.cart.requestAddSingle(itemId);
+        }
       });
     });
+  }
+
+  function showToast(message) {
+    var el = document.getElementById("lls-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "lls-toast";
+      el.className = "toast-msg";
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.add("toast-msg--visible");
+    clearTimeout(el._timer);
+    el._timer = setTimeout(function () { el.classList.remove("toast-msg--visible"); }, 2200);
   }
 
   function renderPickupDateOptions(app) {
@@ -631,6 +821,25 @@
     }
 
     updatePromoBanner(app);
+    setupSettingsListener(app);
+  }
+
+  function setupSettingsListener(app) {
+    var db = app.state.db;
+    var storeId = app.state.storeId;
+    if (!db || !storeId) return;
+    if (app._settingsUnsub) { try { app._settingsUnsub(); } catch (e) {} }
+    app._settingsUnsub = db.collection("settings").doc(storeId).onSnapshot(function (snap) {
+      var prev = JSON.stringify(app.state.settings && app.state.settings.giftPromotion);
+      app.state.settings = snap.exists ? snap.data() : null;
+      var next = JSON.stringify(app.state.settings && app.state.settings.giftPromotion);
+      updatePromoBanner(app);
+      if (prev !== next && app.modules.cart && typeof app.modules.cart.renderCart === "function") {
+        app.modules.cart.renderCart();
+      }
+    }, function (error) {
+      console.warn("[FrontData] Settings real-time listener error.", error);
+    });
   }
 
   function getBooleanValue() {
@@ -907,11 +1116,21 @@
       id: item.id,
       name: item.name || "",
       price: Number(item.price || 0),
+      unit: item.unit || "",            // unit 獨立欄位，與 requiresFlavor 完全無關
       categoryId: item.category || item.categoryId || "未分類",
       sort: Number(item.sortOrder != null ? item.sortOrder : (item.sort != null ? item.sort : 999)),
       description: item.description || "",
       imageUrl: item.imageUrl || "",
-      enabled: item.isActive === true || (item.isActive == null && item.enabled === true)
+      enabled: item.isActive === true || (item.isActive == null && item.enabled === true),
+      isStaple: (function () {
+        // Primary: explicit field on the item itself
+        if (item.isStaple || item.staple || item.type === "staple") return true;
+        // Fallback: category ID contains "staple" (e.g. the default "staples" category)
+        var catId = (item.category || item.categoryId || "").toLowerCase();
+        return catId === "staples" || catId === "staple" || catId.indexOf("staple") !== -1;
+      })(),
+      requiresFlavor: item.requiresFlavor !== false, // 預設 true；只有 false 才隱藏口味
+      quickAdd: item.quickAdd === true
     };
   }
 
@@ -960,12 +1179,9 @@
     checkStoreOpenStatus: checkStoreOpenStatus,
     categoryColorOptions: CATEGORY_COLOR_OPTIONS,
     resolveCategoryColor: resolveCategoryColor,
-    resolveCategoryTheme: resolveCategoryTheme
+    resolveCategoryTheme: resolveCategoryTheme,
+    showToast: showToast
   };
 })();
-
-
-
-
 
 

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "YOUR_PROJECT_NUMBER",
+    "project_id":     "YOUR_PROJECT_ID",
+    "storage_bucket": "YOUR_PROJECT_ID.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:YOUR_NUMBER:android:XXXXXXXXXXXXXXXX",
+        "android_client_info": {
+          "package_name": "com.leleshan.pos"
+        }
+      },
+      "api_key": [{ "current_key": "YOUR_API_KEY" }],
+      "services": {
+        "appinvite_service": { "other_platform_oauth_client": [] }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
+// ── 使用說明 ──────────────────────────────────────────────
+// 1. 前往 Firebase Console → 你的專案 → 專案設定
+// 2. 「你的應用程式」→ 新增應用程式 → Android
+// 3. 套件名稱填：com.leleshan.pos
+// 4. 下載 google-services.json 放到 android-pos/app/ 目錄
+// 5. 刪除此 .example 檔案

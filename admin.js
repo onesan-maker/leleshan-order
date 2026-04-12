@@ -28,6 +28,7 @@
   var adminState = {
     autoSeedAttempted: false
   };
+  var giftPromoRules = []; // in-memory rules for the admin UI editor
   var OWNER_ROLE = "owner";
   var ADMIN_ROLE = "admin";
   var CATEGORY_COLOR_OPTIONS = [
@@ -207,7 +208,29 @@
     if (pointRuleSaveBtn) {
       pointRuleSaveBtn.addEventListener("click", savePointRule);
     }
+    var giftPromoSaveBtn = document.getElementById("gift-promo-save-btn");
+    if (giftPromoSaveBtn) {
+      giftPromoSaveBtn.addEventListener("click", saveGiftPromotionSettings);
+    }
+    var giftPromoAddRuleBtn = document.getElementById("gift-promo-add-rule-btn");
+    if (giftPromoAddRuleBtn) {
+      giftPromoAddRuleBtn.addEventListener("click", function () {
+        giftPromoRules.push({
+          id: uid8(),
+          name: "",
+          enabled: true,
+          minAmount: 0,
+          maxAmount: null,
+          maxStaple: 1,
+          maxVegetable: 0,
+          sort: giftPromoRules.length + 1,
+          items: []
+        });
+        renderGiftRulesUI();
+      });
+    }
     bindSwitchLabel("point-rule-enabled", "point-rule-enabled-label", "啟用中", "未啟用");
+    bindSwitchLabel("gift-promo-enabled", "gift-promo-enabled-label", "啟用中", "未啟用");
 
     var userSearchBtn = document.getElementById("user-search-btn");
     if (userSearchBtn) {
@@ -241,12 +264,16 @@
 
     bindSwitchLabel("store-active", "store-active-label", "啟用中", "停用中");
     bindSwitchLabel("category-enabled", "category-enabled-label", "啟用中", "停用中");
+    bindSwitchLabel("menu-is-staple", "menu-is-staple-label", "主食類", "非主食");
+    bindSwitchLabel("menu-requires-flavor", "menu-requires-flavor-label", "需要選口味", "不需要口味");
+    bindSwitchLabel("menu-quick-add", "menu-quick-add-label", "快速加購", "標準模式");
     bindSwitchLabel("menu-enabled", "menu-enabled-label", "啟用中", "停用中");
     bindSwitchLabel("combo-enabled", "combo-enabled-label", "啟用中", "停用中");
     bindSwitchLabel("flavor-enabled", "flavor-enabled-label", "啟用中", "停用中");
     bindSwitchLabel("promotion-enabled", "promotion-enabled-label", "啟用中", "停用中");
     bindSwitchLabel("settings-open", "settings-open-label", "營業中", "休息中");
     bindSwitchLabel("settings-promo-enabled", "settings-promo-enabled-label", "啟用中", "未啟用");
+    bindSwitchLabel("settings-gift-enabled", "settings-gift-enabled-label", "啟用中", "未啟用");
   }
 
   function renderCategoryColorOptions() {
@@ -514,6 +541,28 @@
 
     renderAll();
     msg("已載入 " + storeId + " 的資料");
+    migrateQuickAddItems();
+  }
+
+  // 一次性將白飯、滷肉飯、王子麵、水餃設為 quickAdd=true（若尚未設定）
+  async function migrateQuickAddItems() {
+    var QUICK_ADD_NAMES = ["白飯", "滷肉飯", "王子麵", "水餃"];
+    var toUpdate = data.menuItems.filter(function (item) {
+      return QUICK_ADD_NAMES.indexOf(item.name) !== -1 && item.quickAdd !== true;
+    });
+    if (!toUpdate.length) return;
+    try {
+      var batch = db.batch();
+      toUpdate.forEach(function (item) {
+        var col = item._sourceCollection || "menu_items";
+        batch.update(db.collection(col).doc(item.id), { quickAdd: true });
+        item.quickAdd = true; // update local state immediately
+      });
+      await batch.commit();
+      console.log("[Admin] migrateQuickAddItems: set quickAdd=true for", toUpdate.map(function (i) { return i.name; }));
+    } catch (e) {
+      console.warn("[Admin] migrateQuickAddItems failed:", e);
+    }
   }
 
   async function seedDefaults() {
@@ -636,13 +685,27 @@
     renderPointRuleSummary();
   }
 
+  /**
+   * 統計計算共用過濾規則：
+   * - 已封存（archived）、測試單（isTest）、已取消（cancelled）不列入統計
+   * - Dashboard、熱門商品、時段分布、平均客單價都從此函式走
+   */
+  function isValidOrderForStats(order) {
+    if (!order) return false;
+    if (order.archived) return false;       // 封存單不列入
+    if (order.isTest) return false;         // 測試單不列入
+    if (order.status === "cancelled") return false; // 已取消不列入
+    return true;
+  }
+
   function renderDashboard() {
     var start = new Date();
     start.setHours(0, 0, 0, 0);
 
     var todayOrders = data.orders.filter(function (order) {
       var createdAt = toDate(order.createdAt);
-      return createdAt && createdAt >= start && order.status !== "cancelled";
+      // 使用共用過濾邏輯，與訂單列表排除邏輯保持一致
+      return createdAt && createdAt >= start && isValidOrderForStats(order);
     });
     var revenue = todayOrders.reduce(function (sum, order) {
       return sum + Number(order.totalAmount || 0);
@@ -763,6 +826,8 @@
   }
 
   function renderPromotions() {
+    // Load gift promo settings into the promotions view
+    fillGiftPromotionFields("gift-promo", data.settings || {});
     el.lists.promotions.innerHTML = data.promotions.map(function (item) {
       var button = canManage()
         ? '<button type="button" data-edit="promotions" data-id="' + esc(item.id) + '">編輯</button>'
@@ -826,6 +891,334 @@
   var showArchivedOrders = false;
   var showTestOrdersOnly = false;
 
+  function normalizeGiftPoolInput(list) {
+    return (Array.isArray(list) ? list : []).map(function (item) {
+      if (!item) return null;
+      if (typeof item === "string") return { id: item, name: item, priceAdjustment: 0 };
+      var id = item.id || item.itemId || item.sku || "";
+      var name = item.name || item.label || id;
+      if (!id && !name) return null;
+      return {
+        id: id || name,
+        name: name || id,
+        priceAdjustment: Number(item.priceAdjustment || item.price || 0)
+      };
+    }).filter(Boolean);
+  }
+
+  function serializeGiftPool(list) {
+    return normalizeGiftPoolInput(list).map(function (item) {
+      return item.id + "|" + item.name;
+    }).join("\n");
+  }
+
+  function parseGiftPoolTextarea(id) {
+    return val(id).split(/\r?\n/).map(function (line) {
+      return line.trim();
+    }).filter(Boolean).map(function (line) {
+      var parts = line.split("|").map(function (item) { return item.trim(); }).filter(Boolean);
+      if (!parts.length) return null;
+      return {
+        id: parts[0],
+        name: parts[1] || parts[0],
+        priceAdjustment: 0
+      };
+    }).filter(Boolean);
+  }
+
+  // Default gift rules for initial seeding
+  var DEFAULT_GIFT_RULES = [
+    {
+      id: "rule-150-299", name: "150-299 主食 1 份", enabled: true, minAmount: 150, maxAmount: 299,
+      maxStaple: 1, maxVegetable: 0, sort: 1,
+      items: [
+        { id: "white-rice", name: "白飯", type: "staple", enabled: true, sort: 1 },
+        { id: "instant-noodle", name: "泡麵", type: "staple", enabled: true, sort: 2 },
+        { id: "wide-noodle", name: "寬粉", type: "staple", enabled: true, sort: 3 }
+      ]
+    },
+    {
+      id: "rule-300-449", name: "300-449 主食 2 份", enabled: true, minAmount: 300, maxAmount: 449,
+      maxStaple: 2, maxVegetable: 0, sort: 2,
+      items: [
+        { id: "white-rice", name: "白飯", type: "staple", enabled: true, sort: 1 },
+        { id: "instant-noodle", name: "泡麵", type: "staple", enabled: true, sort: 2 },
+        { id: "wide-noodle", name: "寬粉", type: "staple", enabled: true, sort: 3 }
+      ]
+    },
+    {
+      id: "rule-450-plus", name: "450+ 主食 2 份＋蔬菜 1 份", enabled: true, minAmount: 450, maxAmount: null,
+      maxStaple: 2, maxVegetable: 1, sort: 3,
+      items: [
+        { id: "white-rice", name: "白飯", type: "staple", enabled: true, sort: 1 },
+        { id: "instant-noodle", name: "泡麵", type: "staple", enabled: true, sort: 2 },
+        { id: "wide-noodle", name: "寬粉", type: "staple", enabled: true, sort: 3 },
+        { id: "cabbage", name: "高麗菜", type: "vegetable", enabled: true, sort: 4 },
+        { id: "mainland-lettuce", name: "大陸妹", type: "vegetable", enabled: true, sort: 5 },
+        { id: "baby-cabbage", name: "娃娃菜", type: "vegetable", enabled: true, sort: 6 }
+      ]
+    }
+  ];
+
+  function describeGiftPromotion(settings) {
+    var promo = settings && settings.giftPromotion || {};
+    var status = promo.enabled ? "啟用中" : "未啟用";
+    var rules = promo.rules || [];
+    var activeRules = rules.filter(function (r) { return r && r.enabled !== false; });
+    if (!activeRules.length) return "狀態：" + status + "｜尚未設定區間規則";
+    return "狀態：" + status + "｜共 " + activeRules.length + " 個啟用區間（" +
+      activeRules.map(function (r) {
+        return (r.name || ("NT$" + (r.minAmount || 0) + (r.maxAmount != null ? "–" + r.maxAmount : "+")));
+      }).join("、") + "）";
+  }
+
+  function fillGiftPromotionFields(prefix, settings) {
+    var promo = settings && settings.giftPromotion || {};
+    var enabledEl = document.getElementById(prefix + "-enabled");
+    if (enabledEl) enabledEl.checked = promo.enabled === true;
+    if (prefix === "gift-promo") {
+      giftPromoRules = cloneRules(promo.rules && promo.rules.length ? promo.rules : DEFAULT_GIFT_RULES);
+      renderGiftRulesUI();
+    }
+    var statusEl = document.getElementById(prefix + "-status");
+    if (statusEl) statusEl.textContent = describeGiftPromotion(settings);
+  }
+
+  function cloneRules(rules) {
+    return (rules || []).map(function (r) {
+      return {
+        id: r.id || uid8(),
+        name: r.name || "",
+        enabled: r.enabled !== false,
+        minAmount: Number(r.minAmount || 0),
+        maxAmount: (r.maxAmount != null && r.maxAmount !== "") ? Number(r.maxAmount) : null,
+        maxStaple: Number(r.maxStaple || 0),
+        maxVegetable: Number(r.maxVegetable || 0),
+        sort: Number(r.sort != null ? r.sort : 9999),
+        items: (r.items || []).map(function (i) {
+          return {
+            id: (i.id || i.name || uid8()).trim(),
+            name: i.name || i.id || "",
+            type: i.type === "vegetable" ? "vegetable" : "staple",
+            enabled: i.enabled !== false,
+            sort: Number(i.sort != null ? i.sort : 9999)
+          };
+        })
+      };
+    });
+  }
+
+  function uid8() {
+    return "r" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function renderGiftRulesUI() {
+    var container = document.getElementById("gift-promo-rules-list");
+    if (!container) return;
+    if (!giftPromoRules.length) {
+      container.innerHTML = '<p style="color:var(--admin-muted);font-size:.88rem;">尚無區間規則，點下方「新增金額區間」。</p>';
+      return;
+    }
+    container.innerHTML = giftPromoRules.map(function (rule, rIdx) {
+      return buildRuleHTML(rule, rIdx);
+    }).join("");
+    attachGiftRuleEvents();
+  }
+
+  function buildRuleHTML(rule, rIdx) {
+    var maxAmountVal = rule.maxAmount != null ? rule.maxAmount : "";
+    var itemsHTML = (rule.items || []).map(function (item, iIdx) {
+      return buildItemHTML(item, rIdx, iIdx);
+    }).join("");
+    return (
+      '<div class="gr-card" data-rule-idx="' + rIdx + '">' +
+
+        // ── Card header ──
+        '<div class="gr-card-head">' +
+          '<div class="gr-card-head-left">' +
+            '<label class="gr-enabled-wrap" title="啟用此規則">' +
+              '<input type="checkbox" class="gift-rule-enabled" data-rule="' + rIdx + '"' + (rule.enabled ? ' checked' : '') + '>' +
+              '<span class="gr-enabled-dot"></span>' +
+            '</label>' +
+            '<span class="gr-card-index">規則 ' + (rIdx + 1) + '</span>' +
+            '<input type="text" class="gift-rule-name gr-name-input" data-rule="' + rIdx + '" value="' + esc(rule.name || "") + '" placeholder="規則名稱（選填）">' +
+          '</div>' +
+          '<button type="button" class="gr-delete-btn gift-rule-delete" data-rule="' + rIdx + '">刪除規則</button>' +
+        '</div>' +
+
+        // ── Threshold row ──
+        '<div class="gr-fields-grid">' +
+          '<div class="gr-field">' +
+            '<label class="gr-field-label">最低金額（元）</label>' +
+            '<input type="number" class="gift-rule-min gr-field-input" data-rule="' + rIdx + '" value="' + rule.minAmount + '" min="0" placeholder="0">' +
+          '</div>' +
+          '<div class="gr-field">' +
+            '<label class="gr-field-label">最高金額（元）</label>' +
+            '<input type="number" class="gift-rule-max gr-field-input" data-rule="' + rIdx + '" value="' + maxAmountVal + '" placeholder="無上限">' +
+          '</div>' +
+          '<div class="gr-field">' +
+            '<label class="gr-field-label">主食上限（份）</label>' +
+            '<input type="number" class="gift-rule-staple gr-field-input gr-field-input--sm" data-rule="' + rIdx + '" value="' + rule.maxStaple + '" min="0">' +
+          '</div>' +
+          '<div class="gr-field">' +
+            '<label class="gr-field-label">蔬菜上限（份）</label>' +
+            '<input type="number" class="gift-rule-vegetable gr-field-input gr-field-input--sm" data-rule="' + rIdx + '" value="' + rule.maxVegetable + '" min="0">' +
+          '</div>' +
+        '</div>' +
+
+        // ── Gift items sub-section ──
+        '<div class="gr-items-section">' +
+          '<div class="gr-items-header">' +
+            '<span class="gr-items-title">可選贈品</span>' +
+            '<button type="button" class="gr-add-item-btn gift-item-add" data-rule="' + rIdx + '">＋ 新增</button>' +
+          '</div>' +
+          (itemsHTML
+            ? '<div class="gr-items-list">' + itemsHTML + '</div>'
+            : '<p class="gr-items-empty">尚未設定任何贈品，請點擊「＋ 新增」。</p>') +
+        '</div>' +
+
+      '</div>'
+    );
+  }
+
+  function buildItemHTML(item, rIdx, iIdx) {
+    var menuOptions = '<option value="">（手動輸入品名）</option>' +
+      (data.menuItems || []).map(function (m) {
+        var sel = (m.id === item.id) ? ' selected' : '';
+        return '<option value="' + esc(m.id) + '" data-name="' + esc(m.name) + '"' + sel + '>' + esc(m.name) + '</option>';
+      }).join('');
+    var showManual = !item.id || !(data.menuItems || []).some(function (m) { return m.id === item.id; });
+    return (
+      '<div class="gr-item-row" data-item-idx="' + iIdx + '">' +
+        '<div class="gr-item-row-main">' +
+          '<label class="gr-item-enabled-wrap" title="啟用此贈品">' +
+            '<input type="checkbox" class="gift-item-enabled" data-rule="' + rIdx + '" data-item="' + iIdx + '"' + (item.enabled ? ' checked' : '') + '>' +
+            '<span class="gr-item-dot"></span>' +
+          '</label>' +
+          '<div class="gr-item-name-col">' +
+            '<select class="gift-item-menu-select gr-item-select" data-rule="' + rIdx + '" data-item="' + iIdx + '">' + menuOptions + '</select>' +
+            '<input type="text" class="gift-item-name gr-item-name-input" data-rule="' + rIdx + '" data-item="' + iIdx + '" value="' + esc(item.name || "") + '" placeholder="自訂品名"' + (showManual ? '' : ' style="display:none;"') + '>' +
+          '</div>' +
+          '<select class="gift-item-type gr-item-type-select" data-rule="' + rIdx + '" data-item="' + iIdx + '">' +
+            '<option value="staple"' + (item.type !== "vegetable" ? ' selected' : '') + '>主食</option>' +
+            '<option value="vegetable"' + (item.type === "vegetable" ? ' selected' : '') + '>蔬菜</option>' +
+          '</select>' +
+          '<button type="button" class="gr-item-remove-btn gift-item-remove" data-rule="' + rIdx + '" data-item="' + iIdx + '">移除</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function attachGiftRuleEvents() {
+    var container = document.getElementById("gift-promo-rules-list");
+    if (!container) return;
+
+    // Rule-level fields
+    container.querySelectorAll(".gift-rule-enabled").forEach(function (el) {
+      el.addEventListener("change", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        giftPromoRules[rIdx].enabled = this.checked;
+      });
+    });
+    container.querySelectorAll(".gift-rule-name").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        giftPromoRules[rIdx].name = this.value;
+      });
+    });
+    container.querySelectorAll(".gift-rule-min").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        giftPromoRules[rIdx].minAmount = Number(this.value) || 0;
+      });
+    });
+    container.querySelectorAll(".gift-rule-max").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        var v = this.value.trim();
+        giftPromoRules[rIdx].maxAmount = v === "" ? null : Number(v);
+      });
+    });
+    container.querySelectorAll(".gift-rule-staple").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        giftPromoRules[rIdx].maxStaple = Number(this.value) || 0;
+      });
+    });
+    container.querySelectorAll(".gift-rule-vegetable").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        giftPromoRules[rIdx].maxVegetable = Number(this.value) || 0;
+      });
+    });
+    container.querySelectorAll(".gift-rule-delete").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        if (!confirm("確認刪除此區間規則？")) return;
+        giftPromoRules.splice(rIdx, 1);
+        renderGiftRulesUI();
+      });
+    });
+
+    // Menu item selector: when a menu item is chosen, update the rule's item id+name
+    container.querySelectorAll(".gift-item-menu-select").forEach(function (el) {
+      el.addEventListener("change", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        var iIdx = parseInt(this.getAttribute("data-item"), 10);
+        var selectedOption = this.options[this.selectedIndex];
+        if (this.value) {
+          giftPromoRules[rIdx].items[iIdx].id = this.value;
+          giftPromoRules[rIdx].items[iIdx].name = selectedOption.getAttribute("data-name") || selectedOption.text;
+          // Hide manual name input when menu item selected
+          var nameInput = this.parentElement.querySelector(".gift-item-name");
+          if (nameInput) nameInput.style.display = "none";
+        } else {
+          giftPromoRules[rIdx].items[iIdx].id = "";
+          var nameInput2 = this.parentElement.querySelector(".gift-item-name");
+          if (nameInput2) nameInput2.style.display = "";
+        }
+      });
+    });
+
+    // Item-level fields
+    container.querySelectorAll(".gift-item-enabled").forEach(function (el) {
+      el.addEventListener("change", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        var iIdx = parseInt(this.getAttribute("data-item"), 10);
+        giftPromoRules[rIdx].items[iIdx].enabled = this.checked;
+      });
+    });
+    container.querySelectorAll(".gift-item-name").forEach(function (el) {
+      el.addEventListener("input", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        var iIdx = parseInt(this.getAttribute("data-item"), 10);
+        giftPromoRules[rIdx].items[iIdx].name = this.value;
+      });
+    });
+    container.querySelectorAll(".gift-item-type").forEach(function (el) {
+      el.addEventListener("change", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        var iIdx = parseInt(this.getAttribute("data-item"), 10);
+        giftPromoRules[rIdx].items[iIdx].type = this.value;
+      });
+    });
+    container.querySelectorAll(".gift-item-remove").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        var iIdx = parseInt(this.getAttribute("data-item"), 10);
+        giftPromoRules[rIdx].items.splice(iIdx, 1);
+        renderGiftRulesUI();
+      });
+    });
+    container.querySelectorAll(".gift-item-add").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var rIdx = parseInt(this.getAttribute("data-rule"), 10);
+        giftPromoRules[rIdx].items.push({ id: uid8(), name: "", type: "staple", enabled: true, sort: giftPromoRules[rIdx].items.length + 1 });
+        renderGiftRulesUI();
+      });
+    });
+  }
+
   function renderSettingsSummary() {
     document.getElementById("settings-open").checked = !!(data.settings && data.settings.isOpen);
     document.getElementById("settings-promo-enabled").checked = !!(data.settings && data.settings.promoEnabled);
@@ -840,8 +1233,11 @@
       "<p><strong>營業公告：</strong>" + esc(data.settings && data.settings.openNotice || "未設定") + "</p>",
       "<p><strong>優惠提示：</strong>" + esc(data.settings && data.settings.promoText || "未設定") + "</p>",
       "<p><strong>優惠提示狀態：</strong>" + (data.settings && data.settings.promoEnabled ? "啟用中" : "未啟用") + "</p>",
-      "<p><strong>接單時間：</strong>" + esc((data.settings && data.settings.openFrom) || "17:40") + " – " + esc((data.settings && data.settings.openTo) || "22:50") + "</p>"
+      "<p><strong>接單時間：</strong>" + esc((data.settings && data.settings.openFrom) || "17:40") + " – " + esc((data.settings && data.settings.openTo) || "22:50") + "</p>",
+      "<p><strong>滿額贈送：</strong>" + esc(describeGiftPromotion(data.settings || {})) + "（詳細規則在「優惠管理」）</p>"
     ].join("");
+    var giftStatusEl = document.getElementById("gift-promo-status");
+    if (giftStatusEl) giftStatusEl.textContent = describeGiftPromotion(data.settings || {});
   }
 
   function renderCategoryOptions() {
@@ -961,6 +1357,7 @@
       document.getElementById("settings-promo-text").value = data.settings && data.settings.promoText || "";
       document.getElementById("settings-open-from").value = data.settings && data.settings.openFrom || "";
       document.getElementById("settings-open-to").value = data.settings && data.settings.openTo || "";
+      fillGiftPromotionFields("settings-gift", data.settings || {});
       syncSwitchLabels();
     }
     openModal(type, type === "settings" ? "編輯" : "新增");
@@ -985,6 +1382,7 @@
       document.getElementById("category-enabled").checked = item.enabled !== false;
     } else if (type === "menu") {
       document.getElementById("menu-id").value = item.id;
+      document.getElementById("menu-original-id").value = item.id; // 記錄原始 ID 用於 rename 偵測
       document.getElementById("menu-name").value = item.name || "";
       document.getElementById("menu-price").value = item.price || 0;
       document.getElementById("menu-category").value = item.category || "";
@@ -994,6 +1392,13 @@
       document.getElementById("menu-unit").value = item.unit || "";
       document.getElementById("menu-description").value = item.description || "";
       document.getElementById("menu-option-groups").value = JSON.stringify(item.optionGroups || [], null, 2);
+      document.getElementById("menu-is-staple").checked = (function () {
+        if (item.isStaple || item.staple || item.type === "staple") return true;
+        var catId = (item.category || item.categoryId || "").toLowerCase();
+        return catId === "staples" || catId === "staple" || catId.indexOf("staple") !== -1;
+      })();
+      document.getElementById("menu-requires-flavor").checked = item.requiresFlavor !== false;
+      document.getElementById("menu-quick-add").checked = item.quickAdd === true;
       document.getElementById("menu-enabled").checked = !!item.isActive;
     } else if (type === "combos") {
       document.getElementById("combo-id").value = item.id;
@@ -1078,38 +1483,53 @@
   async function saveMenuItem() {
     if (!canManage()) return;
 
-    var docId = val("menu-id") || db.collection("menu_items").doc().id;
-    var isNew = !val("menu-id");
+    // originalId = Firestore 文件 ID（不可變，編輯時永遠用這個寫回）
+    // menuIdField = 「品項編號」欄位值（可修改，只是文件內的一個欄位）
+    var originalId = val("menu-original-id").trim();
+    var isNew = !originalId;
+
+    // 新增時：使用 menu-id 作為 doc ID（若空白則自動產生）
+    var docId;
+    if (isNew) {
+      docId = val("menu-id").trim() || db.collection("menu_items").doc().id;
+    } else {
+      // 編輯時：永遠寫回原始 doc ID，絕不新增新文件
+      docId = originalId;
+    }
+
     var payload = buildMenuItem();
+    var firestoreData = {
+      storeId: storeId,
+      name: payload.name,
+      price: payload.price,
+      category: payload.category,
+      categoryId: payload.category,
+      sortOrder: payload.sortOrder,
+      sort: payload.sortOrder,
+      isActive: payload.isActive,
+      enabled: payload.isActive,
+      isStaple: payload.isStaple,
+      requiresFlavor: payload.requiresFlavor,
+      quickAdd: payload.quickAdd,
+      description: payload.description,
+      imageUrl: payload.imageUrl,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: user && user.uid || "",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      tags: payload.tags,
+      unit: payload.unit,
+      optionGroups: payload.optionGroups
+    };
 
     try {
-      await db.collection("menu_items").doc(docId).set({
-        storeId: storeId,
-        name: payload.name,
-        price: payload.price,
-        category: payload.category,
-        categoryId: payload.category,
-        sortOrder: payload.sortOrder,
-        sort: payload.sortOrder,
-        isActive: payload.isActive,
-        enabled: payload.isActive,
-        description: payload.description,
-        imageUrl: payload.imageUrl,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedBy: user && user.uid || "",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        tags: payload.tags,
-        unit: payload.unit,
-        optionGroups: payload.optionGroups
-      }, { merge: true });
-
+      await db.collection("menu_items").doc(docId).set(firestoreData, { merge: true });
       console.log("[AdminMenu] Saved menu item.", { docId: docId, action: isNew ? "create" : "update" });
+      msg(isNew ? "新增成功" : "更新成功");
       closeModal();
       await loadScoped();
-      msg(isNew ? "新增成功" : "更新成功");
     } catch (error) {
       console.error("[AdminMenu] Save failed.", error);
-      msg("儲存失敗，請稍後再試");
+      msg("儲存失敗：" + (error.message || error));
     }
   }
 
@@ -1179,6 +1599,11 @@
       promoText: val("settings-promo-text"),
       openFrom: val("settings-open-from") || "17:40",
       openTo: val("settings-open-to") || "22:50",
+      giftPromotion: Object.assign(
+        {},
+        (data.settings && data.settings.giftPromotion) || {},
+        { enabled: checked("settings-gift-enabled") }
+      ),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
@@ -1211,6 +1636,9 @@
       tags: csv("menu-tags"),
       unit: val("menu-unit"),
       optionGroups: json("menu-option-groups"),
+      isStaple: checked("menu-is-staple"),
+      requiresFlavor: checked("menu-requires-flavor"),
+      quickAdd: checked("menu-quick-add"),
       isActive: checked("menu-enabled")
     };
   }
@@ -1437,6 +1865,9 @@
     [
       ["store-active", "store-active-label", "啟用中", "停用中"],
       ["category-enabled", "category-enabled-label", "啟用中", "停用中"],
+      ["menu-is-staple", "menu-is-staple-label", "主食類", "非主食"],
+      ["menu-requires-flavor", "menu-requires-flavor-label", "需要選口味", "不需要口味"],
+      ["menu-quick-add", "menu-quick-add-label", "快速加購", "標準模式"],
       ["menu-enabled", "menu-enabled-label", "啟用中", "停用中"],
       ["combo-enabled", "combo-enabled-label", "啟用中", "停用中"],
       ["flavor-enabled", "flavor-enabled-label", "啟用中", "停用中"],
@@ -1518,6 +1949,8 @@
     normalized.tags = Array.isArray(normalized.tags) ? normalized.tags : [];
     normalized.unit = normalized.unit || "";
     normalized.optionGroups = Array.isArray(normalized.optionGroups) ? normalized.optionGroups : [];
+    normalized.requiresFlavor = normalized.requiresFlavor !== false;
+    normalized.quickAdd = normalized.quickAdd === true;
     return normalized;
   }
 
@@ -1580,10 +2013,28 @@
     return map[status] || status;
   }
 
-  function orderItemsSummary(items) {
+  function orderItemsSummary(items, groups) {
+    if (groups && groups.length > 1) {
+      return groups.map(function (g, gIdx) {
+        var gItems = g.items || [];
+        if (!gItems.length) return "";
+        var displayLabel = "第" + (gIdx + 1) + "份";
+        return "<strong>" + esc(displayLabel) + "</strong>：" + gItems.map(function (i) {
+          var detail = [];
+          if (i.flavor) detail.push(i.flavor);
+          if (i.staple) detail.push("主食：" + i.staple);
+          var suffix = detail.length ? "（" + detail.join("／") + "）" : "";
+          return esc((i.name || i.itemId || "未命名") + " x" + Number(i.qty || 0) + suffix);
+        }).join("、");
+      }).filter(Boolean).join("<br>");
+    }
     if (!items || !items.length) return "無";
     return items.map(function (item) {
-      return (item.name || item.itemId || "未命名品項") + " x" + Number(item.qty || 0);
+      var detail = [];
+      if (item.flavor || item.flavorName) detail.push(item.flavor || item.flavorName);
+      if (item.staple || item.stapleName) detail.push("主食：" + (item.staple || item.stapleName));
+      var suffix = detail.length ? "（" + detail.join("／") + "）" : "";
+      return (item.name || item.itemId || "未命名品項") + " x" + Number(item.qty || 0) + suffix;
     }).join("、");
   }
 
@@ -2154,7 +2605,8 @@
         { label: "取餐號碼", value: pickupNumDisplay, html: true },
         { label: "訂單狀態", value: statusPill(meta.label, meta.tone === "ready" || meta.tone === "picked") + archivedBadge + testBadge, html: true },
         { label: "訂單金額", value: "NT$ " + Number(normalizedOrder.total || 0) },
-        { label: "品項內容", value: orderItemsSummary(normalizedOrder.items) },
+        { label: "品項內容", value: orderItemsSummary(normalizedOrder.items, normalizedOrder.groups || order.groups), html: !!(normalizedOrder.groups || order.groups) },
+        { label: "優惠結果", value: orderGiftPromotionSummary(normalizedOrder) },
         { label: "建立時間", value: formatDate(normalizedOrder.created_at || normalizedOrder.raw.createdAt) },
         { label: "預約取餐", value: normalizedOrder.scheduled_pickup_time ? (normalizedOrder.scheduled_pickup_date + " " + normalizedOrder.scheduled_pickup_time) : "未指定" },
         { label: "接單通知", value: renderNotifStatus(order), html: true },
@@ -2208,6 +2660,7 @@
       var order = data.orders.find(function (o) { return o.id === id; });
       if (order) { order.archived = shouldArchive === false ? false : true; }
       renderOrders();
+      renderDashboard();
       msg(shouldArchive === false ? "已取消封存" : "訂單已封存");
     } catch (error) {
       console.error("[AdminOrders] Archive failed.", error);
@@ -2225,6 +2678,7 @@
       await db.collection("orders").doc(id).delete();
       data.orders = data.orders.filter(function (o) { return o.id !== id; });
       renderOrders();
+      renderDashboard();
       msg("訂單已永久刪除");
     } catch (error) {
       console.error("[AdminOrders] Permanent delete failed.", error);
@@ -2269,10 +2723,11 @@
         deleted += snap.docs.length;
         if (snap.docs.length < 300) hasMore = false;
       }
-      // 更新本地快取
+      // 更新本地快取，同時刷新訂單列表與 Dashboard 統計
       data.orders = data.orders.filter(function (o) { return o.isTest !== true; });
       showTestOrdersOnly = false;
       renderOrders();
+      renderDashboard();
       window.alert("測試訂單已刪除（共 " + deleted + " 筆）");
       msg("已刪除 " + deleted + " 筆測試訂單");
     } catch (error) {
@@ -2289,6 +2744,15 @@
   function orderItemsSummary(items) {
     var lines = window.LeLeShanOrders.itemSummary(items, 4);
     return lines.length ? lines.join(" / ") : "無品項";
+  }
+
+  function orderGiftPromotionSummary(order) {
+    var result = order && order.raw && order.raw.giftPromotionResult || order && order.giftPromotionResult || null;
+    if (!result || !result.enabled) return "未套用";
+    var items = Array.isArray(result.selectedGifts) ? result.selectedGifts.map(function (item) {
+      return (item.giftType === "vegetable" ? "蔬菜：" : "主食：") + (item.name || item.itemId || "未選擇");
+    }) : [];
+    return items.length ? items.join(" / ") : "已達門檻，尚未選擇";
   }
 
   function describePointRule(rule) {
@@ -2346,6 +2810,52 @@
     } catch (error) {
       console.error("[Admin] Save point rule failed.", error);
       msg("點數規則儲存失敗");
+    }
+  }
+
+  async function saveGiftPromotionSettings() {
+    if (!canManage()) return;
+    try {
+      // Read current values from UI (rules already updated in-memory via event listeners)
+      var enabledEl = document.getElementById("gift-promo-enabled");
+      // Normalize rules for storage: generate clean IDs from names if empty
+      var rulesToSave = giftPromoRules.map(function (r, idx) {
+        var ruleId = (r.id || uid8()).trim();
+        return {
+          id: ruleId,
+          name: r.name || ("區間 " + (idx + 1)),
+          enabled: r.enabled !== false,
+          minAmount: Number(r.minAmount || 0),
+          maxAmount: r.maxAmount != null ? Number(r.maxAmount) : null,
+          maxStaple: Number(r.maxStaple || 0),
+          maxVegetable: Number(r.maxVegetable || 0),
+          sort: idx + 1,
+          items: (r.items || []).map(function (i, iIdx) {
+            var itemId = (i.id || i.name || uid8()).trim();
+            return {
+              id: itemId,
+              name: i.name || itemId,
+              type: i.type === "vegetable" ? "vegetable" : "staple",
+              enabled: i.enabled !== false,
+              sort: iIdx + 1,
+              priceAdjustment: Number(i.priceAdjustment || 0)
+            };
+          })
+        };
+      });
+      await db.collection("settings").doc(storeId).set({
+        storeId: storeId,
+        giftPromotion: {
+          enabled: enabledEl ? enabledEl.checked : false,
+          rules: rulesToSave
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      await loadScoped();
+      msg("滿額贈送規則已儲存（共 " + rulesToSave.length + " 個區間）");
+    } catch (error) {
+      console.error("[Admin] Save gift promotion failed.", error);
+      msg("滿額贈送設定儲存失敗");
     }
   }
 
