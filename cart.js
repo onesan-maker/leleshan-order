@@ -87,6 +87,14 @@
     }).filter(Boolean).slice(0, 3);
   }
 
+  function recommendFirstNudgeItems(app) {
+    var names = ["白飯", "玉米筍"];
+    var items = allSingleItems(app);
+    return names.map(function (name) {
+      return items.find(function (item) { return matchesNamedItem(item, name); }) || null;
+    }).filter(Boolean).slice(0, 2);
+  }
+
   function hasPendingStapleSelection(app) {
     var result = app.state.giftPromotionResult || null;
     if (!result || !result.enabled || !result.entitlement) return false;
@@ -99,7 +107,7 @@
   function maybeShowFirstAddNudge(app, hadItemsBefore) {
     if (hadItemsBefore || app.state.firstAddNudgeShown) return;
     app.state.firstAddNudgeShown = true;
-    var actions = recommendBoostItems(app).slice(0, 2).map(function (item) {
+    var actions = recommendFirstNudgeItems(app).map(function (item) {
       return { label: "+ " + item.name, itemId: item.id };
     });
     window.LeLeShanUI.showToast("再加一個更剛好 👍", actions, 2200);
