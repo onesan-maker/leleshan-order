@@ -125,7 +125,7 @@
       { label: "▶ 開始製作", next: "preparing", cls: "primary-btn" }
     ],
     accepted: [
-      { label: "▶ 開始製作", next: "preparing", cls: "primary-btn" }
+      { label: "🔔 完成出餐", next: "ready", cls: "primary-btn" }
     ],
     preparing: [
       { label: "🔔 完成出餐", next: "ready", cls: "primary-btn" }
@@ -142,6 +142,7 @@
   var cancelPressTimer = null;
   var cancelPressTarget = null;
   var cancelPressTriggered = false;
+  var expandedCol = null; // null | "pending" | "work" | "ready"
 
   document.addEventListener("DOMContentLoaded", function () {
     cache();
@@ -241,6 +242,44 @@
           el.enableAudio.disabled = true;
         }
       });
+    }
+
+    // 點欄位 header → 切換展開／收合
+    document.querySelectorAll(".kds-col__head").forEach(function (h) {
+      h.addEventListener("click", function () {
+        var col = h.closest(".kds-col");
+        if (!col) return;
+        var key = col.id.replace("kds-col-", "");
+        expandedCol = (expandedCol === key) ? null : key;
+        applyExpanded();
+        render();
+      });
+    });
+
+    // 點 compact 卡取餐號 → 展開該欄
+    document.addEventListener("click", function (e) {
+      var num = e.target.closest(".kds-card--compact .kds-card__number[data-expand]");
+      if (!num) return;
+      expandedCol = num.getAttribute("data-expand");
+      applyExpanded();
+      render();
+    });
+  }
+
+  function applyExpanded() {
+    var board = document.getElementById("kds-board");
+    if (!board) return;
+    var widths = {
+      pending: "minmax(0, 1fr) 60px 60px",
+      work:    "60px minmax(0, 1fr) 60px",
+      ready:   "60px 60px minmax(0, 1fr)"
+    };
+    if (expandedCol) {
+      board.setAttribute("data-expanded", expandedCol);
+      board.style.setProperty("grid-template-columns", widths[expandedCol], "important");
+    } else {
+      board.removeAttribute("data-expanded");
+      board.style.removeProperty("grid-template-columns");
     }
   }
 
@@ -491,17 +530,28 @@
       return (helpers.toMillis(a.ready_at) || 0) - (helpers.toMillis(b.ready_at) || 0);
     });
 
+    var emptyLabels = { pending: "無待確認", work: "無製作中", ready: "無可取餐" };
     ["pending", "work", "ready"].forEach(function (k) {
+      var col  = document.getElementById("kds-col-" + k);
       var body = document.getElementById("kds-body-" + k);
       if (!body) return;
-      if (cols[k].length === 0) {
-        var emptyText = k === "pending" ? "無待確認" : k === "work" ? "無製作中" : "無可取餐";
-        body.innerHTML = '<div class="kds-empty">' + esc(emptyText) + '</div>';
-      } else {
-        body.innerHTML = cols[k].map(function (o) {
-          return renderCard(o);
-        }).join("");
+
+      // expanded / collapsed 狀態
+      if (col) {
+        col.classList.toggle("kds-is-expanded",  expandedCol === k);
+        col.classList.toggle("kds-is-collapsed", expandedCol !== null && expandedCol !== k);
       }
+
+      if (cols[k].length === 0) {
+        body.innerHTML = '<div class="kds-empty">' + esc(emptyLabels[k]) + '</div>';
+      } else if (expandedCol === k) {
+        // 展開欄：完整卡片
+        body.innerHTML = cols[k].map(function (o) { return renderCard(o); }).join("");
+      } else {
+        // 其他欄（或全部未展開）：compact 卡
+        body.innerHTML = cols[k].map(function (o) { return renderCardCompact(o); }).join("");
+      }
+
       var ct = document.getElementById("kds-ct-" + k);
       if (ct) ct.textContent = String(cols[k].length);
       var sb = document.getElementById("kds-sb-" + k.charAt(0));
@@ -934,9 +984,7 @@
     if (!ms) return { cls: "", text: "—" };
     var secs = Math.max(0, Math.floor((Date.now() - ms) / 1000));
     var mins = Math.floor(secs / 60);
-    var text = mins < 1
-      ? (secs + " 秒")
-      : (mins + ":" + String(secs % 60).padStart(2, "0"));
+    var text = mins + ":" + String(secs % 60).padStart(2, "0");
     var cls = "";
     if (order.status === "pending_confirmation" || order.status === "new") {
       if (mins >= 5) cls = "crit";
@@ -969,28 +1017,28 @@
   function renderCard(order /* , visible */) {
     var helpers    = window.LeLeShanOrders;
     var status     = order.status;
-    var groups     = normalizeGroups(order);
+    var isPending  = status === "pending_confirmation" || status === "new";
+    var groups     = isPending ? [] : normalizeGroups(order);
     var allKeys    = collectAllItemKeys(order, groups);
     var allChecked = allKeys.length > 0 && allKeys.every(function (k) { return isItemChecked(k); });
     var wait       = getWaitInfo(order);
     var elapsedMin = Math.floor((Date.now() - helpers.toMillis(order.created_at)) / 60000);
 
-    var statusKey = (status === "pending_confirmation" || status === "new") ? "pending"
+    var statusKey = isPending ? "pending"
       : status === "ready" ? "ready"
       : status === "preparing" ? "preparing"
       : "accepted";
 
     var cls = "kds-card kds-card--" + statusKey;
     if (status === "preparing" && allChecked) cls += " all-checked";
-    if (statusKey === "pending" && elapsedMin >= 8) cls += " kds-critical";
+    if (isPending && elapsedMin >= 8) cls += " kds-critical";
 
-    // CTA 對應 STATUS_ACTIONS[status][0]
+    // CTA
     var primary = (STATUS_ACTIONS[status] || [])[0] || null;
     var ctaHtml = "";
     if (primary) {
       var ctaClass = "";
       if (primary.next === "accepted") ctaClass = "accept";
-      else if (primary.next === "preparing") ctaClass = "start";
       else if (primary.next === "ready") ctaClass = "ready" + (allChecked ? " armed" : "");
       else if (primary.next === "completed") ctaClass = "pickup";
       ctaHtml = '<button class="kds-btn kds-btn--main ' + ctaClass + '" type="button" ' +
@@ -1001,16 +1049,19 @@
       ctaHtml = '<button class="kds-btn kds-btn--main pickup" type="button" disabled style="opacity:0.5">—</button>';
     }
 
-    // 來源 + 預約 badge
+    // 來源 badge（pending 不顯示預約）
     var srcCode = getSourceCode(order);
     var srcHtml = '<span class="kds-src kds-src--' + esc(srcCode) + '">' + esc(getSourceLabel(order)) + '</span>';
-    if (helpers.isFutureScheduled(order)) {
+    if (!isPending && helpers.isFutureScheduled(order)) {
       srcHtml += '<span class="kds-src kds-src--reserve">預約</span>';
     }
 
-    // 群組區
+    // body：pending 顯示金額；製作/完成 顯示品項
     var bodyHtml = "";
-    if (groups && groups.length) {
+    if (isPending) {
+      var total = Number(order.total || 0);
+      bodyHtml = '<div class="kds-card__amount">$ ' + total.toLocaleString() + '</div>';
+    } else if (groups && groups.length) {
       bodyHtml = groups.map(function (g, gi) {
         var badge = GROUP_BADGE_LABELS[gi] || String(gi + 1);
         var totalQty = (g.items || []).reduce(function (n, i) { return n + Number(i.qty || 0); }, 0);
@@ -1019,10 +1070,10 @@
           var key = String(order.id || "") + "_" + String(g.index || 0) + "_" + String(ii);
           var checked = isItemChecked(key);
           var staple = String(item.staple || item.selectedStaple || "").trim();
-          var note = String(item.item_note || item.note || "").trim();
+          var noteItem = String(item.item_note || item.note || "").trim();
           var subParts = [];
           if (staple) subParts.push("主食：" + staple);
-          if (note) subParts.push(note);
+          if (noteItem) subParts.push(noteItem);
           var subHtml = subParts.length ? '<span class="sub">' + esc(subParts.join("、")) + '</span>' : "";
           return '<li class="' + (checked ? "done" : "") + '" data-item-key="' + esc(key) + '">' +
             '<span>' + esc(item.name || "") + '</span>' +
@@ -1053,7 +1104,6 @@
     }
 
     var note = getNoteText(order);
-    var pickupStr = getPickupTimeStr(order);
 
     return '<article class="' + cls + '" data-id="' + esc(order.id) + '">' +
       '<div class="kds-card__hero">' +
@@ -1063,12 +1113,50 @@
       '<div class="kds-card__meta">' +
         '<span class="kds-card__name">' + esc(getCustomerName(order)) + '</span>' +
         srcHtml +
-        (pickupStr ? '<span class="kds-pickup-time">' + esc(pickupStr) + '</span>' : '') +
       '</div>' +
       '<div class="kds-card__body">' + bodyHtml + '</div>' +
       (note ? '<div class="kds-note">' + esc(note) + '</div>' : '') +
       '<div class="kds-card__cta">' +
         ctaHtml +
+        '<button class="kds-btn kds-btn--sub" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">✕</button>' +
+      '</div>' +
+      '</article>';
+  }
+
+  function renderCardCompact(order) {
+    var status    = order.status;
+    var isPending = status === "pending_confirmation" || status === "new";
+    var statusKey = isPending ? "pending"
+      : status === "ready" ? "ready"
+      : status === "preparing" ? "preparing" : "accepted";
+    var wait    = getWaitInfo(order);
+    var total   = Number(order.total || 0);
+    var primary = (STATUS_ACTIONS[status] || [])[0] || null;
+
+    var ctaClass = "";
+    if (primary) {
+      if (primary.next === "accepted")       ctaClass = "accept";
+      else if (primary.next === "ready")     ctaClass = "ready";
+      else if (primary.next === "completed") ctaClass = "pickup";
+    }
+
+    var ctaHtml = primary
+      ? '<button class="kds-btn kds-btn--main ' + ctaClass + '" type="button" ' +
+          'data-order-id="' + esc(order.id) + '" ' +
+          'data-next-status="' + esc(primary.next) + '">' + esc(primary.label) + '</button>'
+      : '<button class="kds-btn kds-btn--main pickup" type="button" disabled style="opacity:0.5">—</button>';
+
+    return '<article class="kds-card kds-card--compact kds-card--' + statusKey + '" data-id="' + esc(order.id) + '">' +
+      '<div class="kds-card__hero">' +
+        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '">' + esc(wait.text) + '</div>' +
+        '<div class="kds-card__number" data-expand="' + statusKey + '">' + esc(getPickupNumber(order)) + '</div>' +
+      '</div>' +
+      '<div class="kds-card__meta kds-card__meta--compact">' +
+        '<span class="kds-src kds-src--' + esc(getSourceCode(order)) + '">' + esc(getSourceLabel(order)) + '</span>' +
+        '<span class="kds-card__name">' + esc(getCustomerName(order)) + '</span>' +
+      '</div>' +
+      '<div class="kds-card__amount">$ ' + total.toLocaleString() + '</div>' +
+      '<div class="kds-card__cta">' + ctaHtml +
         '<button class="kds-btn kds-btn--sub" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">✕</button>' +
       '</div>' +
       '</article>';
