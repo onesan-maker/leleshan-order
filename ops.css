@@ -862,24 +862,82 @@ button {
   --kds-line-brand: #06c755;
 }
 
-/* ─── main 容器 ─── */
-/* 強制 KDS 頁面 ops-shell 單欄滿版（避免 grid auto-track 把 main 縮窄） */
+/* ─── KDS 全螢幕覆蓋（v3 原型）─── */
 body.kds-has-stats-bar {
-  padding-bottom: 54px; /* 36px stats-bar + 18px original padding */
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  height: 100vh;
+  background: var(--kds-bg);
+  background-image: none;
 }
 body.kds-has-stats-bar .ops-shell {
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  gap: 0;
   width: 100%;
 }
+
+/* ops-topbar → 48px compact bar（對齊原型 .bar）*/
+body.kds-has-stats-bar .ops-topbar {
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-radius: 0;
+  background: var(--kds-panel);
+  border: none;
+  border-bottom: 2px solid var(--kds-line);
+  box-shadow: none;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* kds-bar 內部元件 */
+.kds-bar__brand {
+  font-weight: 900; font-size: 16px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--kds-text); white-space: nowrap; flex-shrink: 0;
+}
+.kds-bar__logo {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 14px; color: #fff; flex-shrink: 0;
+}
+.kds-bar__live {
+  display: flex; gap: 6px; font-size: 12px;
+  color: var(--kds-text-dim); align-items: center; flex-shrink: 0;
+}
+.kds-bar__dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--kds-ready);
+  animation: kdsLivePulse 1.2s infinite;
+}
+@keyframes kdsLivePulse { 50% { opacity: 0.3; } }
+.kds-bar__info {
+  display: flex; gap: 12px; font-size: 12px;
+  color: var(--kds-muted); flex-shrink: 1; overflow: hidden;
+}
+.kds-bar__update {
+  margin-left: auto; font-size: 12px;
+  color: var(--kds-muted); white-space: nowrap; flex-shrink: 0;
+}
+
+/* kds-main：flex:1 撐滿 topbar 以下全部高度 */
 .kds-main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   background: var(--kds-bg);
   color: var(--kds-text);
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--kds-line);
-  box-shadow: var(--ops-shadow);
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  min-width: 0;
 }
 
 /* ─── 全寬警報條 ─── */
@@ -932,16 +990,15 @@ body.kds-pending-mode .kds-alert-strip {
 /* ─── 三欄 ─── */
 .kds-board {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.1fr) minmax(0, 1fr);
-  height: calc(100vh - 240px);
-  min-height: 520px;
+  grid-template-columns: 420px 1.1fr 1fr;
+  flex: 1;          /* 撐滿 kds-main 剩餘高度 */
+  min-height: 0;    /* 讓 flex:1 能正確縮小 */
   gap: 2px;
   background: var(--kds-line);
   width: 100%;
-  min-width: 0;
 }
-@media (min-width: 1280px) {
-  .kds-board { grid-template-columns: 420px minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 1279px) {
+  .kds-board { grid-template-columns: 1.4fr 1.1fr 1fr; }
 }
 .kds-col {
   background: var(--kds-panel);
@@ -996,7 +1053,7 @@ body.kds-pending-mode .kds-alert-strip {
 .kds-col--ready .kds-col__title { color: var(--kds-ready); }
 
 .kds-col__body {
-  flex: 1; overflow-y: auto; padding: 10px 10px 20px;
+  flex: 1; overflow-y: auto; padding: 10px 10px 44px; /* 44px = stats-bar(36px) + 8px */
   display: flex; flex-direction: column; gap: 10px;
 }
 .kds-col__body::-webkit-scrollbar { width: 8px; }
@@ -1319,5 +1376,3 @@ body.kds-pending-mode .kds-col--ready:hover {
 .kds-stats-bar__gauge .sg-p { background: var(--kds-pending); }
 .kds-stats-bar__gauge .sg-w { background: var(--kds-preparing); }
 .kds-stats-bar__gauge .sg-r { background: var(--kds-ready); }
-
-body.kds-has-stats-bar { padding-bottom: 36px; }
