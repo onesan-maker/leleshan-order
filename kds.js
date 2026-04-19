@@ -547,6 +547,9 @@
     var helpers = window.LeLeShanOrders;
 
     // ── 嚴格三欄分桶（直接走 state.orders，避免 KDS_VISIBLE 漏掉 pending_confirmation） ──
+    console.log("[KDS] incoming orders:", state.orders.map(function (o) {
+      return { id: o.id, status: o.status, source: o.source };
+    }));
     var cols = { pending: [], work: [], ready: [] };
     state.orders.forEach(function (o) {
       if (o.status === "completed" || o.status === "cancelled" || o.status === "picked_up") return;
@@ -554,6 +557,12 @@
       else if (o.status === "ready") cols.ready.push(o);
       else if (o.status === "accepted" || o.status === "preparing") cols.work.push(o);
       // 其他狀態（如 "new"）不顯示，避免誤入待確認欄
+    });
+
+    console.log("[KDS] bucket counts:", {
+      pending: cols.pending.length,
+      work: cols.work.length,
+      ready: cols.ready.length
     });
 
     // 自診斷：印出本次 render 的真實資料來源（協助對照 Firestore）

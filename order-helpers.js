@@ -305,6 +305,10 @@
       pickupSequence: resolve(options.pickupSequence, null),
       groups: resolve(options.groups, null)
     };
+    if (status === "accepted") {
+      payload.accepted_at = serverTimestamp();
+      payload.acceptedAt  = serverTimestamp();
+    }
     return payload;
   }
 
