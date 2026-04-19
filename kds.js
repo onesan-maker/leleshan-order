@@ -142,12 +142,32 @@
     return ps !== ns && isSoundTargetStatus(ns);
   }
 
-  function triggerNewOrderSound(order, reason) {
+  var RING_INTERVAL_MS = 8000; // 每 8 秒重響一次
+  var pendingRingMap = new Map(); // orderId → intervalId
+
+  function playBellOnce(id, reason) {
     if (!isSoundEnabled()) return;
     Promise.resolve()
       .then(function () { return playNewOrderBell(); })
-      .then(function () { console.log("[KDS_SOUND] played (" + reason + ")", order.id); })
-      .catch(function (err) { console.warn("[KDS_SOUND] play failed (" + reason + ")", order.id, err); });
+      .then(function () { console.log("[KDS_SOUND] played (" + reason + ")", id); })
+      .catch(function (err) { console.warn("[KDS_SOUND] play failed (" + reason + ")", id, err); });
+  }
+
+  function startRinging(order) {
+    var id = String(order.id);
+    if (pendingRingMap.has(id)) return;
+    playBellOnce(id, "start");
+    var timer = setInterval(function () { playBellOnce(id, "repeat"); }, RING_INTERVAL_MS);
+    pendingRingMap.set(id, timer);
+    console.log("[KDS_SOUND] started ringing", id);
+  }
+
+  function stopRinging(orderId) {
+    var id = String(orderId);
+    if (!pendingRingMap.has(id)) return;
+    clearInterval(pendingRingMap.get(id));
+    pendingRingMap.delete(id);
+    console.log("[KDS_SOUND] stopped ringing", id);
   }
 
   // ── 狀態分組定義 ────────────────────────────────────────────
@@ -475,17 +495,23 @@
           newlyAppeared.forEach(function (order) {
             var shouldPlay = isOnlineOrderSource(order.source) && isSoundTargetStatus(order.status);
             console.log("[KDS_SOUND] evaluate new doc", { id: order.id, source: order.source, status: order.status, shouldPlay: shouldPlay });
-            if (shouldPlay) triggerNewOrderSound(order, "new_doc");
+            if (shouldPlay) startRinging(order);
           });
 
           // 2. 已存在文件：status 轉換進入目標狀態
           orders.forEach(function (order) {
             var prevOrder = previousOrderMap.get(String(order.id));
-            if (!prevOrder) return; // 新出現的已在上面處理
+            if (!prevOrder) return;
             if (!didEnterTargetStatus(prevOrder, order)) return;
             if (!isOnlineOrderSource(order.source)) return;
             console.log("[KDS_SOUND] status transition", { id: order.id, from: prevOrder.status, to: order.status, source: order.source });
-            triggerNewOrderSound(order, "transition");
+            startRinging(order);
+          });
+
+          // 3. 停止已確認訂單的響鈴
+          pendingRingMap.forEach(function (timerId, orderId) {
+            var cur = currentMap.get(orderId);
+            if (!cur || !isSoundTargetStatus(cur.status)) stopRinging(orderId);
           });
 
           previousOrderMap = currentMap;
