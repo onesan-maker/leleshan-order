@@ -92,13 +92,9 @@
     } catch (_) {}
   }
 
-  // ── 新訂單追蹤 ───────────────────────────────────────────────
-  var hasBootstrappedOrderStream = false;
-  var prevNewOrderIds = {};
-  var playedOrderIds  = new Set();
-  var audioUnlocked   = false;
-
   // ── 音效開關 ─────────────────────────────────────────────────
+  var audioUnlocked = false;
+
   function isSoundEnabled() {
     return localStorage.getItem("kds_sound") !== "off";
   }
@@ -113,6 +109,45 @@
     var btn = document.getElementById("kds-sound-toggle");
     if (!btn) return;
     btn.textContent = isSoundEnabled() ? "🔊" : "🔇";
+  }
+
+  // ── 音效：snapshot diff helpers ──────────────────────────────
+  var hasInitializedSoundBaseline = false;
+  var previousOrderMap = new Map();
+
+  function buildOrderMap(orders) {
+    var map = new Map();
+    orders.forEach(function (o) { map.set(String(o.id), o); });
+    return map;
+  }
+
+  function getNewlyAppearedOrders(currentOrders, prevMap) {
+    return currentOrders.filter(function (o) { return !prevMap.has(String(o.id)); });
+  }
+
+  function isOnlineOrderSource(source) {
+    var v = String(source || "").trim().toLowerCase();
+    return ["line_order", "line", "liff", "online", "line-liff", "line_liff"].indexOf(v) >= 0;
+  }
+
+  function isSoundTargetStatus(status) {
+    var v = String(status || "").trim().toLowerCase();
+    return v === "pending_confirmation";
+  }
+
+  function didEnterTargetStatus(prevOrder, nextOrder) {
+    if (!prevOrder || !nextOrder) return false;
+    var ps = String(prevOrder.status || "").trim().toLowerCase();
+    var ns = String(nextOrder.status || "").trim().toLowerCase();
+    return ps !== ns && isSoundTargetStatus(ns);
+  }
+
+  function triggerNewOrderSound(order, reason) {
+    if (!isSoundEnabled()) return;
+    Promise.resolve()
+      .then(function () { return playNewOrderBell(); })
+      .then(function () { console.log("[KDS_SOUND] played (" + reason + ")", order.id); })
+      .catch(function (err) { console.warn("[KDS_SOUND] play failed (" + reason + ")", order.id, err); });
   }
 
   // ── 狀態分組定義 ────────────────────────────────────────────
@@ -416,23 +451,44 @@
         state.orders = orders;
         if (el.lastUpdate) el.lastUpdate.textContent = "更新：" + new Date().toLocaleTimeString("zh-TW", { hour12: false });
 
-        // 新訂單音效追蹤（P2-B：LINE 來源 pending_confirmation，Set 去重）
-        if (!hasBootstrappedOrderStream) {
-          hasBootstrappedOrderStream = true;
-          // 首次載入：全部標為已播放，避免 reload 重播舊單
-          orders.forEach(function (o) { playedOrderIds.add(o.id); });
+        // ── P2-B 音效：snapshot diff + 狀態轉換偵測 ──────────────
+        var currentMap = buildOrderMap(orders);
+
+        console.log("[KDS_SOUND] snapshot check", {
+          initialized: hasInitializedSoundBaseline,
+          total: orders.length,
+          previousCount: previousOrderMap.size
+        });
+
+        if (!hasInitializedSoundBaseline) {
+          previousOrderMap = currentMap;
+          hasInitializedSoundBaseline = true;
+          console.log("[KDS_SOUND] baseline initialized, ids:", orders.map(function (o) { return o.id; }));
         } else {
-          orders.forEach(function (o) {
-            var isLineOrder =
-              o.status === "pending_confirmation" &&
-              (o.source === "liff" || o.source === "line");
-            if (isLineOrder && !playedOrderIds.has(o.id)) {
-              if (isSoundEnabled()) {
-                try { playNewOrderBell(); } catch (e) { console.warn("sound play failed", e); }
-              }
-              playedOrderIds.add(o.id);
-            }
+          var newlyAppeared = getNewlyAppearedOrders(orders, previousOrderMap);
+
+          console.log("[KDS_SOUND] newly appeared", newlyAppeared.map(function (o) {
+            return { id: o.id, status: o.status, source: o.source, pickupNumber: o.pickupNumber || o.display_code || "" };
+          }));
+
+          // 1. 全新文件：直接判斷 status + source
+          newlyAppeared.forEach(function (order) {
+            var shouldPlay = isOnlineOrderSource(order.source) && isSoundTargetStatus(order.status);
+            console.log("[KDS_SOUND] evaluate new doc", { id: order.id, source: order.source, status: order.status, shouldPlay: shouldPlay });
+            if (shouldPlay) triggerNewOrderSound(order, "new_doc");
           });
+
+          // 2. 已存在文件：status 轉換進入目標狀態
+          orders.forEach(function (order) {
+            var prevOrder = previousOrderMap.get(String(order.id));
+            if (!prevOrder) return; // 新出現的已在上面處理
+            if (!didEnterTargetStatus(prevOrder, order)) return;
+            if (!isOnlineOrderSource(order.source)) return;
+            console.log("[KDS_SOUND] status transition", { id: order.id, from: prevOrder.status, to: order.status, source: order.source });
+            triggerNewOrderSound(order, "transition");
+          });
+
+          previousOrderMap = currentMap;
         }
 
         render();
