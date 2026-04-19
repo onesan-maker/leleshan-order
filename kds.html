@@ -105,6 +105,19 @@
     </div>
   </div>
 
+  <!-- KDS 訂單預覽 Modal -->
+  <div id="kds-preview-modal" class="kds-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kds-preview-num">
+    <div class="kds-modal__backdrop" id="kds-preview-backdrop"></div>
+    <div class="kds-modal__box">
+      <div class="kds-modal__header" id="kds-preview-header">
+        <span class="kds-modal__num" id="kds-preview-num"></span>
+        <span class="kds-modal__status-badge" id="kds-preview-status"></span>
+        <button class="kds-modal__close" id="kds-preview-close" type="button" aria-label="關閉預覽">✕</button>
+      </div>
+      <div class="kds-modal__body" id="kds-preview-body"></div>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>

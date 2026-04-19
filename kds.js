@@ -256,13 +256,30 @@
       });
     });
 
-    // 點 compact 卡取餐號 → 展開該欄
+    // 點 compact 卡取餐號：未展開 → 開預覽 modal；已展開 → 展開該欄
     document.addEventListener("click", function (e) {
       var num = e.target.closest(".kds-card--compact .kds-card__number[data-expand]");
       if (!num) return;
-      expandedCol = num.getAttribute("data-expand");
-      applyExpanded();
-      render();
+      e.stopPropagation();
+      if (expandedCol === null) {
+        var card = num.closest(".kds-card[data-id]");
+        var oid  = card ? card.getAttribute("data-id") : null;
+        var order = oid ? findOrderById(oid) : null;
+        if (order) showPreviewModal(order);
+      } else {
+        expandedCol = num.getAttribute("data-expand");
+        applyExpanded();
+        render();
+      }
+    });
+
+    // Preview modal 關閉
+    var _closeBtn    = document.getElementById("kds-preview-close");
+    var _backdrop    = document.getElementById("kds-preview-backdrop");
+    if (_closeBtn)  _closeBtn.addEventListener("click",   hidePreviewModal);
+    if (_backdrop)  _backdrop.addEventListener("click",   hidePreviewModal);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") hidePreviewModal();
     });
   }
 
@@ -1276,6 +1293,121 @@
       '</div>' +
       '</article>';
   }
+
+  // ── 訂單預覽 Modal ─────────────────────────────────────────────
+
+  function findOrderById(id) {
+    for (var i = 0; i < state.orders.length; i++) {
+      if (state.orders[i].id === id) return state.orders[i];
+    }
+    return null;
+  }
+
+  function renderPreviewBody(order) {
+    var helpers    = window.LeLeShanOrders;
+    var groups     = normalizeGroups(order);
+    var wait       = getWaitInfo(order);
+    var note       = getNoteText(order);
+    var total      = Number(order.total || 0);
+    var pickupStr  = getPickupTimeStr(order);
+    var createdMs  = helpers.toMillis(order.created_at);
+    var createdStr = "";
+    if (createdMs) {
+      var d = new Date(createdMs);
+      createdStr = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+    var html = "";
+
+    // 來源 + 姓名 + 等待時間
+    html += '<div class="kds-pm__meta">';
+    html += '<span class="kds-src kds-src--' + esc(getSourceCode(order)) + '">' + esc(getSourceLabel(order)) + '</span>';
+    html += '<span class="kds-pm__name">' + esc(getCustomerName(order)) + '</span>';
+    if (createdStr) {
+      html += '<span class="kds-pm__time">建單 ' + esc(createdStr) + '・等待 ' + esc(wait.text) + '</span>';
+    }
+    html += '</div>';
+
+    // 金額 + 取餐時段
+    html += '<div class="kds-pm__amounts">';
+    html += '<span class="kds-pm__total">$ ' + total.toLocaleString() + '</span>';
+    if (pickupStr) html += '<span class="kds-pm__pickup">' + esc(pickupStr) + '</span>';
+    html += '</div>';
+
+    // 備註
+    if (note) html += '<div class="kds-pm__note">📝 ' + esc(note) + '</div>';
+
+    // 群組 + 品項
+    if (groups && groups.length) {
+      groups.forEach(function (g, gi) {
+        var badge    = GROUP_BADGE_LABELS[gi] || String(gi + 1);
+        var flavor   = String(g.flavor || "").trim();
+        var totalQty = (g.items || []).reduce(function (n, i) { return n + Number(i.qty || 0); }, 0);
+        html += '<div class="kds-pm__group">';
+        html += '<div class="kds-pm__group-head">';
+        html += '<span class="kds-group__badge">' + esc(badge) + '</span>';
+        if (flavor) html += '<span class="kds-pm__flavor">' + esc(flavor) + '</span>';
+        html += '<span class="kds-pm__flavor" style="margin-left:auto;font-weight:700">' + esc(String(totalQty)) + ' 項</span>';
+        html += '</div>';
+        html += '<ul class="kds-pm__items">';
+        (g.items || []).forEach(function (item) {
+          var staple   = String(item.staple || item.selectedStaple || "").trim();
+          var itemNote = String(item.item_note || item.note || "").trim();
+          html += '<li>';
+          html += '<span class="kds-pm__item-name">' + esc(item.name || "") + '</span>';
+          html += '<span class="kds-pm__item-qty">×' + esc(String(Number(item.qty || 1))) + '</span>';
+          if (staple)   html += '<span class="kds-pm__item-sub">主食：' + esc(staple)   + '</span>';
+          if (itemNote) html += '<span class="kds-pm__item-sub">' + esc(itemNote) + '</span>';
+          html += '</li>';
+        });
+        html += '</ul></div>';
+      });
+    } else {
+      var flatItems = Array.isArray(order.items) ? order.items : [];
+      if (flatItems.length) {
+        html += '<ul class="kds-pm__items kds-pm__items--flat">';
+        flatItems.forEach(function (item) {
+          html += '<li>';
+          html += '<span class="kds-pm__item-name">' + esc(item.name || "") + '</span>';
+          html += '<span class="kds-pm__item-qty">×' + esc(String(Number(item.qty || 1))) + '</span>';
+          html += '</li>';
+        });
+        html += '</ul>';
+      }
+    }
+    return html;
+  }
+
+  function showPreviewModal(order) {
+    var modal = document.getElementById("kds-preview-modal");
+    if (!modal) return;
+
+    document.getElementById("kds-preview-num").textContent = getPickupNumber(order);
+
+    var statusKey = (order.status === "pending_confirmation" || order.status === "new") ? "pending"
+      : order.status === "ready" ? "ready"
+      : order.status === "preparing" ? "preparing"
+      : "accepted";
+    var statusLabels = { pending: "待確認", accepted: "製作中", preparing: "製作中", ready: "可取餐" };
+    var badge = document.getElementById("kds-preview-status");
+    badge.textContent = statusLabels[statusKey] || "";
+    badge.className   = "kds-modal__status-badge is-" + statusKey;
+
+    var header = document.getElementById("kds-preview-header");
+    if (header) header.setAttribute("data-status", statusKey);
+
+    document.getElementById("kds-preview-body").innerHTML = renderPreviewBody(order);
+
+    modal.hidden = false;
+    var closeBtn = document.getElementById("kds-preview-close");
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function hidePreviewModal() {
+    var modal = document.getElementById("kds-preview-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  // ── ──────────────────────────────────────────────────────────
 
   function esc(value) {
     return String(value == null ? "" : value)

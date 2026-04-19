@@ -1585,3 +1585,122 @@ body.kds-pending-mode .kds-col--ready:hover {
   border-top: 1px dashed var(--kds-line);
   flex-shrink: 0;
 }
+
+/* ─── KDS 訂單預覽 Modal ─── */
+.kds-modal {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+}
+.kds-modal[hidden] { display: none !important; }
+
+.kds-modal__backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.7);
+  cursor: pointer;
+}
+.kds-modal__box {
+  position: relative; z-index: 1;
+  background: var(--kds-panel);
+  border: 1px solid var(--kds-line);
+  border-radius: 14px;
+  width: clamp(320px, 56vw, 680px);
+  max-height: 82vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+
+/* header: 取餐號 + 狀態 badge + 關閉 */
+.kds-modal__header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--kds-line);
+  flex-shrink: 0;
+}
+.kds-modal__num {
+  font-size: clamp(32px, 4vw, 48px); font-weight: 900;
+  line-height: 1; color: var(--kds-text);
+  font-variant-numeric: tabular-nums;
+}
+.kds-modal__status-badge {
+  font-size: 12px; font-weight: 800;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--kds-line); color: var(--kds-text-dim);
+  align-self: center;
+}
+.kds-modal__status-badge.is-pending  { background: var(--kds-pending);  color: #fff; }
+.kds-modal__status-badge.is-accepted { background: var(--kds-accepted); color: #fff; }
+.kds-modal__status-badge.is-preparing{ background: var(--kds-preparing);color: #fff; }
+.kds-modal__status-badge.is-ready    { background: var(--kds-ready);    color: #fff; }
+.kds-modal__close {
+  margin-left: auto; flex-shrink: 0;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--kds-line);
+  color: var(--kds-text-dim);
+  border-radius: 8px; width: 36px; height: 36px;
+  font-size: 16px; cursor: pointer; line-height: 1;
+  transition: background 150ms;
+}
+.kds-modal__close:hover { background: rgba(255,255,255,0.18); color: var(--kds-text); }
+
+/* scrollable body */
+.kds-modal__body {
+  overflow-y: auto; padding: 18px 20px 24px;
+  flex: 1; min-height: 0;
+}
+.kds-modal__body::-webkit-scrollbar { width: 6px; }
+.kds-modal__body::-webkit-scrollbar-thumb { background: var(--kds-line); border-radius: 3px; }
+
+/* meta row */
+.kds-pm__meta {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; margin-bottom: 10px;
+}
+.kds-pm__name { font-size: 16px; font-weight: 800; color: var(--kds-text); }
+.kds-pm__time { font-size: 12px; color: var(--kds-muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* amount + pickup */
+.kds-pm__amounts {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 12px;
+}
+.kds-pm__total { font-size: 24px; font-weight: 900; color: var(--kds-text); font-variant-numeric: tabular-nums; }
+.kds-pm__pickup { font-size: 13px; color: var(--kds-text-dim); }
+
+/* note */
+.kds-pm__note {
+  background: rgba(251,191,36,0.1);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 8px; padding: 8px 12px;
+  font-size: 13px; color: #fbbf24;
+  margin-bottom: 14px;
+}
+
+/* groups */
+.kds-pm__group {
+  background: var(--kds-panel-2);
+  border: 1px solid var(--kds-line);
+  border-radius: 10px; padding: 10px 14px;
+  margin-bottom: 8px;
+}
+.kds-pm__group-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.kds-pm__flavor { font-size: 13px; color: var(--kds-text-dim); font-weight: 600; }
+
+/* items list */
+.kds-pm__items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.kds-pm__items li {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 6px; border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+.kds-pm__items--flat { margin-top: 4px; }
+.kds-pm__item-name { font-size: 14px; font-weight: 600; color: var(--kds-text); flex: 1; }
+.kds-pm__item-qty  { font-size: 14px; font-weight: 800; color: var(--kds-text-dim); flex-shrink: 0; }
+.kds-pm__item-sub  { font-size: 11px; color: var(--kds-muted); }
+
+/* compact number hint */
+.kds-card--compact .kds-card__number { cursor: pointer; }
+.kds-card--compact .kds-card__number:focus-visible { outline: 2px solid var(--kds-accepted); outline-offset: 2px; border-radius: 4px; }
