@@ -1006,6 +1006,8 @@ body.kds-pending-mode .kds-alert-strip {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;       /* grid item 可縮至 60px，不被內容撐開 */
+  overflow: hidden;   /* 欄內容不繪製到鄰欄 */
 }
 .kds-col__head {
   padding: 12px 18px;
@@ -1441,21 +1443,37 @@ body.kds-pending-mode .kds-col--ready:hover {
 /* 收合欄樣式 */
 .kds-col.kds-is-collapsed {
   overflow: hidden;
+  max-width: 60px !important;   /* 確保欄寬硬上限 60px */
+  min-width: 0 !important;      /* 允許 grid 縮至 60px */
 }
 .kds-col.kds-is-collapsed .kds-col__head {
   cursor: pointer;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  padding: 12px 6px;
+  writing-mode: vertical-lr;    /* 文字由上到下，不使用 transform 避免 stacking context 跨欄 */
+  padding: 14px 0 10px;
   justify-content: flex-start;
   height: 100%;
+  width: 100%;
+  max-width: 60px;              /* 約束 head 寬度 */
+  overflow: hidden;
+  box-sizing: border-box;
+  border-bottom: none;
+  border-right: 2px solid var(--kds-line);
+  gap: 8px;
+}
+.kds-col.kds-is-collapsed .kds-col__title {
+  letter-spacing: 0.2em;
+  font-size: 14px;
 }
 .kds-col.kds-is-collapsed .kds-col__body {
   display: none;
 }
 .kds-col.kds-is-collapsed .kds-col__count {
-  margin: 8px auto 0;
-  transform: rotate(180deg);
+  writing-mode: horizontal-tb;  /* badge 數字保持橫式 */
+  margin-left: 0;
+  margin-top: 8px;
+  transform: none;              /* 移除舊的 rotate(180deg) */
+  min-width: 34px;
+  padding: 3px 6px;
 }
 /* ─── 展開欄：invoice 式 4 欄橫排佈局 ─── */
 .kds-col.kds-has-expanded-invoice .kds-col__body {
