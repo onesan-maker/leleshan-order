@@ -543,12 +543,24 @@
       }
 
       if (cols[k].length === 0) {
+        if (col) col.classList.remove("kds-has-expanded-invoice");
         body.innerHTML = '<div class="kds-empty">' + esc(emptyLabels[k]) + '</div>';
       } else if (expandedCol === k) {
-        // 展開欄：完整卡片
-        body.innerHTML = cols[k].map(function (o) { return renderCard(o); }).join("");
+        // 展開欄：最多 4 張 invoice 式直長卡橫排
+        if (col) col.classList.add("kds-has-expanded-invoice");
+        var VISIBLE_N = 4;
+        var visible = cols[k].slice(0, VISIBLE_N);
+        var hiddenCount = cols[k].length - visible.length;
+        body.innerHTML =
+          '<div class="kds-col__invoice-stack">' +
+            visible.map(function (o) { return renderCardInvoice(o); }).join("") +
+          '</div>' +
+          (hiddenCount > 0
+            ? '<div class="kds-hidden-count">+' + hiddenCount + ' 張較新訂單隱藏中（展開欄僅顯示最老 4 張）</div>'
+            : '');
       } else {
         // 其他欄（或全部未展開）：compact 卡
+        if (col) col.classList.remove("kds-has-expanded-invoice");
         body.innerHTML = cols[k].map(function (o) { return renderCardCompact(o); }).join("");
       }
 
@@ -1113,6 +1125,109 @@
       '<div class="kds-card__meta">' +
         '<span class="kds-card__name">' + esc(getCustomerName(order)) + '</span>' +
         srcHtml +
+      '</div>' +
+      '<div class="kds-card__body">' + bodyHtml + '</div>' +
+      (note ? '<div class="kds-note">' + esc(note) + '</div>' : '') +
+      '<div class="kds-card__cta">' +
+        ctaHtml +
+        '<button class="kds-btn kds-btn--sub" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">✕</button>' +
+      '</div>' +
+      '</article>';
+  }
+
+  function renderCardInvoice(order) {
+    var helpers    = window.LeLeShanOrders;
+    var status     = order.status;
+    var isPending  = status === "pending_confirmation" || status === "new";
+    var groups     = normalizeGroups(order);
+    var allKeys    = collectAllItemKeys(order, groups);
+    var allChecked = allKeys.length > 0 && allKeys.every(function (k) { return isItemChecked(k); });
+    var wait       = getWaitInfo(order);
+    var elapsedMin = Math.floor((Date.now() - helpers.toMillis(order.created_at)) / 60000);
+
+    var statusKey = isPending ? "pending"
+      : status === "ready" ? "ready"
+      : status === "preparing" ? "preparing"
+      : "accepted";
+
+    var cls = "kds-card kds-card--invoice kds-card--" + statusKey;
+    if (status === "preparing" && allChecked) cls += " all-checked";
+    if (isPending && elapsedMin >= 8) cls += " kds-critical";
+
+    var primary = (STATUS_ACTIONS[status] || [])[0] || null;
+    var ctaHtml = "";
+    if (primary) {
+      var ctaClass = "";
+      if (primary.next === "accepted") ctaClass = "accept";
+      else if (primary.next === "ready") ctaClass = "ready" + (allChecked ? " armed" : "");
+      else if (primary.next === "completed") ctaClass = "pickup";
+      ctaHtml = '<button class="kds-btn kds-btn--main ' + ctaClass + '" type="button" ' +
+        'data-order-id="' + esc(order.id) + '" ' +
+        'data-next-status="' + esc(primary.next) + '">' +
+        esc(primary.label) + '</button>';
+    } else {
+      ctaHtml = '<button class="kds-btn kds-btn--main pickup" type="button" disabled style="opacity:0.5">—</button>';
+    }
+
+    var srcCode = getSourceCode(order);
+    var srcHtml = '<span class="kds-src kds-src--' + esc(srcCode) + '">' + esc(getSourceLabel(order)) + '</span>';
+    if (!isPending && helpers.isFutureScheduled(order)) {
+      srcHtml += '<span class="kds-src kds-src--reserve">預約</span>';
+    }
+
+    // invoice 模式永遠顯示完整品項
+    var bodyHtml = "";
+    if (groups && groups.length) {
+      bodyHtml = groups.map(function (g, gi) {
+        var badge = GROUP_BADGE_LABELS[gi] || String(gi + 1);
+        var totalQty = (g.items || []).reduce(function (n, i) { return n + Number(i.qty || 0); }, 0);
+        var flavor = String(g.flavor || "").trim();
+        var itemsHtml = (g.items || []).map(function (item, ii) {
+          var key = String(order.id || "") + "_" + String(g.index || 0) + "_" + String(ii);
+          var checked = isItemChecked(key);
+          var staple = String(item.staple || item.selectedStaple || "").trim();
+          var noteItem = String(item.item_note || item.note || "").trim();
+          var subParts = [];
+          if (staple) subParts.push("主食：" + staple);
+          if (noteItem) subParts.push(noteItem);
+          var subHtml = subParts.length ? '<span class="sub">' + esc(subParts.join("、")) + '</span>' : "";
+          return '<li class="' + (checked ? "done" : "") + '" data-item-key="' + esc(key) + '">' +
+            '<span>' + esc(item.name || "") + '</span>' +
+            '<span class="qty">×' + esc(String(Number(item.qty || 1))) + '</span>' +
+            subHtml + '</li>';
+        }).join("");
+        return '<div class="kds-group">' +
+          '<div class="kds-group__head">' +
+            '<span class="kds-group__badge">' + esc(badge) + '</span>' +
+            '<span class="kds-group__flavor">' + esc(flavor || "—") + '</span>' +
+            '<span class="kds-group__count">' + esc(String(totalQty)) + ' 項</span>' +
+          '</div>' +
+          '<ul class="kds-items">' + itemsHtml + '</ul>' +
+          '</div>';
+      }).join("");
+    } else {
+      var flatItems = Array.isArray(order.items) ? order.items : [];
+      var flatHtml = flatItems.map(function (item, ii) {
+        var key = String(order.id || "") + "_" + String(ii);
+        var checked = isItemChecked(key);
+        return '<li class="kds-item' + (checked ? " done" : "") + '" data-item-key="' + esc(key) + '">' +
+          '<span>' + esc(item.name || "") + '</span>' +
+          '<span class="qty">×' + esc(String(Number(item.qty || 1))) + '</span>' +
+          '</li>';
+      }).join("");
+      bodyHtml = '<div class="kds-group"><ul class="kds-items">' + flatHtml + '</ul></div>';
+    }
+
+    var note = getNoteText(order);
+
+    return '<article class="' + cls + '" data-id="' + esc(order.id) + '">' +
+      '<div class="kds-card__hero">' +
+        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '">' + esc(wait.text) + '</div>' +
+        '<div class="kds-card__number">' + esc(getPickupNumber(order)) + '</div>' +
+      '</div>' +
+      '<div class="kds-card__meta">' +
+        srcHtml +
+        '<span class="kds-card__name">' + esc(getCustomerName(order)) + '</span>' +
       '</div>' +
       '<div class="kds-card__body">' + bodyHtml + '</div>' +
       (note ? '<div class="kds-note">' + esc(note) + '</div>' : '') +

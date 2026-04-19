@@ -1457,10 +1457,113 @@ body.kds-pending-mode .kds-col--ready:hover {
   margin: 8px auto 0;
   transform: rotate(180deg);
 }
-/* 展開欄：覆寫回原本的 flex column */
-.kds-col.kds-is-expanded .kds-col__body {
-  display: flex;
+/* ─── 展開欄：invoice 式 4 欄橫排佈局 ─── */
+.kds-col.kds-has-expanded-invoice .kds-col__body {
+  padding: 12px;
+  gap: 10px;
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  overflow: hidden;
+}
+.kds-col.kds-has-expanded-invoice .kds-col__invoice-stack {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.kds-col.kds-has-expanded-invoice .kds-col__invoice-stack .kds-card--invoice {
+  min-width: 0;
+  height: 100%;
+}
+
+/* kds-card--invoice：直長型展開卡 */
+.kds-card--invoice {
+  display: flex !important;
   flex-direction: column;
-  padding: 10px 10px 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+}
+.kds-card--invoice .kds-card__hero {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px !important;
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid var(--kds-line);
+  flex-shrink: 0;
+}
+.kds-card--invoice .kds-card__number {
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 150ms;
+}
+.kds-card--invoice .kds-card__number:hover {
+  transform: scale(0.96); opacity: 0.85;
+}
+.kds-card--invoice .kds-card__wait-bar {
+  font-size: 12px; padding: 2px 8px;
+}
+.kds-card--invoice .kds-card__meta {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px !important;
+  font-size: 13px;
+  border-bottom: 1px dashed var(--kds-line);
+  flex-shrink: 0;
+}
+.kds-card--invoice .kds-card__meta .kds-card__name {
+  font-weight: 800; font-size: 15px;
+}
+.kds-card--invoice .kds-card__body {
+  padding: 8px 10px !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto;
+}
+.kds-card--invoice .kds-note {
+  padding: 5px 10px !important;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.kds-card--invoice .kds-card__cta {
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 1fr !important;
   gap: 0;
+  height: 56px;
+  margin-top: 0 !important;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+.kds-card--invoice .kds-card__cta .kds-btn--main {
+  height: 56px !important; font-size: 15px;
+  border-radius: 0; padding: 0 12px;
+}
+.kds-card--invoice .kds-card__cta .kds-btn--sub {
+  height: 56px !important; width: 48px;
+  padding-bottom: 14px; border-radius: 0;
+}
+
+/* 超過 4 張的提示 */
+.kds-hidden-count {
+  text-align: center;
+  padding: 10px;
+  color: var(--kds-muted);
+  font-size: 12px;
+  border-top: 1px dashed var(--kds-line);
+  flex-shrink: 0;
 }
