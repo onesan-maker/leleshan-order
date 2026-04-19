@@ -95,6 +95,25 @@
   // ── 新訂單追蹤 ───────────────────────────────────────────────
   var hasBootstrappedOrderStream = false;
   var prevNewOrderIds = {};
+  var playedOrderIds  = new Set();
+  var audioUnlocked   = false;
+
+  // ── 音效開關 ─────────────────────────────────────────────────
+  function isSoundEnabled() {
+    return localStorage.getItem("kds_sound") !== "off";
+  }
+
+  function toggleSound() {
+    var next = isSoundEnabled() ? "off" : "on";
+    localStorage.setItem("kds_sound", next);
+    updateSoundUI();
+  }
+
+  function updateSoundUI() {
+    var btn = document.getElementById("kds-sound-toggle");
+    if (!btn) return;
+    btn.textContent = isSoundEnabled() ? "🔊" : "🔇";
+  }
 
   // ── 狀態分組定義 ────────────────────────────────────────────
   // KDS 顯示的狀態（normalized 後）
@@ -148,6 +167,11 @@
     cache();
     loadCheckedState();
     bind();
+    var soundBtn = document.getElementById("kds-sound-toggle");
+    if (soundBtn) {
+      soundBtn.onclick = toggleSound;
+      updateSoundUI();
+    }
     window.LeLeShanStaffAuth.init({
       loadingEl: el.loading,
       errorEl:   el.error,
@@ -273,6 +297,22 @@
       }
     });
 
+    // Audio unlock：首次點擊解鎖 AudioContext（iOS Safari 限制）
+    document.addEventListener("click", function () {
+      if (audioUnlocked) return;
+      try {
+        var Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return;
+        var ctx = new Ctor();
+        var buffer = ctx.createBuffer(1, 1, 22050);
+        var source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+        audioUnlocked = true;
+      } catch (e) {}
+    });
+
     // Preview modal 關閉
     var _closeBtn    = document.getElementById("kds-preview-close");
     var _backdrop    = document.getElementById("kds-preview-backdrop");
@@ -376,21 +416,23 @@
         state.orders = orders;
         if (el.lastUpdate) el.lastUpdate.textContent = "更新：" + new Date().toLocaleTimeString("zh-TW", { hour12: false });
 
-        // 新訂單音效追蹤
-        var currentNewIds = {};
-        orders.forEach(function (o) {
-          if (o.status === "new" || o.status === "pending_confirmation") currentNewIds[o.id] = true;
-        });
+        // 新訂單音效追蹤（P2-B：LINE 來源 pending_confirmation，Set 去重）
         if (!hasBootstrappedOrderStream) {
           hasBootstrappedOrderStream = true;
-          prevNewOrderIds = currentNewIds;
+          // 首次載入：全部標為已播放，避免 reload 重播舊單
+          orders.forEach(function (o) { playedOrderIds.add(o.id); });
         } else {
-          var hasNewEntry = false;
-          Object.keys(currentNewIds).forEach(function (id) {
-            if (!prevNewOrderIds[id]) hasNewEntry = true;
+          orders.forEach(function (o) {
+            var isLineOrder =
+              o.status === "pending_confirmation" &&
+              (o.source === "liff" || o.source === "line");
+            if (isLineOrder && !playedOrderIds.has(o.id)) {
+              if (isSoundEnabled()) {
+                try { playNewOrderBell(); } catch (e) { console.warn("sound play failed", e); }
+              }
+              playedOrderIds.add(o.id);
+            }
           });
-          if (hasNewEntry) playNewOrderBeep();
-          prevNewOrderIds = currentNewIds;
         }
 
         render();
@@ -578,7 +620,17 @@
       } else {
         // 其他欄（或全部未展開）：compact 卡
         if (col) col.classList.remove("kds-has-expanded-invoice");
-        body.innerHTML = cols[k].map(function (o) { return renderCardCompact(o); }).join("");
+        if (k === "ready") {
+          // ready 欄專用：包一層 scroll shell，限制最多 6 張可見
+          body.innerHTML =
+            '<div class="kds-ready-scroll-shell">' +
+              '<div class="kds-ready-compact-grid">' +
+                cols[k].map(function (o) { return renderCardCompact(o); }).join("") +
+              '</div>' +
+            '</div>';
+        } else {
+          body.innerHTML = cols[k].map(function (o) { return renderCardCompact(o); }).join("");
+        }
       }
 
       var ct = document.getElementById("kds-ct-" + k);
