@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- UTF-8 required: 禁止使用未指定編碼工具覆蓋本檔 -->
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
@@ -7,9 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/ops.css?v=20260410-3">
+  <link rel="stylesheet" href="/ops.css?v=20260419-p2a5">
 </head>
-<body class="ops-page">
+<body class="ops-page kds-has-stats-bar">
   <div id="auth-loading" class="ops-login-guard">正在驗證員工登入...</div>
   <div class="ops-shell">
     <header class="ops-topbar">
@@ -23,7 +24,7 @@
       </div>
     </header>
 
-    <section class="ops-panel">
+    <section class="ops-panel" style="display:none">
       <div class="ops-stats">
         <div class="ops-stat"><span>待處理</span><strong id="stat-pending">0</strong></div>
         <div class="ops-stat"><span>製作中</span><strong id="stat-preparing">0</strong></div>
@@ -32,25 +33,80 @@
       </div>
     </section>
 
-    <section class="ops-panel">
-      <div class="ops-tabs">
-        <button class="ops-tab is-active" type="button" data-kds-filter="all">全部</button>
-        <button class="ops-tab" type="button" data-kds-filter="pending">待處理</button>
-        <button class="ops-tab" type="button" data-kds-filter="preparing">製作中</button>
-        <button class="ops-tab" type="button" data-kds-filter="ready">可取餐</button>
-      </div>
-    </section>
-
     <div id="auth-error" class="ops-error hidden"></div>
-    <main id="kds-list" class="ops-grid"></main>
+
+    <main id="kds-list" class="kds-main">
+      <div class="kds-alert-strip" id="kds-alert-strip" hidden>
+        <div class="kds-alert-strip__content">
+          <span>⚠ 待確認</span>
+          <span class="kds-alert-strip__count" id="kds-alert-count">0 筆</span>
+          <div class="kds-alert-strip__marquee">
+            <span id="kds-alert-marquee"></span>
+          </div>
+          <span class="kds-alert-strip__oldest" id="kds-alert-oldest">最老 0 分</span>
+        </div>
+      </div>
+
+      <div class="kds-board" id="kds-board">
+        <section class="kds-col kds-col--pending" id="kds-col-pending">
+          <div class="kds-col__head">
+            <span class="kds-col__title">⚠ 待確認</span>
+            <span class="kds-col__count" id="kds-ct-pending">0</span>
+          </div>
+          <div class="kds-col__body" id="kds-body-pending"></div>
+        </section>
+        <section class="kds-col kds-col--work" id="kds-col-work">
+          <div class="kds-col__head">
+            <span class="kds-col__title">製作中</span>
+            <span class="kds-col__count" id="kds-ct-work">0</span>
+          </div>
+          <div class="kds-col__body" id="kds-body-work"></div>
+        </section>
+        <section class="kds-col kds-col--ready" id="kds-col-ready">
+          <div class="kds-col__head">
+            <span class="kds-col__title">可取餐</span>
+            <span class="kds-col__count" id="kds-ct-ready">0</span>
+          </div>
+          <div class="kds-col__body" id="kds-body-ready"></div>
+        </section>
+      </div>
+    </main>
+
+    <div class="kds-stats-bar">
+      <div class="kds-stats-bar__item">
+        <span class="kds-stats-bar__label">今日進度</span>
+        <div class="kds-stats-bar__gauge" id="kds-gauge">
+          <span class="sg-p" style="width:0%"></span>
+          <span class="sg-w" style="width:0%"></span>
+          <span class="sg-r" style="width:0%"></span>
+        </div>
+      </div>
+      <div class="kds-stats-bar__item">
+        <span class="kds-stats-bar__label">待確認</span>
+        <span class="kds-stats-bar__val" id="kds-sb-p">0</span>
+      </div>
+      <div class="kds-stats-bar__item">
+        <span class="kds-stats-bar__label">製作中</span>
+        <span class="kds-stats-bar__val" id="kds-sb-w">0</span>
+      </div>
+      <div class="kds-stats-bar__item">
+        <span class="kds-stats-bar__label">可取餐</span>
+        <span class="kds-stats-bar__val" id="kds-sb-r">0</span>
+      </div>
+      <div class="kds-stats-bar__item" style="margin-left:auto">
+        <span class="kds-stats-bar__label">最老待確認</span>
+        <span class="kds-stats-bar__val" id="kds-sb-oldest">—</span>
+      </div>
+    </div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="/config.public.js?v=20260413-1"></script>
-  <script src="/order-helpers.js?v=20260410-3"></script>
+  <script src="/order-helpers.js?v=20260419-p2a5"></script>
   <script src="/staff-auth.js?v=20260404-1"></script>
-  <script src="/kds.js?v=20260410-3"></script>
+  <script src="/order-status-labels.js?v=20260418-2"></script>
+  <script src="/kds.js?v=20260419-p2a5"></script>
 </body>
 </html>

@@ -1,8 +1,9 @@
 (function () {
   var PUBLIC_BOARD_STATUSES = ["cooking", "packing", "ready", "preparing"];
-  var ACTIVE_QUEUE_STATUSES = ["new", "accepted", "preparing", "cooking", "packing"];
-  var KDS_ACTIVE_STATUSES = ["new", "accepted", "preparing", "ready"];
+  var ACTIVE_QUEUE_STATUSES = ["pending_confirmation", "new", "accepted", "preparing", "cooking", "packing"];
+  var KDS_ACTIVE_STATUSES = ["pending_confirmation", "new", "accepted", "preparing", "ready"];
   var STATUS_META = {
+    pending_confirmation: { label: "待確認",  tone: "warn" },
     new:       { label: "新訂單",  tone: "new" },
     accepted:  { label: "已確認",  tone: "accepted" },
     preparing: { label: "製作中",  tone: "cooking" },
@@ -20,8 +21,11 @@
     done:      "ready"
   };
   var SOURCE_LABELS = {
-    liff:      "LINE訂",
-    pos:       "現場",
+    walk_in:   "現場顧客",
+    phone:     "電話訂",
+    line:      "LINE點餐",
+    liff:      "LINE點餐",
+    pos:       "現場顧客",
     ubereats:  "UberEats",
     foodpanda: "Foodpanda",
     manual:    "人工建立"
@@ -58,7 +62,15 @@
     if (!value) return null;
     if (typeof value.toDate === "function") return value.toDate();
     if (value instanceof Date) return value;
-    if (typeof value === "number") return new Date(value);
+    // Firestore Timestamp 序列化後的 plain object（可能來自 cache / REST / postMessage）
+    if (typeof value === "object" && typeof value.seconds === "number") {
+      var nanos = typeof value.nanoseconds === "number" ? value.nanoseconds : 0;
+      return new Date(value.seconds * 1000 + Math.floor(nanos / 1e6));
+    }
+    if (typeof value === "number") {
+      // 小於 1e12 視為 unix 秒、否則視為毫秒
+      return new Date(value < 1e12 ? value * 1000 : value);
+    }
     if (typeof value === "string") {
       var parsed = new Date(value);
       return isNaN(parsed.getTime()) ? null : parsed;
@@ -117,23 +129,52 @@
     var unitPrice = Number(resolve(item && (item.unit_price || item.price), 0));
     var qty = Number(resolve(item && item.qty, 0));
     var subtotal = Number(resolve(item && item.subtotal, unitPrice * qty));
+    var partIndexRaw = Number(resolve(
+      item && item.partIndex,
+      resolve(item && item.groupIndex, resolve(item && item.sourceGroupIndex, null))
+    ));
+    var partIndex = Number.isFinite(partIndexRaw) && partIndexRaw > 0 ? partIndexRaw : null;
+    var relationKey = resolve(item && (item.parentLineId || item.parentItemId || item.attachTo || item.bundleId), "");
+    var lineKey = resolve(item && (item.lineId || item.itemLineId), "");
     return {
       sku: resolve(item && (item.sku || item.itemId), ""),
       itemId: resolve(item && (item.itemId || item.sku), ""),
       type: resolve(item && item.type, ""),
+      posType: resolve(item && item.posType, ""),
       isGift: !!(item && item.isGift),
       giftType: resolve(item && item.giftType, ""),
       giftSlot: resolve(item && item.giftSlot, ""),
       giftLabel: resolve(item && item.giftLabel, ""),
       name: resolve(item && item.name, "未命名品項"),
       qty: qty,
-      flavor: resolve(item && item.flavor, resolve(item && item.flavorName, "")),
-      staple: resolve(item && item.staple, resolve(item && item.stapleName, "")),
+      flavor: resolve(item && item.flavor, resolve(item && item.selectedFlavor, resolve(item && item.flavorName, ""))),
+      selectedFlavor: resolve(item && item.selectedFlavor, resolve(item && item.flavor, resolve(item && item.flavorName, ""))),
+      staple: resolve(item && item.staple, resolve(item && item.selectedStaple, resolve(item && item.stapleName, ""))),
+      selectedStaple: resolve(item && item.selectedStaple, resolve(item && item.staple, resolve(item && item.stapleName, ""))),
       options: Array.isArray(item && item.options) ? item.options : [],
       unit_price: unitPrice,
       price: unitPrice,
       subtotal: subtotal,
-      item_note: resolve(item && (item.item_note || item.note), "")
+      item_note: resolve(item && (item.item_note || item.note), ""),
+      sourceGroupId: resolve(item && item.sourceGroupId, resolve(item && item.groupId, resolve(item && item.partId, ""))),
+      sourceGroupIndex: partIndex,
+      sourceGroupLabel: resolve(item && item.sourceGroupLabel, resolve(item && item.groupLabel, resolve(item && item.partLabel, ""))),
+      partId: resolve(item && item.partId, resolve(item && item.sourceGroupId, resolve(item && item.groupId, ""))),
+      partLabel: resolve(item && item.partLabel, resolve(item && item.sourceGroupLabel, resolve(item && item.groupLabel, ""))),
+      partIndex: partIndex,
+      groupId: resolve(item && item.groupId, resolve(item && item.sourceGroupId, resolve(item && item.partId, ""))),
+      groupLabel: resolve(item && item.groupLabel, resolve(item && item.sourceGroupLabel, resolve(item && item.partLabel, ""))),
+      groupIndex: partIndex,
+      groupKey: resolve(item && item.groupKey, ""),
+      personIndex: Number(resolve(item && item.personIndex, 0)) || 0,
+      seatIndex: Number(resolve(item && item.seatIndex, 0)) || 0,
+      seatLabel: resolve(item && item.seatLabel, ""),
+      assignee: resolve(item && item.assignee, ""),
+      bundleId: resolve(item && item.bundleId, ""),
+      parentLineId: relationKey,
+      lineId: lineKey,
+      sequence: Number(resolve(item && item.sequence, 0)) || 0,
+      slot: resolve(item && item.slot, "")
     };
   }
 
@@ -287,9 +328,14 @@
         unitPrice: Number(item.unit_price || item.price || 0),
         lineTotal: Number(item.subtotal || 0),
         flavor: resolve(item.flavor || item.flavorName, ""),
+        selectedFlavor: resolve(item.selectedFlavor || item.flavor || item.flavorName, ""),
         staple: resolve(item.staple || item.stapleName, ""),
+        selectedStaple: resolve(item.selectedStaple || item.staple || item.stapleName, ""),
         selectedOptions: Array.isArray(item.options) ? item.options : [],
         notes: resolve(item.item_note || item.itemNote || item.note, ""),
+        sourceGroupId: resolve(item.sourceGroupId || item.groupId || item.partId, ""),
+        sourceGroupIndex: Number(resolve(item.sourceGroupIndex || item.groupIndex || item.partIndex, 0)) || 0,
+        sourceGroupLabel: resolve(item.sourceGroupLabel || item.groupLabel || item.partLabel, ""),
         source: source,
         createdAt: createdAt
       };
