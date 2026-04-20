@@ -176,6 +176,57 @@
     console.log("[KDS_SOUND] stopped ringing", id);
   }
 
+  // ── 製作中逾時音效 ──────────────────────────────────────────
+  var workAlertMap = new Map(); // orderId → { alerted5: bool, alerted10: bool }
+
+  function getWorkElapsedMs(order) {
+    var helpers = window.LeLeShanOrders;
+    var ms = helpers.toMillis(order.started_at) || helpers.toMillis(order.created_at);
+    return ms ? Date.now() - ms : 0;
+  }
+
+  function tickWorkOrderAlerts() {
+    if (!state.orders || !state.orders.length) return;
+    var workOrders = state.orders.filter(function (o) {
+      return o.status === "accepted" || o.status === "preparing";
+    });
+    var activeIds = new Set(workOrders.map(function (o) { return String(o.id); }));
+
+    // 訂單離開製作中 → 清除記錄並停響
+    workAlertMap.forEach(function (_, id) {
+      if (!activeIds.has(id)) {
+        workAlertMap.delete(id);
+        stopRinging(id);
+      }
+    });
+
+    workOrders.forEach(function (order) {
+      var id   = String(order.id);
+      var mins = getWorkElapsedMs(order) / 60000;
+      if (!workAlertMap.has(id)) workAlertMap.set(id, { alerted5: false, alerted10: false });
+      var rec = workAlertMap.get(id);
+
+      if (mins >= 10 && !rec.alerted10) {
+        // 10 分鐘：持續響直到離開製作中
+        rec.alerted10 = true;
+        console.log("[KDS_WORK] 10min → continuous ring", id, mins.toFixed(1) + "min");
+        startRinging(order);
+      } else if (mins >= 5 && !rec.alerted5) {
+        // 5 分鐘：響 10 秒後停
+        rec.alerted5 = true;
+        console.log("[KDS_WORK] 5min → 10s ring", id, mins.toFixed(1) + "min");
+        startRinging(order);
+        setTimeout(function () {
+          var cur = workAlertMap.get(id);
+          if (cur && !cur.alerted10) {           // 尚未到 10 分鐘就停
+            stopRinging(id);
+            console.log("[KDS_WORK] 5min ring stopped", id);
+          }
+        }, 10000);
+      }
+    });
+  }
+
   // ── 狀態分組定義 ────────────────────────────────────────────
   // KDS 顯示的狀態（normalized 後）
   var KDS_VISIBLE = ["new", "accepted", "preparing", "ready"];
@@ -240,6 +291,7 @@
     });
     // 每秒更新等待時間文字（不重渲整張卡，避免閃爍）
     setInterval(tickWaitBars, 1000);
+    setInterval(tickWorkOrderAlerts, 10000); // 每 10 秒檢查製作中逾時
   });
 
   function tickWaitBars() {
