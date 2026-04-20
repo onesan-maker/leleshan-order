@@ -176,8 +176,36 @@
     console.log("[KDS_SOUND] stopped ringing", id);
   }
 
-  // ── 製作中逾時音效 ──────────────────────────────────────────
-  var workAlertMap = new Map(); // orderId → { alerted5: bool, alerted10: bool }
+  // ── 製作中逾時音效（單一音軌）────────────────────────────────
+  var workAlertMap    = new Map(); // orderId → { alerted5, alerted10, ringing }
+  var globalRingHandle = null;    // 全局唯一 ring loop handle
+
+  function startGlobalRing() {
+    if (globalRingHandle && globalRingHandle.active) return;
+    var handle = { active: true };
+    globalRingHandle = handle;
+    console.log("[KDS_WORK] global ring ON");
+    (function ring() {
+      if (!handle.active) return;
+      if (isSoundEnabled()) {
+        try { playNewOrderBell(); } catch (e) {}
+      }
+      setTimeout(ring, BELL_CYCLE_MS);
+    })();
+  }
+
+  function stopGlobalRing() {
+    if (!globalRingHandle) return;
+    globalRingHandle.active = false;
+    globalRingHandle = null;
+    console.log("[KDS_WORK] global ring OFF");
+  }
+
+  function syncGlobalRing() {
+    var anyRinging = false;
+    workAlertMap.forEach(function (rec) { if (rec.ringing) anyRinging = true; });
+    anyRinging ? startGlobalRing() : stopGlobalRing();
+  }
 
   function getWorkElapsedMs(order) {
     var helpers = window.LeLeShanOrders;
@@ -192,39 +220,37 @@
     });
     var activeIds = new Set(workOrders.map(function (o) { return String(o.id); }));
 
-    // 訂單離開製作中 → 清除記錄並停響
+    // 訂單離開製作中 → 清除記錄
     workAlertMap.forEach(function (_, id) {
-      if (!activeIds.has(id)) {
-        workAlertMap.delete(id);
-        stopRinging(id);
-      }
+      if (!activeIds.has(id)) workAlertMap.delete(id);
     });
 
     workOrders.forEach(function (order) {
       var id   = String(order.id);
       var mins = getWorkElapsedMs(order) / 60000;
-      if (!workAlertMap.has(id)) workAlertMap.set(id, { alerted5: false, alerted10: false });
+      if (!workAlertMap.has(id)) workAlertMap.set(id, { alerted5: false, alerted10: false, ringing: false });
       var rec = workAlertMap.get(id);
 
       if (mins >= 10 && !rec.alerted10) {
-        // 10 分鐘：持續響直到離開製作中
         rec.alerted10 = true;
-        console.log("[KDS_WORK] 10min → continuous ring", id, mins.toFixed(1) + "min");
-        startRinging(order);
+        rec.ringing   = true; // 持續響，直到訂單離開製作中
+        console.log("[KDS_WORK] 10min", id, mins.toFixed(1) + "min");
       } else if (mins >= 5 && !rec.alerted5) {
-        // 5 分鐘：響 10 秒後停
-        rec.alerted5 = true;
-        console.log("[KDS_WORK] 5min → 10s ring", id, mins.toFixed(1) + "min");
-        startRinging(order);
-        setTimeout(function () {
+        rec.alerted5  = true;
+        rec.ringing   = true;
+        console.log("[KDS_WORK] 5min", id, mins.toFixed(1) + "min");
+        setTimeout(function () {          // 10 秒後：若尚未升級到 10 分鐘就停
           var cur = workAlertMap.get(id);
-          if (cur && !cur.alerted10) {           // 尚未到 10 分鐘就停
-            stopRinging(id);
-            console.log("[KDS_WORK] 5min ring stopped", id);
+          if (cur && !cur.alerted10) {
+            cur.ringing = false;
+            syncGlobalRing();
+            console.log("[KDS_WORK] 5min ring ended", id);
           }
         }, 10000);
       }
     });
+
+    syncGlobalRing();
   }
 
   // ── 狀態分組定義 ────────────────────────────────────────────
