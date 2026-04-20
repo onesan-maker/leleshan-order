@@ -17,10 +17,10 @@ function playNewOrderBell() {
   var now = ctx.currentTime;
 
   // 第一聲：高音（880Hz）
-  playTone(ctx, 880, now, 0.15, 0.3);
+  playTone(ctx, 880, now, 0.15, 0.45);
 
   // 第二聲：低音（660Hz）
-  playTone(ctx, 660, now + 0.18, 0.15, 0.35);
+  playTone(ctx, 660, now + 0.18, 0.15, 0.525);
 }
 
 function playTone(ctx, freq, startTime, duration, volume) {
