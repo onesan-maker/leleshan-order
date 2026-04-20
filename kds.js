@@ -320,25 +320,34 @@
     setInterval(tickWorkOrderAlerts, 10000); // 每 10 秒檢查製作中逾時
   });
 
-  // 待確認呼吸警示：經過時間基準
-  //   LINE 訂單（liff/line）→ 從預約取餐時間起算（若有），否則建單時間
-  //   其他 → 建單時間
-  function getBreatheElapsedMs(order) {
+  // ── 待確認呼吸警示 helpers ───────────────────────────────────
+  var PENDING_BREATHE_MS = 12 * 60 * 1000; // 12 分鐘閾值
+  var _breatheActiveIds  = new Set();       // 只在首次 on/off 時 log
+
+  // LINE 訂單以 scheduled_pickup_at 起算（若無 fallback created_at）
+  // 其他訂單以 created_at 起算
+  function getPendingAlertBaseMs(order) {
     var helpers = window.LeLeShanOrders;
     var src = String(order.source || "").toLowerCase();
-    var isLine = src === "liff" || src === "line";
+    var isLine = src === "liff" || src === "line" || src === "line_order" || src === "online";
     if (isLine && order.scheduled_pickup_at) {
-      var ref = helpers.toMillis(order.scheduled_pickup_at);
-      if (ref) return Date.now() - ref;
+      var t = helpers.toMillis(order.scheduled_pickup_at);
+      if (t) return t;
     }
-    var created = helpers.toMillis(order.created_at);
-    return created ? Date.now() - created : 0;
+    return helpers.toMillis(order.created_at) || 0;
   }
 
-  var BREATHE_THRESHOLD_MS = 12 * 60 * 1000; // 12 分鐘
+  function shouldApplyPendingBreathe(order, nowMs) {
+    if (!order) return false;
+    if (String(order.status || "").toLowerCase() !== "pending_confirmation") return false;
+    var baseMs = getPendingAlertBaseMs(order);
+    if (!baseMs) return false;
+    return (nowMs - baseMs) >= PENDING_BREATHE_MS;
+  }
 
   function tickWaitBars() {
     if (!state.orders || !state.orders.length) return;
+    var nowMs = Date.now();
     var nodes = document.querySelectorAll(".kds-card[data-id]");
     nodes.forEach(function (card) {
       var oid = card.getAttribute("data-id");
@@ -359,10 +368,23 @@
 
       // 紅色呼吸警示：pending_confirmation 超過 12 分鐘
       if (o.status === "pending_confirmation") {
-        var overdue = getBreatheElapsedMs(o) >= BREATHE_THRESHOLD_MS;
-        card.classList.toggle("kds-card--breathe", overdue);
+        var apply = shouldApplyPendingBreathe(o, nowMs);
+        if (apply && !_breatheActiveIds.has(o.id)) {
+          _breatheActiveIds.add(o.id);
+          var baseMs = getPendingAlertBaseMs(o);
+          console.log("[KDS_ALERT] breathe on", {
+            id: o.id, source: o.source, status: o.status,
+            createdAt: o.created_at, scheduledPickupAt: o.scheduled_pickup_at,
+            waitMs: nowMs - baseMs
+          });
+        }
+        card.classList.toggle("kds-card--alert-breathe", apply);
       } else {
-        card.classList.remove("kds-card--breathe");
+        if (_breatheActiveIds.has(o.id)) {
+          _breatheActiveIds.delete(o.id);
+          console.log("[KDS_ALERT] breathe off", { id: o.id, status: o.status });
+        }
+        card.classList.remove("kds-card--alert-breathe");
       }
     });
   }

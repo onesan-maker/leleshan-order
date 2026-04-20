@@ -1377,18 +1377,39 @@ body.kds-pending-mode .kds-alert-strip {
   50%      { background: #601818; transform: scale(1.01); }
 }
 
-/* 12 分鐘紅色呼吸警示 */
-.kds-card--breathe {
-  animation: kdsCardBreathe 2s ease-in-out infinite !important;
+/* 12 分鐘紅色呼吸警示
+   ⚠ 父容器 overflow-y:auto 會 clip outward shadow
+   → 改用 inset shadow + background 變色，確保可見 */
+.kds-card--alert-breathe {
+  animation: kdsPendingBreathe 2s ease-in-out infinite !important;
+  will-change: box-shadow, border-color, background;
+  position: relative;
+  z-index: 1;
 }
-@keyframes kdsCardBreathe {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 4px 24px rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.5);
+@keyframes kdsPendingBreathe {
+  0% {
+    background: #3d0b0b;
+    border-color: rgba(255, 80,  80,  0.72);
+    box-shadow:
+      0 0 0 2px rgba(255, 59, 59, 0.30) inset,
+      0 0 0 1px rgba(255, 59, 59, 0.18) inset;
+    transform: translateZ(0);
   }
   50% {
-    box-shadow: 0 0 0 14px rgba(239, 68, 68, 0), 0 4px 32px rgba(239, 68, 68, 0.7);
-    border-color: rgba(239, 68, 68, 1);
+    background: #701414;
+    border-color: #ff4444;
+    box-shadow:
+      0 0 0 4px rgba(255, 48, 48, 0.65) inset,
+      0 0 18px 2px rgba(255, 48, 48, 0.35) inset;
+    transform: translateZ(0);
+  }
+  100% {
+    background: #3d0b0b;
+    border-color: rgba(255, 80,  80,  0.72);
+    box-shadow:
+      0 0 0 2px rgba(255, 59, 59, 0.30) inset,
+      0 0 0 1px rgba(255, 59, 59, 0.18) inset;
+    transform: translateZ(0);
   }
 }
 
