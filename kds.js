@@ -320,6 +320,23 @@
     setInterval(tickWorkOrderAlerts, 10000); // 每 10 秒檢查製作中逾時
   });
 
+  // 待確認呼吸警示：經過時間基準
+  //   LINE 訂單（liff/line）→ 從預約取餐時間起算（若有），否則建單時間
+  //   其他 → 建單時間
+  function getBreatheElapsedMs(order) {
+    var helpers = window.LeLeShanOrders;
+    var src = String(order.source || "").toLowerCase();
+    var isLine = src === "liff" || src === "line";
+    if (isLine && order.scheduled_pickup_at) {
+      var ref = helpers.toMillis(order.scheduled_pickup_at);
+      if (ref) return Date.now() - ref;
+    }
+    var created = helpers.toMillis(order.created_at);
+    return created ? Date.now() - created : 0;
+  }
+
+  var BREATHE_THRESHOLD_MS = 12 * 60 * 1000; // 12 分鐘
+
   function tickWaitBars() {
     if (!state.orders || !state.orders.length) return;
     var nodes = document.querySelectorAll(".kds-card[data-id]");
@@ -330,12 +347,23 @@
         if (state.orders[i].id === oid) { o = state.orders[i]; break; }
       }
       if (!o) return;
+
+      // 等待時間文字
       var bar = card.querySelector(".kds-card__wait-bar");
-      if (!bar) return;
-      var info = getWaitInfo(o);
-      bar.textContent = info.text;
-      bar.classList.remove("warn", "crit");
-      if (info.cls) bar.classList.add(info.cls);
+      if (bar) {
+        var info = getWaitInfo(o);
+        bar.textContent = info.text;
+        bar.classList.remove("warn", "crit");
+        if (info.cls) bar.classList.add(info.cls);
+      }
+
+      // 紅色呼吸警示：pending_confirmation 超過 12 分鐘
+      if (o.status === "pending_confirmation") {
+        var overdue = getBreatheElapsedMs(o) >= BREATHE_THRESHOLD_MS;
+        card.classList.toggle("kds-card--breathe", overdue);
+      } else {
+        card.classList.remove("kds-card--breathe");
+      }
     });
   }
 
