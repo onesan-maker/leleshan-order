@@ -1413,6 +1413,31 @@ body.kds-pending-mode .kds-alert-strip {
   }
 }
 
+/* 製作中超過 12 分鐘警示（深橘紅，弱於 pending） */
+.kds-card--late-work {
+  animation: kdsWorkLate 2.5s ease-in-out infinite !important;
+  will-change: box-shadow, border-color, background;
+  position: relative;
+  z-index: 1;
+}
+@keyframes kdsWorkLate {
+  0%, 100% {
+    background: #2e1806;
+    border-color: rgba(251, 146, 60, 0.60);
+    box-shadow:
+      0 0 0 2px rgba(251, 120, 30, 0.25) inset;
+    transform: translateZ(0);
+  }
+  50% {
+    background: #5c2e08;
+    border-color: #fb923c;
+    box-shadow:
+      0 0 0 4px rgba(251, 120, 30, 0.50) inset,
+      0 0 16px 2px rgba(251, 100, 20, 0.28) inset;
+    transform: translateZ(0);
+  }
+}
+
 .kds-card--preparing.all-checked {
   border: 2px solid var(--kds-ready);
   box-shadow: 0 0 20px rgba(16,185,129,0.3);

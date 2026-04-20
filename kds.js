@@ -321,8 +321,9 @@
   });
 
   // ── 待確認呼吸警示 helpers ───────────────────────────────────
-  var PENDING_BREATHE_MS = 12 * 60 * 1000; // 12 分鐘閾值
-  var _breatheActiveIds  = new Set();       // 只在首次 on/off 時 log
+  var PENDING_BREATHE_MS  = 12 * 60 * 1000; // 12 分鐘閾值（pending + work 共用）
+  var _breatheActiveIds   = new Set();       // log dedup：pending breathe
+  var _workLateActiveIds  = new Set();       // log dedup：work late
 
   // LINE 訂單以 scheduled_pickup_at 起算（若無 fallback created_at）
   // 其他訂單以 created_at 起算
@@ -340,6 +341,15 @@
   function shouldApplyPendingBreathe(order, nowMs) {
     if (!order) return false;
     if (String(order.status || "").toLowerCase() !== "pending_confirmation") return false;
+    var baseMs = getPendingAlertBaseMs(order);
+    if (!baseMs) return false;
+    return (nowMs - baseMs) >= PENDING_BREATHE_MS;
+  }
+
+  function shouldApplyWorkLate(order, nowMs) {
+    if (!order) return false;
+    var st = String(order.status || "").toLowerCase();
+    if (st !== "accepted" && st !== "preparing") return false;
     var baseMs = getPendingAlertBaseMs(order);
     if (!baseMs) return false;
     return (nowMs - baseMs) >= PENDING_BREATHE_MS;
@@ -366,25 +376,54 @@
         if (info.cls) bar.classList.add(info.cls);
       }
 
+      var st = String(o.status || "").toLowerCase();
+
       // 紅色呼吸警示：pending_confirmation 超過 12 分鐘
-      if (o.status === "pending_confirmation") {
-        var apply = shouldApplyPendingBreathe(o, nowMs);
-        if (apply && !_breatheActiveIds.has(o.id)) {
+      if (st === "pending_confirmation") {
+        var applyPending = shouldApplyPendingBreathe(o, nowMs);
+        if (applyPending && !_breatheActiveIds.has(o.id)) {
           _breatheActiveIds.add(o.id);
           var baseMs = getPendingAlertBaseMs(o);
-          console.log("[KDS_ALERT] breathe on", {
+          console.log("[KDS_ALERT] pending breathe on", {
             id: o.id, source: o.source, status: o.status,
             createdAt: o.created_at, scheduledPickupAt: o.scheduled_pickup_at,
             waitMs: nowMs - baseMs
           });
+        } else if (!applyPending && _breatheActiveIds.has(o.id)) {
+          _breatheActiveIds.delete(o.id);
+          console.log("[KDS_ALERT] pending breathe off", { id: o.id, status: o.status });
         }
-        card.classList.toggle("kds-card--alert-breathe", apply);
+        card.classList.toggle("kds-card--alert-breathe", applyPending);
+        card.classList.remove("kds-card--late-work");
+
+      // 橘紅脈動警示：accepted / preparing 超過 12 分鐘
+      } else if (st === "accepted" || st === "preparing") {
+        var applyWork = shouldApplyWorkLate(o, nowMs);
+        if (applyWork && !_workLateActiveIds.has(o.id)) {
+          _workLateActiveIds.add(o.id);
+          var wBaseMs = getPendingAlertBaseMs(o);
+          console.log("[KDS_ALERT] work late on", {
+            id: o.id, source: o.source, status: o.status,
+            waitMs: nowMs - wBaseMs
+          });
+        } else if (!applyWork && _workLateActiveIds.has(o.id)) {
+          _workLateActiveIds.delete(o.id);
+          console.log("[KDS_ALERT] work late off", { id: o.id, status: o.status });
+        }
+        card.classList.toggle("kds-card--late-work", applyWork);
+        card.classList.remove("kds-card--alert-breathe");
+
+      // 其他狀態（ready 等）：清除兩個 class
       } else {
         if (_breatheActiveIds.has(o.id)) {
           _breatheActiveIds.delete(o.id);
-          console.log("[KDS_ALERT] breathe off", { id: o.id, status: o.status });
+          console.log("[KDS_ALERT] pending breathe off", { id: o.id, status: o.status });
         }
-        card.classList.remove("kds-card--alert-breathe");
+        if (_workLateActiveIds.has(o.id)) {
+          _workLateActiveIds.delete(o.id);
+          console.log("[KDS_ALERT] work late off", { id: o.id, status: o.status });
+        }
+        card.classList.remove("kds-card--alert-breathe", "kds-card--late-work");
       }
     });
   }
