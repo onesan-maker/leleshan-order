@@ -142,30 +142,36 @@
     return ps !== ns && isSoundTargetStatus(ns);
   }
 
-  var RING_INTERVAL_MS = 8000; // 每 8 秒重響一次
-  var pendingRingMap = new Map(); // orderId → intervalId
-
-  function playBellOnce(id, reason) {
-    if (!isSoundEnabled()) return;
-    Promise.resolve()
-      .then(function () { return playNewOrderBell(); })
-      .then(function () { console.log("[KDS_SOUND] played (" + reason + ")", id); })
-      .catch(function (err) { console.warn("[KDS_SOUND] play failed (" + reason + ")", id, err); });
-  }
+  var BELL_CYCLE_MS = 1000; // bell ~0.35s + 靜音 ~0.65s = 約 1 秒一循環
+  var pendingRingMap = new Map(); // orderId → stop flag object
 
   function startRinging(order) {
     var id = String(order.id);
     if (pendingRingMap.has(id)) return;
-    playBellOnce(id, "start");
-    var timer = setInterval(function () { playBellOnce(id, "repeat"); }, RING_INTERVAL_MS);
-    pendingRingMap.set(id, timer);
+    var handle = { active: true };
+    pendingRingMap.set(id, handle);
     console.log("[KDS_SOUND] started ringing", id);
+
+    function ring() {
+      if (!handle.active) return;
+      if (isSoundEnabled()) {
+        try {
+          playNewOrderBell();
+          console.log("[KDS_SOUND] ring", id);
+        } catch (e) {
+          console.warn("[KDS_SOUND] ring failed", id, e);
+        }
+      }
+      setTimeout(ring, BELL_CYCLE_MS);
+    }
+    ring();
   }
 
   function stopRinging(orderId) {
     var id = String(orderId);
-    if (!pendingRingMap.has(id)) return;
-    clearInterval(pendingRingMap.get(id));
+    var handle = pendingRingMap.get(id);
+    if (!handle) return;
+    handle.active = false;
     pendingRingMap.delete(id);
     console.log("[KDS_SOUND] stopped ringing", id);
   }

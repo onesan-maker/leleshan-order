@@ -1,5 +1,19 @@
+// Singleton AudioContext — 避免快速連響時超過瀏覽器 context 限制
+var _bellCtx = null;
+
+function getBellContext() {
+  if (_bellCtx && _bellCtx.state !== "closed") return _bellCtx;
+  try {
+    var Ctor = window.AudioContext || window.webkitAudioContext;
+    _bellCtx = Ctor ? new Ctor() : null;
+  } catch (e) { _bellCtx = null; }
+  return _bellCtx;
+}
+
 function playNewOrderBell() {
-  var ctx = new (window.AudioContext || window.webkitAudioContext)();
+  var ctx = getBellContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume();
   var now = ctx.currentTime;
 
   // 第一聲：高音（880Hz）
