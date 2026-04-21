@@ -30,7 +30,7 @@ admin.initializeApp();
 const REGION       = "asia-east1";
 const LIFF_ID      = "2008047700-HIAn2llR";
 const SITE_URL     = "https://leleshan-system.web.app";
-const LINE_SECRETS = ["LINE_CHANNEL_ACCESS_TOKEN"];
+const LINE_SECRETS = ["LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"];
 
 // ── 1. onCreate：建單後推播「已收到訂單」────────────────────────
 
