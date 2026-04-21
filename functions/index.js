@@ -19,16 +19,23 @@ const crypto    = require("crypto");
 admin.initializeApp();
 
 // ── 集中式部署設定（US→Asia 遷移時只改這一區）──────────────────
-// REGION:   所有 onCall / onRequest / Firestore trigger 的部署區域。
-// LIFF_ID:  LIFF 與 Firebase 專案無關，搬到 Asia 可沿用原 ID（除非另開 channel）。
-// SITE_URL: 用於產生 line-bind 等 callback 連結；新 Hosting 啟用後同步改。
-const REGION   = "us-central1";
-const LIFF_ID  = "2008047700-HIAn2llR";
-const SITE_URL = "https://leleshan-order.web.app";
+// REGION:       所有 onCall / onRequest / Firestore trigger 的部署區域。
+// LIFF_ID:      LIFF 與 Firebase 專案無關，搬到 Asia 可沿用原 ID。
+// SITE_URL:     用於產生 line-bind 等 callback 連結；新 Hosting 啟用後同步改。
+// LINE_SECRETS: Gen 1 Secret Manager binding。部署前必須跑：
+//   firebase functions:secrets:set LINE_CHANNEL_ACCESS_TOKEN --project <alias>
+//   firebase functions:secrets:set LINE_CHANNEL_SECRET       --project <alias>
+// SECRET 尚未設定時可暫時只放 ACCESS_TOKEN — webhook 會回 500
+// "Channel secret not configured"，但 NEW webhook 未被 LINE 指向、無實害。
+const REGION       = "us-central1";
+const LIFF_ID      = "2008047700-HIAn2llR";
+const SITE_URL     = "https://leleshan-order.web.app";
+const LINE_SECRETS = ["LINE_CHANNEL_ACCESS_TOKEN"];
 
 // ── 1. onCreate：建單後推播「已收到訂單」────────────────────────
 
 exports.sendOrderReceivedPush = functions
+  .runWith({ secrets: LINE_SECRETS })
   .region(REGION)
   .firestore.document("orders/{orderId}")
   .onCreate(async (snap, context) => {
@@ -86,6 +93,7 @@ exports.sendOrderReceivedPush = functions
 // ── 2. onUpdate：狀態變更推播（ready / cancelled）───────────────
 
 exports.sendOrderStatusPush = functions
+  .runWith({ secrets: LINE_SECRETS })
   .region(REGION)
   .firestore.document("orders/{orderId}")
   .onUpdate(async (change, context) => {
@@ -587,6 +595,7 @@ function buildCancelReasonQuickReply(orderId) {
 // ── 3. onCreate：新 LINE 訂單通知管理員 ─────────────────────────
 
 exports.notifyAdminsNewLineOrder = functions
+  .runWith({ secrets: LINE_SECRETS })
   .region(REGION)
   .firestore.document("orders/{orderId}")
   .onCreate(async (snap, context) => {
@@ -733,6 +742,7 @@ exports.notifyAdminsNewLineOrder = functions
 // 並設定 LINE_CHANNEL_SECRET secret（firebase functions:secrets:set LINE_CHANNEL_SECRET）
 
 exports.lineWebhook = functions
+  .runWith({ secrets: LINE_SECRETS })
   .region(REGION)
   .https.onRequest(async (req, res) => {
     if (req.method !== "POST") {

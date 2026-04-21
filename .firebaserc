@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "leleshan-order"
+    "default": "leleshan-order",
+    "asia": "leleshan-system"
   }
 }
