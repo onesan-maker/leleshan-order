@@ -18,14 +18,18 @@ const crypto    = require("crypto");
 
 admin.initializeApp();
 
-// ── LINE 綁定設定 ─────────────────────────────────────────────
-const LIFF_ID = "2008047700-HIAn2llR";
+// ── 集中式部署設定（US→Asia 遷移時只改這一區）──────────────────
+// REGION:   所有 onCall / onRequest / Firestore trigger 的部署區域。
+// LIFF_ID:  LIFF 與 Firebase 專案無關，搬到 Asia 可沿用原 ID（除非另開 channel）。
+// SITE_URL: 用於產生 line-bind 等 callback 連結；新 Hosting 啟用後同步改。
+const REGION   = "us-central1";
+const LIFF_ID  = "2008047700-HIAn2llR";
 const SITE_URL = "https://leleshan-order.web.app";
 
 // ── 1. onCreate：建單後推播「已收到訂單」────────────────────────
 
 exports.sendOrderReceivedPush = functions
-  .region("us-central1")
+  .region(REGION)
   .firestore.document("orders/{orderId}")
   .onCreate(async (snap, context) => {
     const order   = snap.data();
@@ -47,14 +51,17 @@ exports.sendOrderReceivedPush = functions
       return null;
     }
 
-    if (order.notificationStatus && order.notificationStatus.receivedPushSent === true) {
-      console.log("[Push/onCreate] receivedPush already sent, skip.", { orderId });
-      return null;
-    }
-
     const lineToken = getLineToken();
     if (!lineToken) {
       console.error("[Push/onCreate] ❌ LINE_CHANNEL_ACCESS_TOKEN 未設定。請在 functions/.env 加入 LINE_CHANNEL_ACCESS_TOKEN=<token> 後重新 deploy。Push 跳過。", { orderId });
+      return null;
+    }
+
+    // Idempotent claim: atomic check-and-set via transaction. Prevents double-push
+    // from concurrent retries or dual-region subscribers during migration window.
+    const claimResult = await claimPushOnOrder(snap.ref, "receivedPushSent");
+    if (!claimResult.claimed) {
+      console.log("[Push/onCreate] idempotent skip.", { orderId, reason: claimResult.reason });
       return null;
     }
 
@@ -79,7 +86,7 @@ exports.sendOrderReceivedPush = functions
 // ── 2. onUpdate：狀態變更推播（ready / cancelled）───────────────
 
 exports.sendOrderStatusPush = functions
-  .region("us-central1")
+  .region(REGION)
   .firestore.document("orders/{orderId}")
   .onUpdate(async (change, context) => {
     const before  = change.before.data();
@@ -107,8 +114,9 @@ exports.sendOrderStatusPush = functions
     const storeId = after.storeId || "";
 
     if (afterStatus === "ready") {
-      if (after.notificationStatus && after.notificationStatus.readyPushSent === true) {
-        console.log("[Notify/onUpdate] readyPush already sent, skip.", { orderId });
+      const claimReady = await claimPushOnOrder(change.after.ref, "readyPushSent");
+      if (!claimReady.claimed) {
+        console.log("[Notify/onUpdate] ready idempotent skip.", { orderId, reason: claimReady.reason });
         return null;
       }
       const text = buildReadyMessage(after, orderId);
@@ -121,8 +129,9 @@ exports.sendOrderStatusPush = functions
     }
 
     if (afterStatus === "cancelled") {
-      if (after.notificationStatus && after.notificationStatus.cancelledPushSent === true) {
-        console.log("[Notify/onUpdate] cancelledPush already sent, skip.", { orderId });
+      const claimCancelled = await claimPushOnOrder(change.after.ref, "cancelledPushSent");
+      if (!claimCancelled.claimed) {
+        console.log("[Notify/onUpdate] cancelled idempotent skip.", { orderId, reason: claimCancelled.reason });
         return null;
       }
       const text = buildCancelledMessage(after, orderId);
@@ -136,6 +145,46 @@ exports.sendOrderStatusPush = functions
 
     return null;
   });
+
+// ── 推播 idempotent claim ─────────────────────────────────────
+// Atomically check-and-set notificationStatus.{flagField} on the order doc.
+// Returns { claimed: true } if THIS invocation should proceed with the push;
+// { claimed: false, reason } if another invocation / retry already claimed.
+//
+// Why this exists:
+//   Prior code did a non-atomic `if (status.sent===true) skip; ... send; mark true`.
+//   Concurrent Cloud Functions retries (at-least-once delivery) or dual-region
+//   subscribers could both pass the check and double-push.
+//
+// Failure / release contract:
+//   - handlePush() success path also sets the flag (redundant write, harmless).
+//   - handlePush() error path sets the flag back to false → next retry re-claims
+//     and re-attempts. See the batch.update in the catch block below.
+async function claimPushOnOrder(orderRef, flagField) {
+  const db = admin.firestore();
+  try {
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) return { claimed: false, reason: "order_not_found" };
+      const data = snap.data() || {};
+      const status = data.notificationStatus || {};
+      if (status[flagField] === true) return { claimed: false, reason: "already_sent" };
+      const ts = admin.firestore.FieldValue.serverTimestamp();
+      tx.update(orderRef, {
+        [`notificationStatus.${flagField}`]: true,
+        [`notificationStatus.${flagField}At`]: ts,
+        [`notificationStatus.${flagField}ClaimedRegion`]: REGION,
+        updatedAt: ts
+      });
+      return { claimed: true };
+    });
+  } catch (e) {
+    console.error("[claimPushOnOrder] tx failed — skipping push to avoid unknown state.", {
+      flagField, error: e && e.message
+    });
+    return { claimed: false, reason: "tx_error" };
+  }
+}
 
 // ── 推播執行 + 記錄 ─────────────────────────────────────────────
 
@@ -538,7 +587,7 @@ function buildCancelReasonQuickReply(orderId) {
 // ── 3. onCreate：新 LINE 訂單通知管理員 ─────────────────────────
 
 exports.notifyAdminsNewLineOrder = functions
-  .region("us-central1")
+  .region(REGION)
   .firestore.document("orders/{orderId}")
   .onCreate(async (snap, context) => {
     const order = snap.data();
@@ -632,6 +681,15 @@ exports.notifyAdminsNewLineOrder = functions
       return null;
     }
 
+    // Idempotent claim — deferred until we know we'd actually push, so that
+    // early-exit paths (no employees, query failure) don't "burn" the flag
+    // and block legitimate retries.
+    const claimStaff = await claimPushOnOrder(snap.ref, "staffPushSent");
+    if (!claimStaff.claimed) {
+      console.log("[NotifyStaff/onCreate] idempotent skip.", { orderId, reason: claimStaff.reason });
+      return null;
+    }
+
     const flex = buildAdminNewOrderFlex(order, orderId);
     const promises = eligible.map(({ empId, lineUid }) => {
       const body = JSON.stringify({ to: lineUid, messages: flex.messages });
@@ -669,11 +727,13 @@ exports.notifyAdminsNewLineOrder = functions
 
 // ── 5. LINE Webhook：員工取消按鈕 postback ─────────────────────
 // 設定：LINE Developers > Messaging API > Webhook URL
-//   https://us-central1-<project>.cloudfunctions.net/lineWebhook
-// 並設定 LINE_CHANNEL_SECRET 環境變數（functions/.env）
+//   https://<REGION>-<project>.cloudfunctions.net/lineWebhook
+//   （目前 REGION=us-central1；遷移到 asia-east1 後 URL 前綴會變，
+//    屆時必須到 LINE Developer Console 同步更新 Webhook URL）
+// 並設定 LINE_CHANNEL_SECRET secret（firebase functions:secrets:set LINE_CHANNEL_SECRET）
 
 exports.lineWebhook = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onRequest(async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
@@ -1087,7 +1147,7 @@ function sendLinePush(token, body) {
 // ── LINE 綁定 Functions ───────────────────────────────────────
 
 exports.createLineBindingToken = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data, context) => {
     const { db, role, adminData } = await requireAdminContext(context);
 
@@ -1154,7 +1214,7 @@ exports.createLineBindingToken = functions
   });
 
 exports.completeLineBinding = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data) => {
     const db = admin.firestore();
     const token = safeStr(data && data.token);
@@ -1202,7 +1262,7 @@ exports.completeLineBinding = functions
   });
 
 exports.unbindLine = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data, context) => {
     const { db, role, adminData } = await requireAdminContext(context);
 
@@ -1244,7 +1304,7 @@ exports.unbindLine = functions
   });
 
 exports.updateLineNotificationSettings = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data, context) => {
     const { db, role, adminData } = await requireAdminContext(context);
 
@@ -1340,60 +1400,8 @@ function sessionTokenHash(sessionToken) {
   return crypto.createHash("sha256").update(String(sessionToken || "")).digest("hex");
 }
 
-exports.upsertEmployee = functions
-  .region("us-central1")
-  .https.onCall(async (data, context) => {
-    const { db, role, adminData } = await requireAdminContext(context);
-    const employeeDocId = String(data && data.employeeDocId || "").trim();
-    const name = String(data && data.name || "").trim();
-    const employeeId = normalizeEmployeeId(data && data.employeeId);
-    const pin = normalizePin(data && data.pin);
-    const isActive = data && typeof data.isActive === "boolean" ? data.isActive : true;
-    const requestedStoreId = String(data && data.storeId || "").trim();
-    const storeId = role === "owner" ? requestedStoreId : String(adminData.storeId || "").trim();
-
-    if (!name || !employeeId || !storeId) {
-      throw new functions.https.HttpsError("invalid-argument", "員工資料不完整");
-    }
-    if (!employeeDocId) {
-      assertPin(pin);
-    } else if (pin) {
-      assertPin(pin);
-    }
-
-    const employeeRef = employeeDocId
-      ? db.collection("employees").doc(employeeDocId)
-      : db.collection("employees").doc();
-
-    const duplicateSnap = await db.collection("employees")
-      .where("employeeId", "==", employeeId)
-      .limit(5)
-      .get();
-    const hasDuplicate = duplicateSnap.docs.some((doc) => doc.id !== employeeRef.id);
-    if (hasDuplicate) {
-      throw new functions.https.HttpsError("already-exists", "員工編號已存在");
-    }
-
-    const payload = {
-      name,
-      employeeId,
-      storeId,
-      isActive: !!isActive,
-      updatedAt: nowTs()
-    };
-    if (pin) {
-      payload.pinHash = hashPin(pin);
-    }
-    if (!employeeDocId) {
-      payload.createdAt = nowTs();
-    }
-
-    await employeeRef.set(payload, { merge: true });
-    return { ok: true, employeeDocId: employeeRef.id };
-  });
-
 exports.resetEmployeePin = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data, context) => {
     const { db, role, adminData } = await requireAdminContext(context);
     const employeeDocId = String(data && data.employeeDocId || "").trim();
@@ -1420,65 +1428,8 @@ exports.resetEmployeePin = functions
     return { ok: true };
   });
 
-exports.posEmployeeLogin = functions
-  .region("us-central1")
-  .https.onCall(async (data) => {
-    const db = admin.firestore();
-    const employeeId = normalizeEmployeeId(data && data.employeeId);
-    const pin = normalizePin(data && data.pin);
-    const sessionHours = Math.max(1, Math.min(72, Number(data && data.sessionHours || 16)));
-
-    if (!employeeId || !pin) {
-      throw new functions.https.HttpsError("invalid-argument", "缺少登入資料");
-    }
-    assertPin(pin);
-
-    const employeeSnap = await db.collection("employees")
-      .where("employeeId", "==", employeeId)
-      .limit(1)
-      .get();
-    if (employeeSnap.empty) {
-      throw new functions.https.HttpsError("unauthenticated", "員工編號或 PIN 錯誤");
-    }
-
-    const employeeDoc = employeeSnap.docs[0];
-    const employee = employeeDoc.data() || {};
-    if (employee.isActive === false) {
-      throw new functions.https.HttpsError("failed-precondition", "員工已停用");
-    }
-    if (!verifyPin(pin, employee.pinHash)) {
-      throw new functions.https.HttpsError("unauthenticated", "員工編號或 PIN 錯誤");
-    }
-
-    const sessionToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = sessionTokenHash(sessionToken);
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + sessionHours * 60 * 60 * 1000);
-
-    await db.collection("posSessions").doc(tokenHash).set({
-      tokenHash,
-      employeeDocId: employeeDoc.id,
-      employeeId: employee.employeeId,
-      employeeName: employee.name || "",
-      storeId: employee.storeId || "",
-      loginAt: nowTs(),
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-      revokedAt: null
-    }, { merge: true });
-
-    return {
-      ok: true,
-      employeeId: employee.employeeId,
-      employeeName: employee.name || "",
-      storeId: employee.storeId || "",
-      sessionToken,
-      loginAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString()
-    };
-  });
-
 exports.verifyPosSession = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data) => {
     const db = admin.firestore();
     const employeeId = normalizeEmployeeId(data && data.employeeId);
@@ -1515,7 +1466,7 @@ exports.verifyPosSession = functions
   });
 
 exports.listPosTodayOrders = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data) => {
     const db = admin.firestore();
     const employeeId = normalizeEmployeeId(data && data.employeeId);
@@ -1596,7 +1547,7 @@ exports.listPosTodayOrders = functions
   });
 
 exports.logoutPosSession = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data) => {
     const db = admin.firestore();
     const sessionToken = String(data && data.sessionToken || "").trim();
@@ -1608,9 +1559,9 @@ exports.logoutPosSession = functions
     return { ok: true };
   });
 
-// Override with transaction-safe unique employeeId enforcement.
+// Transaction-safe unique employeeId enforcement with employeeIdIndex sidecar.
 exports.upsertEmployee = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data, context) => {
     const { db, role, adminData } = await requireAdminContext(context);
     const employeeDocId = String(data && data.employeeDocId || "").trim();
@@ -1693,9 +1644,10 @@ exports.upsertEmployee = functions
     return { ok: true, employeeDocId: savedEmployeeDocId };
   });
 
-// Override with dedupe-aware employee login selection to align with admin-side primary record rules.
+// Dedupe-aware employee login — picks the primary record when duplicates exist,
+// matching admin-side primary record rules (non-suppressed, oldest, then docId asc).
 exports.posEmployeeLogin = functions
-  .region("us-central1")
+  .region(REGION)
   .https.onCall(async (data) => {
     const db = admin.firestore();
     const employeeId = normalizeEmployeeId(data && data.employeeId);

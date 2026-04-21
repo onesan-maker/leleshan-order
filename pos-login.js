@@ -67,7 +67,7 @@
     setSubmitting(true);
     var tStart = performance.now();
     try {
-      var login = firebase.app().functions("us-central1").httpsCallable("posEmployeeLogin");
+      var login = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1").httpsCallable("posEmployeeLogin");
       var tCallStart = performance.now();
       var result = await login({
         employeeId: employeeId,

@@ -1,6 +1,8 @@
 window.APP_CONFIG = {
   // Copy to ignored `config.js` only when you need a local override.
   liffId: "YOUR_LIFF_ID",
+  // Cloud Functions region (keep client and functions/index.js REGION in sync).
+  functionsRegion: "us-central1",
   firebaseConfig: {
     apiKey: "YOUR_FIREBASE_API_KEY",
     authDomain: "YOUR_PROJECT.firebaseapp.com",

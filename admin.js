@@ -131,7 +131,7 @@
     db = firebase.firestore();
     auth = firebase.auth();
     try {
-      functionsApi = firebase.app().functions("us-central1");
+      functionsApi = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1");
     } catch (e) {
       console.error("[Admin] Firebase Functions init failed:", e);
     }

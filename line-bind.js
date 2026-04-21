@@ -29,7 +29,7 @@
     }
 
     if (!firebase.apps.length) firebase.initializeApp(cfg.firebaseConfig);
-    var functionsApi = firebase.app().functions("us-central1");
+    var functionsApi = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1");
 
     try {
       setStatus("正在初始化 LINE 登入...", "loading");

@@ -1,5 +1,8 @@
+// US→Asia 遷移：切換新專案時同步改 functionsRegion / firebaseConfig / store.siteUrl。
+// 所有 callable 呼叫都透過 window.APP_CONFIG.functionsRegion 讀取（見 liff-ordering 各 client *.js）。
 window.APP_CONFIG = {
   liffId: "2008047700-HIAn2llR",
+  functionsRegion: "us-central1",
   firebaseConfig: {
     apiKey: "AIzaSyCM4lo9QE5JvG7DFRtoWjw88t3CuLQDtxc",
     authDomain: "leleshan-order.firebaseapp.com",

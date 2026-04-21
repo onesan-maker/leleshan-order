@@ -295,7 +295,7 @@
   }
 
   async function verifySessionOnline(session) {
-    var callable = firebase.app().functions("us-central1").httpsCallable("verifyPosSession");
+    var callable = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1").httpsCallable("verifyPosSession");
     var res = await callable({
       employeeId: session.employeeId,
       sessionToken: session.sessionToken
@@ -591,7 +591,7 @@
     }
     if (el.switchConfirm) { el.switchConfirm.disabled = true; el.switchConfirm.textContent = "驗證中..."; }
     try {
-      var login = firebase.app().functions("us-central1").httpsCallable("posEmployeeLogin");
+      var login = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1").httpsCallable("posEmployeeLogin");
       var result = await login({ employeeId: empId, pin: pin, sessionHours: 16 });
       var payload = (result && result.data) || {};
       if (!payload || !payload.sessionToken) throw new Error("SWITCH_FAILED");
@@ -607,7 +607,7 @@
         try {
           var oldToken = state.session && state.session.sessionToken;
           if (oldToken) {
-            var logoutCall = firebase.app().functions("us-central1").httpsCallable("logoutPosSession");
+            var logoutCall = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1").httpsCallable("logoutPosSession");
             await logoutCall({ sessionToken: oldToken });
           }
         } catch (e) { console.warn("[POS] old session logout on switch failed", e); }
@@ -654,7 +654,7 @@
     var session = window.LeLeShanPosSession && window.LeLeShanPosSession.get();
     if (session && navigator.onLine && firebase.apps.length) {
       try {
-        var callable = firebase.app().functions("us-central1").httpsCallable("logoutPosSession");
+        var callable = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1").httpsCallable("logoutPosSession");
         var t1 = performance.now();
         await callable({ sessionToken: session.sessionToken });
         console.log("[POS_DIAG] logout.callable logoutPosSession", (performance.now() - t1).toFixed(2) + "ms");
@@ -2124,7 +2124,7 @@
     try {
       var session = state.session || (window.LeLeShanPosSession && window.LeLeShanPosSession.get()) || null;
       if (!session || !session.employeeId || !session.sessionToken) return;
-      var callable = firebase.app().functions("us-central1").httpsCallable("listPosTodayOrders");
+      var callable = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1").httpsCallable("listPosTodayOrders");
       var result = await callable({ employeeId: session.employeeId, sessionToken: session.sessionToken, limit: 200 });
       var payload = result && result.data || {};
       var rows = Array.isArray(payload.orders) ? payload.orders : [];
@@ -2150,7 +2150,7 @@
       if (!session || !session.employeeId || !session.sessionToken) {
         throw new Error("POS_SESSION_MISSING");
       }
-      var callable = firebase.app().functions("us-central1").httpsCallable("listPosTodayOrders");
+      var callable = firebase.app().functions((window.APP_CONFIG && window.APP_CONFIG.functionsRegion) || "us-central1").httpsCallable("listPosTodayOrders");
       var result = await callable({
         employeeId: session.employeeId,
         sessionToken: session.sessionToken,
