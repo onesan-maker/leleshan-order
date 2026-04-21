@@ -1,7 +1,7 @@
 // US→Asia 遷移：切換時同步改 firebaseConfig / functionsRegion。
 export const firebaseConfig = {
-  apiKey: "AIzaSyCM4lo9QE5JvG7DFRtoWjw88t3CuLQDtxc",
-  authDomain: "leleshan-order.firebaseapp.com",
-  projectId: "leleshan-order",
+  apiKey: "AIzaSyClnMaU0rW8QSWdOoNL5GROgnsM0l-lixI",
+  authDomain: "leleshan-system.firebaseapp.com",
+  projectId: "leleshan-system",
 };
-export const functionsRegion = "us-central1";
+export const functionsRegion = "asia-east1";

@@ -2,24 +2,23 @@
 // 所有 callable 呼叫都透過 window.APP_CONFIG.functionsRegion 讀取（見 liff-ordering 各 client *.js）。
 window.APP_CONFIG = {
   liffId: "2008047700-HIAn2llR",
-  functionsRegion: "us-central1",
+  functionsRegion: "asia-east1",
   firebaseConfig: {
-    apiKey: "AIzaSyCM4lo9QE5JvG7DFRtoWjw88t3CuLQDtxc",
-    authDomain: "leleshan-order.firebaseapp.com",
-    projectId: "leleshan-order",
-    storageBucket: "leleshan-order.firebasestorage.app",
-    messagingSenderId: "725150919521",
-    appId: "1:725150919521:web:3b3824f60d32b092d87320",
-    measurementId: "G-RD1HL8ZFKV"
+    apiKey: "AIzaSyClnMaU0rW8QSWdOoNL5GROgnsM0l-lixI",
+    authDomain: "leleshan-system.firebaseapp.com",
+    projectId: "leleshan-system",
+    storageBucket: "leleshan-system.firebasestorage.app",
+    messagingSenderId: "806566521240",
+    appId: "1:806566521240:web:bcf7ff0c02f9cd5124a3ed"
   },
   store: {
-    name: "璅?撅?皝舀遠撌",
+    name: "樂樂山 湯滷川味",
     orderCollection: "orders",
-    siteUrl: "https://leleshan-order.web.app",
+    siteUrl: "https://leleshan-system.web.app",
     defaultStoreId: "store_1"
   },
   googlePlaces: {
     placeId: "ChIJC9xYBNw1aDQRXwaH1BnkK6w",
-    apiKey: "AIzaSyCM4lo9QE5JvG7DFRtoWjw88t3CuLQDtxc"
+    apiKey: "AIzaSyClnMaU0rW8QSWdOoNL5GROgnsM0l-lixI"
   }
 };

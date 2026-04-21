@@ -27,9 +27,9 @@ admin.initializeApp();
 //   firebase functions:secrets:set LINE_CHANNEL_SECRET       --project <alias>
 // SECRET 尚未設定時可暫時只放 ACCESS_TOKEN — webhook 會回 500
 // "Channel secret not configured"，但 NEW webhook 未被 LINE 指向、無實害。
-const REGION       = "us-central1";
+const REGION       = "asia-east1";
 const LIFF_ID      = "2008047700-HIAn2llR";
-const SITE_URL     = "https://leleshan-order.web.app";
+const SITE_URL     = "https://leleshan-system.web.app";
 const LINE_SECRETS = ["LINE_CHANNEL_ACCESS_TOKEN"];
 
 // ── 1. onCreate：建單後推播「已收到訂單」────────────────────────
@@ -737,8 +737,8 @@ exports.notifyAdminsNewLineOrder = functions
 // ── 5. LINE Webhook：員工取消按鈕 postback ─────────────────────
 // 設定：LINE Developers > Messaging API > Webhook URL
 //   https://<REGION>-<project>.cloudfunctions.net/lineWebhook
-//   （目前 REGION=us-central1；遷移到 asia-east1 後 URL 前綴會變，
-//    屆時必須到 LINE Developer Console 同步更新 Webhook URL）
+//   （REGION 見檔案頂部常數；切換 region 時必須到 LINE Developer
+//    Console 同步更新 Webhook URL，見 docs/migration-us-to-asia/runbook.md）
 // 並設定 LINE_CHANNEL_SECRET secret（firebase functions:secrets:set LINE_CHANNEL_SECRET）
 
 exports.lineWebhook = functions
