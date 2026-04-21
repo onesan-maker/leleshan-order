@@ -8,9 +8,88 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/ops.css?v=20260420-late-work">
+  <link rel="stylesheet" href="/ops.css?v=20260421-lock-timing-v2">
+  <style>
+    /* 兩欄 KDS board */
+    .kds-board--two-col { grid-template-columns: 1fr 1fr !important; }
+
+    /* 取消訂單 Modal */
+    .kds-cancel-modal__box { max-width: 380px; }
+    .kds-cancel-modal__body { padding: 8px 0 0; }
+    .kds-cancel-modal__subtitle { margin: 0 0 14px; font-size: .85rem; color: var(--kds-muted, #888); text-align: center; }
+    .kds-cancel-modal__reasons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 4px 16px; }
+    .kds-cancel-reason-btn {
+      padding: 14px 10px; border-radius: 0; border: none;
+      background: transparent; color: #f87171; font-size: .95rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+    }
+    .kds-cancel-reason-btn:hover, .kds-cancel-reason-btn:focus { background: rgba(239, 68, 68, 0.18); outline: none; }
+    .kds-cancel-modal__footer { padding: 0 4px 4px; }
+    .kds-cancel-modal__dismiss {
+      width: 100%; padding: 12px; border-radius: 0; border: 1px solid #d1d5db;
+      background: #f9fafb; color: #374151; font-size: .9rem; cursor: pointer;
+    }
+    .kds-cancel-modal__dismiss:hover { background: #f3f4f6; }
+
+    /* 取消按鈕樣式 */
+    .kds-btn--cancel {
+      padding: 6px 10px; border-radius: 0; border: none;
+      background: transparent; color: #dc2626; font-size: .78rem; font-weight: 600;
+      cursor: pointer; min-width: 44px;
+    }
+    .kds-btn--cancel:hover { background: rgba(239, 68, 68, 0.18); }
+
+    /* 站別徽章 */
+    .kds-station-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: .85rem;
+      background: #eef2ff; color: #3730a3;
+    }
+    body.kds-mode-boil .kds-station-badge { background: #fff1e6; color: #b45309; }
+    body.kds-mode-pack .kds-station-badge { background: #e0f2fe; color: #075985; }
+
+    /* 站別配色：淺色 tint，不影響既有訊息區 */
+    body.kds-mode-boil .ops-topbar { box-shadow: inset 0 -3px 0 #f59e0b; }
+    body.kds-mode-pack .ops-topbar { box-shadow: inset 0 -3px 0 #0ea5e9; }
+
+    /* 鎖定條 */
+    .kds-lock-bar {
+      padding: 10px 14px; background: #fef3c7; color: #78350f;
+      border-bottom: 1px solid #fde68a; font-size: .95rem; text-align: center; font-weight: 600;
+    }
+    /* 預設未知前先鎖定，拿到 session 後才解除 */
+    body.kds-locked .kds-btn,
+    body.kds-locked [data-next-status],
+    body.kds-locked [data-cancel-order] {
+      pointer-events: none !important;
+      opacity: .45 !important;
+      filter: grayscale(60%) !important;
+      cursor: not-allowed !important;
+    }
+
+    /* 站別過濾顯示欄位：強制覆蓋任何 kds-is-collapsed / max-width 設定 */
+    body.kds-mode-boil #kds-col-ready,
+    body.kds-mode-pack #kds-col-work {
+      display: none !important;
+      width: 0 !important;
+      max-width: 0 !important;
+      min-width: 0 !important;
+      border: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      visibility: hidden !important;
+    }
+    body.kds-mode-boil .kds-board--two-col,
+    body.kds-mode-pack .kds-board--two-col {
+      grid-template-columns: 1fr !important;
+    }
+
+    .kds-duty-text { font-weight: 600; }
+    .kds-duty-text.kds-duty--empty { color: #b91c1c; }
+  </style>
 </head>
-<body class="ops-page kds-has-stats-bar">
+<body class="ops-page kds-has-stats-bar kds-locked">
   <div id="auth-loading" class="ops-login-guard">正在驗證員工登入...</div>
   <div class="ops-shell">
     <header class="ops-topbar">
@@ -22,9 +101,11 @@
         <span class="kds-bar__dot"></span>
         <span>LIVE</span>
       </div>
+      <div class="kds-station-badge" id="kds-station-badge">烹煮站</div>
       <div class="kds-bar__info">
+        <span id="kds-duty" class="kds-duty-text kds-duty--empty">目前值班：未登入</span>
         <span id="ops-store-meta"></span>
-        <span id="ops-user-meta"></span>
+        <span id="ops-user-meta" style="display:none"></span>
       </div>
       <span id="kds-last-update" class="kds-bar__update">即時更新中</span>
       <button id="kds-sound-toggle" style="margin-left:10px;background:none;border:none;cursor:pointer;font-size:1.2em;line-height:1;padding:2px 6px;color:inherit;">🔊</button>
@@ -40,27 +121,10 @@
     </section>
 
     <div id="auth-error" class="ops-error hidden"></div>
+    <div id="kds-lock-bar" class="kds-lock-bar">尚未設定值班員工，請先至 POS 登入或交班</div>
 
     <main id="kds-list" class="kds-main">
-      <div class="kds-alert-strip" id="kds-alert-strip" hidden>
-        <div class="kds-alert-strip__content">
-          <span>⚠ 待確認</span>
-          <span class="kds-alert-strip__count" id="kds-alert-count">0 筆</span>
-          <div class="kds-alert-strip__marquee">
-            <span id="kds-alert-marquee"></span>
-          </div>
-          <span class="kds-alert-strip__oldest" id="kds-alert-oldest">最老 0 分</span>
-        </div>
-      </div>
-
-      <div class="kds-board" id="kds-board">
-        <section class="kds-col kds-col--pending" id="kds-col-pending">
-          <div class="kds-col__head">
-            <span class="kds-col__title">⚠ 待確認</span>
-            <span class="kds-col__count" id="kds-ct-pending">0</span>
-          </div>
-          <div class="kds-col__body" id="kds-body-pending"></div>
-        </section>
+      <div class="kds-board kds-board--two-col" id="kds-board">
         <section class="kds-col kds-col--work" id="kds-col-work">
           <div class="kds-col__head">
             <span class="kds-col__title">製作中</span>
@@ -88,10 +152,6 @@
         </div>
       </div>
       <div class="kds-stats-bar__item">
-        <span class="kds-stats-bar__label">待確認</span>
-        <span class="kds-stats-bar__val" id="kds-sb-p">0</span>
-      </div>
-      <div class="kds-stats-bar__item">
         <span class="kds-stats-bar__label">製作中</span>
         <span class="kds-stats-bar__val" id="kds-sb-w">0</span>
       </div>
@@ -99,9 +159,27 @@
         <span class="kds-stats-bar__label">可取餐</span>
         <span class="kds-stats-bar__val" id="kds-sb-r">0</span>
       </div>
-      <div class="kds-stats-bar__item" style="margin-left:auto">
-        <span class="kds-stats-bar__label">最老待確認</span>
-        <span class="kds-stats-bar__val" id="kds-sb-oldest">—</span>
+    </div>
+  </div>
+
+  <!-- KDS 取消訂單 Modal -->
+  <div id="kds-cancel-modal" class="kds-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kds-cancel-title">
+    <div class="kds-modal__backdrop" id="kds-cancel-backdrop"></div>
+    <div class="kds-modal__box kds-cancel-modal__box">
+      <div class="kds-modal__header">
+        <span class="kds-modal__num" id="kds-cancel-title">取消訂單</span>
+      </div>
+      <div class="kds-cancel-modal__body">
+        <p class="kds-cancel-modal__subtitle">請選擇取消原因（必選）</p>
+        <div class="kds-cancel-modal__reasons">
+          <button class="kds-cancel-reason-btn" type="button" data-reason="busy">爆單 / 忙碌中</button>
+          <button class="kds-cancel-reason-btn" type="button" data-reason="out_of_stock">食材售完</button>
+          <button class="kds-cancel-reason-btn" type="button" data-reason="closing">即將打烊</button>
+          <button class="kds-cancel-reason-btn" type="button" data-reason="abnormal_order">訂單異常</button>
+        </div>
+      </div>
+      <div class="kds-cancel-modal__footer">
+        <button class="kds-cancel-modal__dismiss" type="button" id="kds-cancel-dismiss">不取消，返回</button>
       </div>
     </div>
   </div>
@@ -123,10 +201,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="/config.public.js?v=20260413-1"></script>
-  <script src="/order-helpers.js?v=20260419-p2a-v4"></script>
+  <script src="/order-helpers.js?v=20260421-parallel-cap-v27"></script>
   <script src="/staff-auth.js?v=20260404-1"></script>
   <script src="/order-status-labels.js?v=20260418-2"></script>
   <script src="/kds-sound.js?v=20260420-p2b"></script>
-  <script src="/kds.js?v=20260420-late-work"></script>
+  <script src="/ops-session-sync.js?v=20260421-strip-fix"></script>
+  <script src="/order-action-logger.js?v=20260421-strip-fix"></script>
+  <script src="/kds.js?v=20260421-parallel-cap-v27"></script>
 </body>
 </html>

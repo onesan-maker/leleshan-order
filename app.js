@@ -9,8 +9,8 @@
       db: null,
       profile: null,
       storeId: (window.APP_CONFIG.store && window.APP_CONFIG.store.defaultStoreId) || "store_1",
-      selectedFlavor: null,
-      selectedOrderType: null,
+      selectedFlavor: (defaults.flavors && defaults.flavors[0] && defaults.flavors[0].id) || null,
+      singleSectionExpanded: false,
       cart: [],
       cartGroups: [{ id: "g-a", label: "A點" }],
       activeGroupId: "g-a",
@@ -20,6 +20,10 @@
       storeOpenStatus: STATUS.LOADING,
       flavors: defaults.flavors || [],
       stapleOptions: defaults.stapleOptions || [],
+      globalOptions: {
+        flavors: [],
+        staples: []
+      },
       comboItems: defaults.comboTemplates || [],
       singleCategories: [],
       promotions: [],
@@ -36,7 +40,9 @@
       pendingCheckoutRestored: false,
       activeModal: null,
       pendingCartSelection: null,
-      firstAddNudgeShown: false
+      pendingFlavorChoice: null,
+      firstAddNudgeShown: false,
+      comboUpsellVisible: false
     },
     el: {},
     modules: {}
@@ -92,12 +98,16 @@
     if (app.el.storeStatusModalClose) app.el.storeStatusModalClose.addEventListener("click", function () { app.modules.ui.closeStoreStatusModal(app); });
     if (app.el.loginRequiredConfirm) app.el.loginRequiredConfirm.addEventListener("click", function () { app.modules.auth.proceedLineLogin(); });
     if (app.el.loginRequiredCancel) app.el.loginRequiredCancel.addEventListener("click", function () { app.modules.ui.closeLoginRequiredModal(app); });
-    if (app.el.quantityModalConfirm) app.el.quantityModalConfirm.addEventListener("click", function () { app.modules.ui.closeQuantityModal(app); });
+    if (app.el.quantityModalCancel) app.el.quantityModalCancel.addEventListener("click", function () { app.modules.ui.closeQuantityModal(app); });
+    if (app.el.quantityModalConfirm) app.el.quantityModalConfirm.addEventListener("click", function () { app.modules.cart.confirmPendingSelection(); });
+    if (app.el.flavorConfirmCancel) app.el.flavorConfirmCancel.addEventListener("click", function () { app.modules.cart.cancelFlavorSelection(); });
+    if (app.el.flavorConfirmSubmit) app.el.flavorConfirmSubmit.addEventListener("click", function () { app.modules.cart.confirmFlavorSelection(); });
     if (app.el.viewCartBtnSticky) app.el.viewCartBtnSticky.addEventListener("click", function () { app.modules.ui.scrollToCartList(app); });
     if (app.el.logoutBtn) app.el.logoutBtn.addEventListener("click", function () { app.modules.auth.logout(); });
     app.modules.ui.bindModalDismiss(app, app.el.storeStatusModal, app.modules.ui.closeStoreStatusModal);
     app.modules.ui.bindModalDismiss(app, app.el.loginRequiredModal, app.modules.ui.closeLoginRequiredModal);
     app.modules.ui.bindModalDismiss(app, app.el.quantityModal, app.modules.ui.closeQuantityModal);
+    app.modules.ui.bindModalDismiss(app, app.el.flavorConfirmModal, function () { app.modules.cart.cancelFlavorSelection(); });
     document.addEventListener("keydown", function (event) {
       app.modules.ui.handleDocumentKeydown(app, event);
     });

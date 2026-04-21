@@ -1,6 +1,7 @@
-(function () {
+﻿(function () {
   var db;
   var auth;
+  var functionsApi;
   var user = null;
   var admin = null;
   var storeId = null;
@@ -13,6 +14,8 @@
     inventory: [],
     inventoryMovements: [],
     promotions: [],
+    employees: [],
+    admins: [],
     users: [],
     orders: [],
     settings: null,
@@ -31,6 +34,7 @@
   var giftPromoRules = []; // in-memory rules for the admin UI editor
   var OWNER_ROLE = "owner";
   var ADMIN_ROLE = "admin";
+  var EMPLOYEE_SESSION_HOURS = 16;
   var CATEGORY_COLOR_OPTIONS = [
     { value: "cream", label: "奶油米", bgColor: "#F7F1E3", buttonColor: "#B9853C", textColor: "#5A3418", buttonTextColor: "#FFFFFF" },
     { value: "warm-beige", label: "暖米色", bgColor: "#EFE3D3", buttonColor: "#A66A46", textColor: "#5B3723", buttonTextColor: "#FFFFFF" },
@@ -44,12 +48,26 @@
     { value: "pale-latte", label: "淺拿鐵", bgColor: "#E8D8C8", buttonColor: "#9D7156", textColor: "#4E3223", buttonTextColor: "#FFFFFF" }
   ];
   var DEFAULT_CATEGORY_COLOR = "warm-beige";
+  var DEFAULT_PRODUCT_FLAVOR_OPTIONS = [
+    "紅油麻辣",
+    "藤椒",
+    "鮮湯底",
+    "骨湯麻辣燙",
+    "麻辣乾拌"
+  ];
+  var DEFAULT_PRODUCT_STAPLE_OPTIONS = [
+    "白飯",
+    "泡麵",
+    "寬粉"
+  ];
+  var REQUIRED_COMBO_NAMES = ["經典組合", "熱賣三倍肉", "招牌毛肚雙倍肉", "綜合鍋物"];
 
   document.addEventListener("DOMContentLoaded", function () {
     cache();
     initFirebase();
     bind();
     renderCategoryColorOptions();
+    initProductSpecEditors();
     auth.onAuthStateChanged(onAuth);
   });
 
@@ -89,9 +107,21 @@
       flavors: document.getElementById("flavors-list"),
       orders: document.getElementById("orders-list"),
       inventory: document.getElementById("inventory-list"),
+      employees: document.getElementById("employees-list"),
       users: document.getElementById("users-list"),
       promotions: document.getElementById("promotions-list")
     };
+    el.adminsLineList = document.getElementById("admins-line-list");
+    el.adminsLineRefreshBtn = document.getElementById("admins-line-refresh-btn");
+    el.lineBindModal = document.getElementById("line-bind-modal");
+    el.lineBindClose = document.getElementById("line-bind-close");
+    el.lineBindBackdrop = document.getElementById("line-bind-backdrop");
+    el.lineBindTargetLabel = document.getElementById("line-bind-target-label");
+    el.lineBindModalStatus = document.getElementById("line-bind-modal-status");
+    el.lineBindQrCanvas = document.getElementById("line-bind-qr-canvas");
+    el.lineBindQrWrap = document.getElementById("line-bind-qr-wrap");
+    el.lineBindCountdown = document.getElementById("line-bind-countdown");
+    el.lineBindRegenBtn = document.getElementById("line-bind-regenerate-btn");
   }
 
   function initFirebase() {
@@ -100,23 +130,32 @@
     }
     db = firebase.firestore();
     auth = firebase.auth();
+    try {
+      functionsApi = firebase.app().functions("us-central1");
+    } catch (e) {
+      console.error("[Admin] Firebase Functions init failed:", e);
+    }
+  }
+
+  function addListener(target, eventName, handler) {
+    if (!target || typeof target.addEventListener !== "function") return false;
+    target.addEventListener(eventName, handler);
+    return true;
   }
 
   function bind() {
     var reloginButton = document.getElementById("admin-access-relogin-btn");
 
-    el.logoutBtn.addEventListener("click", async function () {
+    addListener(el.logoutBtn, "click", async function () {
       await auth.signOut();
       window.location.href = "/admin/login";
     });
 
-    if (reloginButton) {
-      reloginButton.addEventListener("click", signOutToLogin);
-    }
+    addListener(reloginButton, "click", signOutToLogin);
 
-    el.seedBtn.addEventListener("click", seedDefaults);
+    addListener(el.seedBtn, "click", seedDefaults);
 
-    el.storeSelect.addEventListener("change", function () {
+    addListener(el.storeSelect, "change", function () {
       storeId = el.storeSelect.value;
       localStorage.setItem("adminCurrentStoreId", storeId);
       loadScoped();
@@ -140,39 +179,46 @@
       });
     });
 
-    el.modalClose.addEventListener("click", closeModal);
-    el.modal.addEventListener("click", function (event) {
+    addListener(el.modalClose, "click", closeModal);
+    addListener(el.modal, "click", function (event) {
       if (event.target && event.target.getAttribute("data-close-modal") === "true") {
         closeModal();
       }
     });
 
-    document.getElementById("store-form").addEventListener("submit", saveStore);
-    document.getElementById("category-form").addEventListener("submit", function (event) {
+    addListener(document.getElementById("store-form"), "submit", saveStore);
+    addListener(document.getElementById("category-form"), "submit", function (event) {
       event.preventDefault();
       saveDoc("categories", "category", buildCategory());
     });
-    document.getElementById("menu-form").addEventListener("submit", function (event) {
+    addListener(document.getElementById("menu-form"), "submit", function (event) {
       event.preventDefault();
       saveMenuItem();
     });
-    document.getElementById("combo-form").addEventListener("submit", function (event) {
+    addListener(document.getElementById("combo-form"), "submit", function (event) {
       event.preventDefault();
-      saveDoc("comboTemplates", "combo", buildCombo());
+      saveComboTemplate();
     });
-    document.getElementById("flavor-form").addEventListener("submit", function (event) {
+    addListener(document.getElementById("flavor-form"), "submit", function (event) {
       event.preventDefault();
       saveDoc("flavors", "flavor", buildFlavor());
     });
-    document.getElementById("inventory-form").addEventListener("submit", function (event) {
+    addListener(document.getElementById("inventory-form"), "submit", function (event) {
       event.preventDefault();
       saveDoc("inventory", "inventory", buildInventory());
     });
-    document.getElementById("promotion-form").addEventListener("submit", function (event) {
+    addListener(document.getElementById("promotion-form"), "submit", function (event) {
       event.preventDefault();
       saveDoc("promotions", "promotion", buildPromotion());
     });
-    document.getElementById("settings-form").addEventListener("submit", saveSettings);
+    addListener(document.getElementById("settings-form"), "submit", saveSettings);
+    addListener(document.getElementById("kds-timing-form"), "submit", saveKdsTiming);
+    var kdstSimBtn = document.getElementById("kdst-sim-run-btn");
+    if (kdstSimBtn) kdstSimBtn.addEventListener("click", runKdsTimingSimulator);
+    var employeeForm = document.getElementById("employee-form");
+    addListener(employeeForm, "submit", saveEmployee);
+    var employeePinForm = document.getElementById("employee-pin-form");
+    addListener(employeePinForm, "submit", resetEmployeePin);
 
     var ordersRefreshBtn = document.getElementById("orders-refresh-btn");
     if (ordersRefreshBtn) {
@@ -239,7 +285,8 @@
     var userDetailClose = document.getElementById("user-detail-close");
     if (userDetailClose) {
       userDetailClose.addEventListener("click", function () {
-        document.getElementById("user-detail-panel").classList.add("hidden");
+        var panel = document.getElementById("user-detail-panel");
+        if (panel) panel.classList.add("hidden");
       });
     }
     var userPointAdjustBtn = document.getElementById("user-point-adjust-btn");
@@ -247,8 +294,17 @@
       userPointAdjustBtn.addEventListener("click", adjustUserPoints);
     }
 
+    addListener(el.lineBindClose, "click", closeLineBindModal);
+    addListener(el.lineBindBackdrop, "click", closeLineBindModal);
+    addListener(el.adminsLineRefreshBtn, "click", loadAndRenderAdmins);
+    addListener(el.lineBindRegenBtn, "click", function () {
+      if (lineBindState.targetDocId) {
+        generateLineBindToken(lineBindState.targetCollection, lineBindState.targetDocId, lineBindState.targetName);
+      }
+    });
+
     document.addEventListener("click", onDocumentClick);
-    el.comboAddOptionBtn.addEventListener("click", function () {
+    addListener(el.comboAddOptionBtn, "click", function () {
       appendComboGroup();
     });
     if (el.platform.uberImportBtn) {
@@ -266,11 +322,17 @@
     bindSwitchLabel("category-enabled", "category-enabled-label", "啟用中", "停用中");
     bindSwitchLabel("menu-is-staple", "menu-is-staple-label", "主食類", "非主食");
     bindSwitchLabel("menu-requires-flavor", "menu-requires-flavor-label", "需要選口味", "不需要口味");
+    bindSwitchLabel("menu-requires-staple", "menu-requires-staple-label", "需要選主食", "不需要主食");
+    bindSwitchLabel("menu-pos-hidden", "menu-pos-hidden-label", "POS 已隱藏", "POS 顯示中");
     bindSwitchLabel("menu-quick-add", "menu-quick-add-label", "快速加購", "標準模式");
     bindSwitchLabel("menu-enabled", "menu-enabled-label", "啟用中", "停用中");
+    bindSwitchLabel("combo-requires-flavor", "combo-requires-flavor-label", "需要選口味", "不需要口味");
+    bindSwitchLabel("combo-requires-staple", "combo-requires-staple-label", "需要選主食", "不需要主食");
+    bindSwitchLabel("combo-pos-hidden", "combo-pos-hidden-label", "POS 已隱藏", "POS 顯示中");
     bindSwitchLabel("combo-enabled", "combo-enabled-label", "啟用中", "停用中");
     bindSwitchLabel("flavor-enabled", "flavor-enabled-label", "啟用中", "停用中");
     bindSwitchLabel("promotion-enabled", "promotion-enabled-label", "啟用中", "停用中");
+    bindSwitchLabel("employee-active", "employee-active-label", "啟用", "停用");
     bindSwitchLabel("settings-open", "settings-open-label", "營業中", "休息中");
     bindSwitchLabel("settings-promo-enabled", "settings-promo-enabled-label", "啟用中", "未啟用");
     bindSwitchLabel("settings-gift-enabled", "settings-gift-enabled-label", "啟用中", "未啟用");
@@ -288,6 +350,81 @@
       return '<button type="button" class="admin-theme-card' + (option.value === select.value ? ' is-selected' : '') + '" data-theme-value="' + esc(option.value) + '" aria-pressed="' + (option.value === select.value ? 'true' : 'false') + '"><span class="admin-theme-card__label">' + esc(option.label) + '</span><span class="admin-theme-card__preview" style="background:' + esc(option.bgColor) + ';color:' + esc(option.textColor) + '"><span>底色 ' + esc(option.bgColor) + '</span><span class="admin-theme-card__button" style="background:' + esc(option.buttonColor) + ';color:' + esc(option.buttonTextColor) + '">加入按鈕</span></span></button>';
     }).join("");
     updateCategoryColorPreview(select.value);
+  }
+
+  function getGlobalSpecOptions() {
+    var settingsOptions = data.settings && data.settings.globalOptions ? data.settings.globalOptions : null;
+    var flavorOptions = Array.isArray(settingsOptions && settingsOptions.flavors) && settingsOptions.flavors.length
+      ? settingsOptions.flavors.slice()
+      : DEFAULT_PRODUCT_FLAVOR_OPTIONS.slice();
+    var stapleOptions = Array.isArray(settingsOptions && settingsOptions.staples) && settingsOptions.staples.length
+      ? settingsOptions.staples.slice()
+      : DEFAULT_PRODUCT_STAPLE_OPTIONS.slice();
+    return {
+      flavorOptions: flavorOptions,
+      stapleOptions: stapleOptions
+    };
+  }
+
+  function renderSpecOptionCheckboxes(rootId, options, selectedValues) {
+    var root = document.getElementById(rootId);
+    if (!root) return;
+    var selectedSet = new Set(Array.isArray(selectedValues) ? selectedValues : []);
+    root.innerHTML = options.map(function (option, index) {
+      var inputId = rootId + "-" + index;
+      var checkedAttr = selectedSet.has(option) ? ' checked' : "";
+      return '<label for="' + esc(inputId) + '"><input type="checkbox" id="' + esc(inputId) + '" value="' + esc(option) + '"' + checkedAttr + '><span>' + esc(option) + "</span></label>";
+    }).join("");
+  }
+
+  function readSpecOptionCheckboxes(rootId) {
+    var root = document.getElementById(rootId);
+    if (!root) return [];
+    return Array.prototype.slice.call(root.querySelectorAll('input[type="checkbox"]:checked')).map(function (checkbox) {
+      return String(checkbox.value || "").trim();
+    }).filter(Boolean);
+  }
+
+  function toggleSpecOptionVisibility() {
+    var menuFlavorWrap = document.getElementById("menu-flavor-options-wrap");
+    var menuStapleWrap = document.getElementById("menu-staple-options-wrap");
+    var comboFlavorWrap = document.getElementById("combo-flavor-options-wrap");
+    var comboStapleWrap = document.getElementById("combo-staple-options-wrap");
+    var menuRequiresFlavor = document.getElementById("menu-requires-flavor");
+    var menuRequiresStaple = document.getElementById("menu-requires-staple");
+    var comboRequiresFlavor = document.getElementById("combo-requires-flavor");
+    var comboRequiresStaple = document.getElementById("combo-requires-staple");
+
+    if (menuFlavorWrap && menuRequiresFlavor) menuFlavorWrap.classList.toggle("hidden", !menuRequiresFlavor.checked);
+    if (menuStapleWrap && menuRequiresStaple) menuStapleWrap.classList.toggle("hidden", !menuRequiresStaple.checked);
+    if (comboFlavorWrap && comboRequiresFlavor) comboFlavorWrap.classList.toggle("hidden", !comboRequiresFlavor.checked);
+    if (comboStapleWrap && comboRequiresStaple) comboStapleWrap.classList.toggle("hidden", !comboRequiresStaple.checked);
+  }
+
+  function initProductSpecEditors() {
+    var specOptions = getGlobalSpecOptions();
+    renderSpecOptionCheckboxes("menu-flavor-options", specOptions.flavorOptions, []);
+    renderSpecOptionCheckboxes("menu-staple-options", specOptions.stapleOptions, []);
+    renderSpecOptionCheckboxes("menu-pos-disabled-flavors", specOptions.flavorOptions, []);
+    renderSpecOptionCheckboxes("menu-pos-disabled-staples", specOptions.stapleOptions, []);
+    renderSpecOptionCheckboxes("combo-flavor-options", specOptions.flavorOptions, []);
+    renderSpecOptionCheckboxes("combo-staple-options", specOptions.stapleOptions, []);
+    renderSpecOptionCheckboxes("combo-pos-disabled-flavors", specOptions.flavorOptions, []);
+    renderSpecOptionCheckboxes("combo-pos-disabled-staples", specOptions.stapleOptions, []);
+    [
+      "menu-requires-flavor",
+      "menu-requires-staple",
+      "combo-requires-flavor",
+      "combo-requires-staple",
+      "menu-pos-hidden",
+      "combo-pos-hidden"
+    ].forEach(function (id) {
+      var input = document.getElementById(id);
+      if (input) {
+        input.addEventListener("change", toggleSpecOptionVisibility);
+      }
+    });
+    toggleSpecOptionVisibility();
   }
 
   function updateCategoryColorPreview(value) {
@@ -312,12 +449,16 @@
   }
 
   function show(name) {
+    if (name === "employees" && !canManage()) {
+      name = "dashboard";
+    }
     el.views.forEach(function (view) {
       view.classList.toggle("hidden", view.id !== "view-" + name);
     });
     el.nav.forEach(function (link) {
       link.classList.toggle("active", link.dataset.view === name);
     });
+    renderByView(name);
   }
 
   function canManage() {
@@ -351,6 +492,10 @@
     if (storesLink) {
       storesLink.style.display = isOwner() ? "block" : "none";
     }
+    var employeesLink = el.nav.find(function (link) { return link.dataset.view === "employees"; });
+    if (employeesLink) {
+      employeesLink.style.display = canManage() ? "block" : "none";
+    }
 
     // 測試訂單管理按鈕：僅 owner 可見
     var showTestBtn = document.getElementById("orders-show-test-btn");
@@ -366,16 +511,18 @@
     var descriptionEl = document.getElementById("admin-access-description");
     var retryButton = document.getElementById("admin-access-relogin-btn");
 
-    shell.classList.add("hidden");
-    state.classList.remove("hidden");
-    titleEl.textContent = title;
-    descriptionEl.textContent = description;
-    retryButton.classList.toggle("hidden", !showRetry);
+    if (shell) shell.classList.add("hidden");
+    if (state) state.classList.remove("hidden");
+    if (titleEl) titleEl.textContent = title;
+    if (descriptionEl) descriptionEl.textContent = description;
+    if (retryButton) retryButton.classList.toggle("hidden", !showRetry);
   }
 
   function showAdminShell() {
-    document.getElementById("admin-access-state").classList.add("hidden");
-    document.getElementById("admin-shell").classList.remove("hidden");
+    var state = document.getElementById("admin-access-state");
+    var shell = document.getElementById("admin-shell");
+    if (state) state.classList.add("hidden");
+    if (shell) shell.classList.remove("hidden");
   }
 
   async function signOutToLogin() {
@@ -420,7 +567,9 @@
 
       admin = access.data || {};
       admin.role = access.role;
-      el.userMeta.textContent = (admin.name || "未命名管理員") + " / " + admin.role;
+      if (el.userMeta) {
+        el.userMeta.textContent = (admin.name || "未命名管理員") + " / " + admin.role;
+      }
 
       await loadStores();
       setupStoreSelector();
@@ -459,6 +608,7 @@
         flavors: "flavors where storeId==" + storeId,
         inventory: "inventory where storeId==" + storeId,
         promotions: "promotions where storeId==" + storeId,
+        employees: "employees where storeId==" + storeId,
         users: "users where storeId==" + storeId,
         orders: "orders where storeId==" + storeId,
         settings: "settings/" + storeId
@@ -473,6 +623,7 @@
       db.collection("flavors").where("storeId", "==", storeId).get(),
       db.collection("inventory").where("storeId", "==", storeId).get(),
       db.collection("promotions").where("storeId", "==", storeId).get(),
+      db.collection("employees").where("storeId", "==", storeId).limit(300).get(),
       db.collection("users").where("storeId", "==", storeId).limit(100).get(),
       db.collection("orders").where("storeId", "==", storeId).limit(200).get(),
       db.collection("settings").doc(storeId).get(),
@@ -487,18 +638,21 @@
     var menuItemsNew = mapDocs(results[1]).map(function (item) { item._sourceCollection = "menu_items"; return normalizeMenuItem(item); }).sort(byMenuSort);
     var menuItemsLegacy = mapDocs(results[2]).map(function (item) { item._sourceCollection = "menuItems"; return normalizeMenuItem(item); }).sort(byMenuSort);
     data.menuItems = mergeMenuItems(menuItemsNew, menuItemsLegacy).sort(byMenuSort);
-    data.comboTemplates = mapDocs(results[3]).sort(bySort);
+    data.comboTemplates = mapDocs(results[3]).map(normalizeComboTemplate).sort(bySort);
     data.flavors = mapDocs(results[4]).sort(bySort);
     data.inventory = mapDocs(results[5]);
     data.promotions = mapDocs(results[6]);
-    data.users = mapDocs(results[7]).sort(byCreatedDesc);
-    data.orders = mapDocs(results[8]).sort(byCreatedDesc);
-    data.settings = results[9].exists ? results[9].data() : null;
-    data.platformOrders = mapDocs(results[10]).sort(byCreatedDesc);
-    data.platformMappings = mapDocs(results[11]).sort(byCreatedDesc);
-    data.inventoryMovements = mapDocs(results[12]).sort(byCreatedDesc);
-    data.importLogs = mapDocs(results[13]).sort(byCreatedDesc);
-    data.pointRules = results[14] ? mapDocs(results[14]) : [];
+    var rawEmployees = mapDocs(results[7]).sort(byUpdatedDesc);
+    await suppressDuplicateEmployees(rawEmployees);
+    data.employees = uniqueEmployees(rawEmployees);
+    data.users = mapDocs(results[8]).sort(byCreatedDesc);
+    data.orders = mapDocs(results[9]).sort(byCreatedDesc);
+    data.settings = results[10].exists ? results[10].data() : null;
+    data.platformOrders = mapDocs(results[11]).sort(byCreatedDesc);
+    data.platformMappings = mapDocs(results[12]).sort(byCreatedDesc);
+    data.inventoryMovements = mapDocs(results[13]).sort(byCreatedDesc);
+    data.importLogs = mapDocs(results[14]).sort(byCreatedDesc);
+    data.pointRules = results[15] ? mapDocs(results[15]) : [];
 
     console.log("[AdminData] Firestore documents loaded.", {
       storeId: storeId,
@@ -511,6 +665,7 @@
         flavors: data.flavors.length,
         inventory: data.inventory.length,
         promotions: data.promotions.length,
+        employees: data.employees.length,
         users: data.users.length,
         orders: data.orders.length,
         settings: data.settings ? 1 : 0,
@@ -539,9 +694,35 @@
       return;
     }
 
-    renderAll();
+    await ensureGlobalOptionsConfigured();
+    await loadAdmins();
+    renderByView(routeName());
     msg("已載入 " + storeId + " 的資料");
-    migrateQuickAddItems();
+    await migrateQuickAddItems();
+    await migrateComboSpecDefaults();
+  }
+
+  async function ensureGlobalOptionsConfigured() {
+    var current = data.settings && data.settings.globalOptions ? data.settings.globalOptions : {};
+    var next = {
+      flavors: Array.isArray(current.flavors) && current.flavors.length ? current.flavors.slice() : DEFAULT_PRODUCT_FLAVOR_OPTIONS.slice(),
+      staples: Array.isArray(current.staples) && current.staples.length ? current.staples.slice() : DEFAULT_PRODUCT_STAPLE_OPTIONS.slice()
+    };
+    var changed = !Array.isArray(current.flavors) || !current.flavors.length || !Array.isArray(current.staples) || !current.staples.length;
+    if (!changed) return;
+    try {
+      await db.collection("settings").doc(storeId).set({
+        storeId: storeId,
+        globalOptions: next,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: user && user.uid || ""
+      }, { merge: true });
+      data.settings = data.settings || {};
+      data.settings.globalOptions = next;
+      console.log("[Admin] globalOptions initialized in settings.", { storeId: storeId });
+    } catch (error) {
+      console.warn("[Admin] globalOptions init failed.", error);
+    }
   }
 
   // 一次性將白飯、滷肉飯、王子麵、水餃設為 quickAdd=true（若尚未設定）
@@ -562,6 +743,52 @@
       console.log("[Admin] migrateQuickAddItems: set quickAdd=true for", toUpdate.map(function (i) { return i.name; }));
     } catch (e) {
       console.warn("[Admin] migrateQuickAddItems failed:", e);
+    }
+  }
+
+  async function migrateComboSpecDefaults() {
+    var specOptions = getGlobalSpecOptions();
+    function shouldApply(item) {
+      var normalizedName = String(item && item.name || "").replace(/\s+/g, "");
+      var idText = String(item && item.id || "").toLowerCase();
+      return REQUIRED_COMBO_NAMES.some(function (name) {
+        var normalizedTarget = String(name || "").replace(/\s+/g, "");
+        return normalizedName === normalizedTarget
+          || normalizedName.indexOf(normalizedTarget) >= 0
+          || idText.indexOf(normalizedTarget.toLowerCase()) >= 0;
+      });
+    }
+    var toUpdate = data.comboTemplates.filter(function (item) {
+      if (!shouldApply(item)) return false;
+      var flavorOptions = Array.isArray(item.flavorOptions) ? item.flavorOptions : [];
+      var stapleOptions = Array.isArray(item.stapleOptions) ? item.stapleOptions : [];
+      var missingFlavor = item.requiresFlavor !== true || flavorOptions.length === 0;
+      var missingStaple = item.requiresStaple !== true || stapleOptions.length === 0;
+      return missingFlavor || missingStaple;
+    });
+    if (!toUpdate.length) return;
+    try {
+      var batch = db.batch();
+      toUpdate.forEach(function (item) {
+        batch.update(db.collection("comboTemplates").doc(item.id), {
+          requiresFlavor: true,
+          requiresStaple: true,
+          flavorOptions: specOptions.flavorOptions.slice(),
+          stapleOptions: specOptions.stapleOptions.slice(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedBy: user && user.uid || ""
+        });
+      });
+      await batch.commit();
+      toUpdate.forEach(function (item) {
+        item.requiresFlavor = true;
+        item.requiresStaple = true;
+        item.flavorOptions = specOptions.flavorOptions.slice();
+        item.stapleOptions = specOptions.stapleOptions.slice();
+      });
+      console.log("[Admin] migrateComboSpecDefaults updated.", toUpdate.map(function (item) { return item.name; }));
+    } catch (error) {
+      console.warn("[Admin] migrateComboSpecDefaults failed:", error);
     }
   }
 
@@ -600,6 +827,14 @@
         sort: item.sort || 999,
         isActive: item.enabled !== false,
         enabled: item.enabled !== false,
+        requiresFlavor: item.requiresFlavor === true,
+        requiresStaple: item.requiresStaple === true,
+        flavorOptions: Array.isArray(item.flavorOptions) ? item.flavorOptions : [],
+        stapleOptions: Array.isArray(item.stapleOptions) ? item.stapleOptions : [],
+        posHidden: item.posHidden === true,
+        posVisible: item.posHidden !== true,
+        posDisabledFlavorOptions: Array.isArray(item.posDisabledFlavorOptions) ? item.posDisabledFlavorOptions : [],
+        posDisabledStapleOptions: Array.isArray(item.posDisabledStapleOptions) ? item.posDisabledStapleOptions : [],
         imageUrl: item.imageUrl || "",
         updatedBy: user && user.uid || ""
       }, { merge: true });
@@ -612,7 +847,17 @@
       }, { merge: true });
     });
     defaults.comboTemplates.forEach(function (item) {
-      batch.set(db.collection("comboTemplates").doc(item.id), withStore(item), { merge: true });
+      batch.set(db.collection("comboTemplates").doc(item.id), {
+        ...withStore(item),
+        requiresFlavor: item.requiresFlavor === true,
+        requiresStaple: item.requiresStaple === true,
+        flavorOptions: Array.isArray(item.flavorOptions) ? item.flavorOptions : [],
+        stapleOptions: Array.isArray(item.stapleOptions) ? item.stapleOptions : [],
+        posHidden: item.posHidden === true,
+        posVisible: item.posHidden !== true,
+        posDisabledFlavorOptions: Array.isArray(item.posDisabledFlavorOptions) ? item.posDisabledFlavorOptions : [],
+        posDisabledStapleOptions: Array.isArray(item.posDisabledStapleOptions) ? item.posDisabledStapleOptions : []
+      }, { merge: true });
       batch.set(db.collection("inventory").doc(storeId + "_" + item.id), {
         storeId: storeId,
         itemId: item.id,
@@ -678,11 +923,66 @@
     renderPromotions();
     renderOrders();
     renderInventory();
+    renderEmployees();
     renderPlatformOrders();
     renderUsers();
     renderSettingsSummary();
+    renderKdsTimingSummary();
     renderCategoryOptions();
     renderPointRuleSummary();
+  }
+
+  function renderByView(name) {
+    var viewName = name || routeName();
+    switch (viewName) {
+      case "dashboard":
+        renderDashboard();
+        break;
+      case "stores":
+        renderStores();
+        break;
+      case "categories":
+        renderCategories();
+        break;
+      case "menu":
+        renderMenu();
+        renderCategoryOptions();
+        break;
+      case "combos":
+        renderCombos();
+        break;
+      case "flavors":
+        renderFlavors();
+        break;
+      case "orders":
+        renderOrders();
+        break;
+      case "inventory":
+        renderInventory();
+        break;
+      case "employees":
+        renderEmployees();
+        renderAdminsLineSection();
+        break;
+      case "users":
+        renderUsers();
+        break;
+      case "promotions":
+        renderPromotions();
+        break;
+      case "platform-orders":
+        renderPlatformOrders();
+        break;
+      case "settings":
+        renderSettingsSummary();
+        renderPointRuleSummary();
+        break;
+      case "kds-timing":
+        renderKdsTimingSummary();
+        break;
+      default:
+        break;
+    }
   }
 
   /**
@@ -791,6 +1091,71 @@
     }).join("") || emptyCard("目前沒有菜單資料");
   }
 
+  function menuCategoryDisplayName(item) {
+    var raw = item && (item.category || item.categoryId || item.categoryName || "");
+    var name = String(categoryName(raw) || "").trim();
+    if (!name || name === "未設定") return "未分類";
+    return name;
+  }
+
+  function menuCategoryDisplayRank(name) {
+    var order = ["主食", "套餐", "肉品", "蔬菜", "火鍋料 A", "火鍋料 B", "飲品", "其他", "未分類"];
+    var index = order.indexOf(name);
+    return index >= 0 ? index : 999;
+  }
+
+  function menuGroupsForRender(items) {
+    var groups = {};
+    (items || []).forEach(function (item) {
+      var groupName = menuCategoryDisplayName(item);
+      if (!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(item);
+    });
+    return Object.keys(groups).sort(function (left, right) {
+      var leftRank = menuCategoryDisplayRank(left);
+      var rightRank = menuCategoryDisplayRank(right);
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return String(left || "").localeCompare(String(right || ""), "zh-Hant");
+    }).map(function (name) {
+      return {
+        name: name,
+        items: groups[name].slice().sort(byMenuSort)
+      };
+    });
+  }
+
+  function renderMenu() {
+    var groups = menuGroupsForRender(data.menuItems || []);
+    if (!groups.length) {
+      el.lists.menu.innerHTML = emptyCard("目前沒有菜單資料");
+      return;
+    }
+    el.lists.menu.innerHTML = groups.map(function (group) {
+      return [
+        '<section class="admin-group-section">',
+        '<div class="admin-group-section__head"><h3>' + esc(group.name) + "（" + group.items.length + '項）</h3></div>',
+        '<div class="admin-group-section__items">',
+        group.items.map(function (item) {
+          var button = canManage()
+            ? '<div class="admin-order-actions"><button type="button" data-edit="menu" data-id="' + esc(item.id) + '">編輯</button><button type="button" data-menu-toggle="' + esc(item.id) + '">' + esc(item.isActive ? "下架" : "上架") + '</button><button type="button" data-menu-delete="' + esc(item.id) + '">刪除</button></div>'
+            : "";
+          return buildCard(item.name || item.id, [
+            { label: "品項編號", value: item.id },
+            { label: "品項名稱", value: item.name || "未命名品項" },
+            { label: "售價", value: "NT$ " + Number(item.price || 0) },
+            { label: "分類", value: group.name },
+            { label: "排序", value: String(item.sortOrder || 999) },
+            { label: "說明", value: item.description || "無" },
+            { label: "圖片網址", value: item.imageUrl || "無" },
+            { label: "品項狀態", value: statusPill(item.isActive ? "上架中" : "下架中", item.isActive), html: true }
+          ], button);
+        }).join(""),
+        "</div>",
+        "</section>"
+      ].join("");
+    }).join("");
+  }
+
   function renderCombos() {
     el.lists.combos.innerHTML = data.comboTemplates.map(function (item) {
       var button = canManage()
@@ -860,6 +1225,78 @@
     }).join("") || emptyCard("目前沒有庫存資料");
   }
 
+  function renderEmployees() {
+    renderEmployeeLineBinding();
+    renderAdminsLineSection();
+  }
+
+  function employeePrimaryComparator(left, right) {
+    var leftCreated = toDate(left.createdAt);
+    var rightCreated = toDate(right.createdAt);
+    var leftTime = leftCreated ? leftCreated.getTime() : Number.MAX_SAFE_INTEGER;
+    var rightTime = rightCreated ? rightCreated.getTime() : Number.MAX_SAFE_INTEGER;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+    var leftUpdated = toDate(left.updatedAt);
+    var rightUpdated = toDate(right.updatedAt);
+    var leftUpdatedTime = leftUpdated ? leftUpdated.getTime() : Number.MAX_SAFE_INTEGER;
+    var rightUpdatedTime = rightUpdated ? rightUpdated.getTime() : Number.MAX_SAFE_INTEGER;
+    if (leftUpdatedTime !== rightUpdatedTime) return leftUpdatedTime - rightUpdatedTime;
+    return String(left.id || "").localeCompare(String(right.id || ""));
+  }
+
+  function uniqueEmployees(rawEmployees) {
+    var groups = {};
+    (rawEmployees || []).forEach(function (employee) {
+      var id = String(employee.employeeId || "").trim();
+      if (!id) return;
+      if (!groups[id]) groups[id] = [];
+      groups[id].push(employee);
+    });
+    return Object.keys(groups).map(function (employeeId) {
+      var list = groups[employeeId].slice().sort(employeePrimaryComparator);
+      return list[0];
+    }).sort(byUpdatedDesc);
+  }
+
+  async function suppressDuplicateEmployees(rawEmployees) {
+    if (!canManage()) return;
+    var groups = {};
+    (rawEmployees || []).forEach(function (employee) {
+      var id = String(employee.employeeId || "").trim();
+      if (!id) return;
+      if (!groups[id]) groups[id] = [];
+      groups[id].push(employee);
+    });
+
+    var duplicates = [];
+    Object.keys(groups).forEach(function (employeeId) {
+      var list = groups[employeeId];
+      if (list.length <= 1) return;
+      var sorted = list.slice().sort(employeePrimaryComparator);
+      sorted.slice(1).forEach(function (item) { duplicates.push(item); });
+    });
+    if (!duplicates.length) return;
+
+    try {
+      var batch = db.batch();
+      var changed = 0;
+      duplicates.forEach(function (item) {
+        if (item.isActive === false && item.duplicateSuppressed === true) return;
+        batch.set(db.collection("employees").doc(item.id), {
+          isActive: false,
+          duplicateSuppressed: true,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        changed += 1;
+      });
+      if (changed > 0) {
+        await batch.commit();
+      }
+    } catch (error) {
+      console.warn("[AdminEmployee] Failed to suppress duplicates.", error);
+    }
+  }
+
   function renderUsers() {
     var searchVal = (document.getElementById("user-search-input") || {}).value || "";
     var filtered = data.users;
@@ -890,6 +1327,7 @@
   var selectedUserId = null;
   var showArchivedOrders = false;
   var showTestOrdersOnly = false;
+  var savingEmployee = false;
 
   function normalizeGiftPoolInput(list) {
     return (Array.isArray(list) ? list : []).map(function (item) {
@@ -1220,28 +1658,40 @@
   }
 
   function renderSettingsSummary() {
-    document.getElementById("settings-open").checked = !!(data.settings && data.settings.isOpen);
-    document.getElementById("settings-promo-enabled").checked = !!(data.settings && data.settings.promoEnabled);
-    document.getElementById("settings-open-notice").value = data.settings && data.settings.openNotice || "";
-    document.getElementById("settings-promo-text").value = data.settings && data.settings.promoText || "";
-    document.getElementById("settings-open-from").value = data.settings && data.settings.openFrom || "";
-    document.getElementById("settings-open-to").value = data.settings && data.settings.openTo || "";
+    var settingsOpen = document.getElementById("settings-open");
+    var settingsPromoEnabled = document.getElementById("settings-promo-enabled");
+    var settingsOpenNotice = document.getElementById("settings-open-notice");
+    var settingsPromoText = document.getElementById("settings-promo-text");
+    var settingsOpenFrom = document.getElementById("settings-open-from");
+    var settingsOpenTo = document.getElementById("settings-open-to");
+    if (!settingsOpen || !settingsPromoEnabled || !settingsOpenNotice || !settingsPromoText || !settingsOpenFrom || !settingsOpenTo) return;
+
+    settingsOpen.checked = !!(data.settings && data.settings.isOpen);
+    settingsPromoEnabled.checked = !!(data.settings && data.settings.promoEnabled);
+    settingsOpenNotice.value = data.settings && data.settings.openNotice || "";
+    settingsPromoText.value = data.settings && data.settings.promoText || "";
+    settingsOpenFrom.value = data.settings && data.settings.openFrom || "";
+    settingsOpenTo.value = data.settings && data.settings.openTo || "";
     syncSwitchLabels();
 
-    el.settingsSummary.innerHTML = [
-      statusPill(data.settings && data.settings.isOpen ? "營業中" : "休息中", !!(data.settings && data.settings.isOpen)),
-      "<p><strong>營業公告：</strong>" + esc(data.settings && data.settings.openNotice || "未設定") + "</p>",
-      "<p><strong>優惠提示：</strong>" + esc(data.settings && data.settings.promoText || "未設定") + "</p>",
-      "<p><strong>優惠提示狀態：</strong>" + (data.settings && data.settings.promoEnabled ? "啟用中" : "未啟用") + "</p>",
-      "<p><strong>接單時間：</strong>" + esc((data.settings && data.settings.openFrom) || "17:40") + " – " + esc((data.settings && data.settings.openTo) || "22:50") + "</p>",
-      "<p><strong>滿額贈送：</strong>" + esc(describeGiftPromotion(data.settings || {})) + "（詳細規則在「優惠管理」）</p>"
-    ].join("");
+    if (el.settingsSummary) {
+      el.settingsSummary.innerHTML = [
+        statusPill(data.settings && data.settings.isOpen ? "營業中" : "休息中", !!(data.settings && data.settings.isOpen)),
+        "<p><strong>營業公告：</strong>" + esc(data.settings && data.settings.openNotice || "未設定") + "</p>",
+        "<p><strong>優惠提示：</strong>" + esc(data.settings && data.settings.promoText || "未設定") + "</p>",
+        "<p><strong>優惠提示狀態：</strong>" + (data.settings && data.settings.promoEnabled ? "啟用中" : "未啟用") + "</p>",
+        "<p><strong>接單時間：</strong>" + esc((data.settings && data.settings.openFrom) || "17:40") + " – " + esc((data.settings && data.settings.openTo) || "22:50") + "</p>",
+        "<p><strong>滿額贈送：</strong>" + esc(describeGiftPromotion(data.settings || {})) + "（詳細規則在「優惠管理」）</p>"
+      ].join("");
+    }
     var giftStatusEl = document.getElementById("gift-promo-status");
     if (giftStatusEl) giftStatusEl.textContent = describeGiftPromotion(data.settings || {});
   }
 
   function renderCategoryOptions() {
-    document.getElementById("menu-category").innerHTML = ['<option value="未分類">未分類</option>'].concat(data.categories.map(function (item) {
+    var menuCategory = document.getElementById("menu-category");
+    if (!menuCategory) return;
+    menuCategory.innerHTML = ['<option value="未分類">未分類</option>'].concat(data.categories.map(function (item) {
       return '<option value="' + esc(item.id) + '">' + esc(item.name || item.id) + "</option>";
     })).join("");
   }
@@ -1260,6 +1710,7 @@
     var mappingKey = event.target.getAttribute("data-platform-map");
     var ignoreMappingKey = event.target.getAttribute("data-platform-ignore");
     var userDetailId = event.target.getAttribute("data-user-detail");
+    var employeeResetPinId = event.target.getAttribute("data-employee-reset-pin");
     var orderArchiveId = event.target.getAttribute("data-order-archive");
     var orderUnarchiveId = event.target.getAttribute("data-order-unarchive");
     var orderPermDeleteId = event.target.getAttribute("data-order-perm-delete");
@@ -1327,6 +1778,11 @@
       return;
     }
 
+    if (employeeResetPinId) {
+      openEmployeePinForm(employeeResetPinId);
+      return;
+    }
+
     if (orderArchiveId) {
       archiveOrder(orderArchiveId, true);
       return;
@@ -1346,10 +1802,69 @@
       markAsTest(orderMarkTestId);
       return;
     }
+
+    var lineBindTarget = event.target.closest("[data-line-bind]");
+    var lineReBindTarget = event.target.closest("[data-line-rebind]");
+    var lineUnbindTarget = event.target.closest("[data-line-unbind]");
+    var lineNotifyToggle = event.target.closest("[data-line-notify-toggle]");
+    var lineConfirmToggle = event.target.closest("[data-line-confirm-toggle]");
+
+    if (lineBindTarget || lineReBindTarget) {
+      var el2 = lineBindTarget || lineReBindTarget;
+      openLineBindModal(
+        el2.getAttribute("data-target-collection"),
+        el2.getAttribute("data-target-id"),
+        el2.getAttribute("data-target-name")
+      );
+      return;
+    }
+    if (lineUnbindTarget) {
+      var tName = lineUnbindTarget.getAttribute("data-target-name") || "此帳號";
+      if (!confirm("確定要解除「" + tName + "」的 LINE 綁定嗎？\n解除後該帳號將無法收到 LINE 訂單通知。")) return;
+      doUnbindLine(
+        lineUnbindTarget.getAttribute("data-target-collection"),
+        lineUnbindTarget.getAttribute("data-target-id"),
+        tName
+      );
+      return;
+    }
+    if (lineNotifyToggle) {
+      var checkbox = lineNotifyToggle.tagName === "INPUT" ? lineNotifyToggle : lineNotifyToggle.querySelector("input");
+      if (checkbox) {
+        saveLineNotificationSetting(
+          checkbox.getAttribute("data-target-collection"),
+          checkbox.getAttribute("data-target-id"),
+          "notify_line_new_orders",
+          checkbox.checked
+        );
+      }
+      return;
+    }
+    if (lineConfirmToggle) {
+      var checkbox2 = lineConfirmToggle.tagName === "INPUT" ? lineConfirmToggle : lineConfirmToggle.querySelector("input");
+      if (checkbox2) {
+        saveLineNotificationSetting(
+          checkbox2.getAttribute("data-target-collection"),
+          checkbox2.getAttribute("data-target-id"),
+          "can_confirm_line_orders",
+          checkbox2.checked
+        );
+      }
+      return;
+    }
   }
 
   function openCreateForm(type) {
     resetForm(type);
+    if (type === "employee") {
+      populateEmployeeStoreSelect();
+      var pinWrap = document.getElementById("employee-pin-wrap");
+      if (pinWrap) pinWrap.classList.remove("hidden");
+      var employeeIdInput = document.getElementById("employee-id");
+      if (employeeIdInput) employeeIdInput.disabled = false;
+      var originalInput = document.getElementById("employee-original-id");
+      if (originalInput) originalInput.value = "";
+    }
     if (type === "settings") {
       document.getElementById("settings-open").checked = !!(data.settings && data.settings.isOpen);
       document.getElementById("settings-promo-enabled").checked = !!(data.settings && data.settings.promoEnabled);
@@ -1360,7 +1875,12 @@
       fillGiftPromotionFields("settings-gift", data.settings || {});
       syncSwitchLabels();
     }
-    openModal(type, type === "settings" ? "編輯" : "新增");
+    if (type === "kds-timing") {
+      fillKdsTimingForm();
+      if (typeof syncSwitchLabels === "function") syncSwitchLabels();
+    }
+    var editTypes = { settings: true, "kds-timing": true };
+    openModal(type, editTypes[type] ? "編輯" : "新增");
   }
 
   function edit(type, id) {
@@ -1373,6 +1893,7 @@
       document.getElementById("store-id").value = item.id;
       document.getElementById("store-name").value = item.name || "";
       document.getElementById("store-active").checked = item.isActive !== false;
+      renderStoreHoursGrid(item.businessHours);
     } else if (type === "categories") {
       document.getElementById("category-id").value = item.id;
       document.getElementById("category-name").value = item.name || "";
@@ -1381,6 +1902,7 @@
       updateCategoryColorPreview(document.getElementById("category-bg-color").value);
       document.getElementById("category-enabled").checked = item.enabled !== false;
     } else if (type === "menu") {
+      var specOptions = getGlobalSpecOptions();
       document.getElementById("menu-id").value = item.id;
       document.getElementById("menu-original-id").value = item.id; // 記錄原始 ID 用於 rename 偵測
       document.getElementById("menu-name").value = item.name || "";
@@ -1397,16 +1919,32 @@
         var catId = (item.category || item.categoryId || "").toLowerCase();
         return catId === "staples" || catId === "staple" || catId.indexOf("staple") !== -1;
       })();
-      document.getElementById("menu-requires-flavor").checked = item.requiresFlavor !== false;
+      document.getElementById("menu-requires-flavor").checked = item.requiresFlavor === true;
+      document.getElementById("menu-requires-staple").checked = item.requiresStaple === true;
+      renderSpecOptionCheckboxes("menu-flavor-options", specOptions.flavorOptions, item.flavorOptions || []);
+      renderSpecOptionCheckboxes("menu-staple-options", specOptions.stapleOptions, item.stapleOptions || []);
+      document.getElementById("menu-pos-hidden").checked = item.posHidden === true;
+      renderSpecOptionCheckboxes("menu-pos-disabled-flavors", specOptions.flavorOptions, item.posDisabledFlavorOptions || []);
+      renderSpecOptionCheckboxes("menu-pos-disabled-staples", specOptions.stapleOptions, item.posDisabledStapleOptions || []);
+      toggleSpecOptionVisibility();
       document.getElementById("menu-quick-add").checked = item.quickAdd === true;
       document.getElementById("menu-enabled").checked = !!item.isActive;
     } else if (type === "combos") {
+      var comboSpecOptions = getGlobalSpecOptions();
       document.getElementById("combo-id").value = item.id;
       document.getElementById("combo-name").value = item.name || "";
       document.getElementById("combo-price").value = item.price || 0;
       document.getElementById("combo-sort").value = item.sort || 0;
       document.getElementById("combo-tags").value = (item.tags || []).join(",");
       document.getElementById("combo-description").value = item.description || "";
+      document.getElementById("combo-requires-flavor").checked = item.requiresFlavor === true;
+      document.getElementById("combo-requires-staple").checked = item.requiresStaple === true;
+      renderSpecOptionCheckboxes("combo-flavor-options", comboSpecOptions.flavorOptions, item.flavorOptions || []);
+      renderSpecOptionCheckboxes("combo-staple-options", comboSpecOptions.stapleOptions, item.stapleOptions || []);
+      document.getElementById("combo-pos-hidden").checked = item.posHidden === true;
+      renderSpecOptionCheckboxes("combo-pos-disabled-flavors", comboSpecOptions.flavorOptions, item.posDisabledFlavorOptions || []);
+      renderSpecOptionCheckboxes("combo-pos-disabled-staples", comboSpecOptions.stapleOptions, item.posDisabledStapleOptions || []);
+      toggleSpecOptionVisibility();
       renderComboGroups(item.optionGroups || []);
       document.getElementById("combo-enabled").checked = item.enabled !== false;
     } else if (type === "flavors") {
@@ -1432,10 +1970,98 @@
       document.getElementById("promotion-start-at").value = item.startAt ? formatDateTime(item.startAt) : "";
       document.getElementById("promotion-end-at").value = item.endAt ? formatDateTime(item.endAt) : "";
       document.getElementById("promotion-enabled").checked = item.enabled !== false;
+    } else if (type === "employees") {
+      populateEmployeeStoreSelect();
+      document.getElementById("employee-original-id").value = item.id || "";
+      document.getElementById("employee-name").value = item.name || "";
+      document.getElementById("employee-id").value = item.employeeId || "";
+      document.getElementById("employee-id").disabled = true;
+      document.getElementById("employee-store-id").value = item.storeId || storeId;
+      document.getElementById("employee-active").checked = item.isActive !== false;
+      var pinWrap = document.getElementById("employee-pin-wrap");
+      if (pinWrap) pinWrap.classList.add("hidden");
     }
 
     syncSwitchLabels();
     openModal(type, "編輯");
+  }
+
+  // ── 營業時段（員工 LINE 靜音窗）─────────────────────────────
+  var BUSINESS_HOURS_DAYS = [
+    { key: "mon", label: "一" },
+    { key: "tue", label: "二" },
+    { key: "wed", label: "三" },
+    { key: "thu", label: "四" },
+    { key: "fri", label: "五" },
+    { key: "sat", label: "六" },
+    { key: "sun", label: "日" }
+  ];
+
+  function defaultBusinessHours() {
+    var out = {};
+    BUSINESS_HOURS_DAYS.forEach(function (d) {
+      out[d.key] = { open: "17:30", close: "22:30", closed: false };
+    });
+    out.sat = { open: "", close: "", closed: true };
+    return out;
+  }
+
+  function normalizeHhMm(value) {
+    var s = String(value == null ? "" : value).trim();
+    if (!/^\d{1,2}:\d{2}$/.test(s)) return "";
+    var parts = s.split(":");
+    var h = Math.max(0, Math.min(23, Number(parts[0]) || 0));
+    var m = Math.max(0, Math.min(59, Number(parts[1]) || 0));
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  }
+
+  function renderStoreHoursGrid(hours) {
+    var grid = document.getElementById("store-hours-grid");
+    if (!grid) return;
+    var current = hours && typeof hours === "object" ? hours : defaultBusinessHours();
+    var rows = BUSINESS_HOURS_DAYS.map(function (d) {
+      var h = current[d.key] || { open: "", close: "", closed: false };
+      var isClosed = !!h.closed;
+      var open = normalizeHhMm(h.open) || "17:30";
+      var close = normalizeHhMm(h.close) || "22:30";
+      return ''
+        + '<div class="store-hours-row" data-day="' + d.key + '">'
+        +   '<span class="store-hours-day">週' + d.label + '</span>'
+        +   '<label class="store-hours-closed"><input type="checkbox" data-hours-closed="' + d.key + '"' + (isClosed ? ' checked' : '') + '><span>公休</span></label>'
+        +   '<input type="time" data-hours-open="' + d.key + '" value="' + open + '"' + (isClosed ? ' disabled' : '') + '>'
+        +   '<span class="store-hours-sep">–</span>'
+        +   '<input type="time" data-hours-close="' + d.key + '" value="' + close + '"' + (isClosed ? ' disabled' : '') + '>'
+        + '</div>';
+    });
+    grid.innerHTML = rows.join("");
+    BUSINESS_HOURS_DAYS.forEach(function (d) {
+      var cb = grid.querySelector('[data-hours-closed="' + d.key + '"]');
+      if (!cb) return;
+      cb.addEventListener("change", function () {
+        var open = grid.querySelector('[data-hours-open="' + d.key + '"]');
+        var close = grid.querySelector('[data-hours-close="' + d.key + '"]');
+        if (open) open.disabled = cb.checked;
+        if (close) close.disabled = cb.checked;
+      });
+    });
+  }
+
+  function readStoreHoursFromForm() {
+    var grid = document.getElementById("store-hours-grid");
+    if (!grid) return defaultBusinessHours();
+    var out = {};
+    BUSINESS_HOURS_DAYS.forEach(function (d) {
+      var closedEl = grid.querySelector('[data-hours-closed="' + d.key + '"]');
+      var openEl = grid.querySelector('[data-hours-open="' + d.key + '"]');
+      var closeEl = grid.querySelector('[data-hours-close="' + d.key + '"]');
+      var closed = !!(closedEl && closedEl.checked);
+      var open = normalizeHhMm(openEl && openEl.value);
+      var close = normalizeHhMm(closeEl && closeEl.value);
+      out[d.key] = closed
+        ? { open: "", close: "", closed: true }
+        : { open: open, close: close, closed: false };
+    });
+    return out;
   }
 
   async function saveStore(event) {
@@ -1446,6 +2072,8 @@
     await db.collection("stores").doc(docId).set({
       name: val("store-name"),
       isActive: document.getElementById("store-active").checked,
+      businessHours: readStoreHoursFromForm(),
+      businessHoursUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
@@ -1480,6 +2108,25 @@
     msg(collection + " 已儲存");
   }
 
+  function validateSpecRequirements(payload, namePrefix) {
+    if (payload.requiresFlavor === true && (!Array.isArray(payload.flavorOptions) || !payload.flavorOptions.length)) {
+      msg((namePrefix || "此商品") + "已勾選需要口味，請至少勾選一個可用口味");
+      return false;
+    }
+    if (payload.requiresStaple === true && (!Array.isArray(payload.stapleOptions) || !payload.stapleOptions.length)) {
+      msg((namePrefix || "此商品") + "已勾選需要主食，請至少勾選一個可用主食");
+      return false;
+    }
+    return true;
+  }
+
+  async function saveComboTemplate() {
+    if (!canManage()) return;
+    var payload = buildCombo();
+    if (!validateSpecRequirements(payload, "此套餐")) return;
+    await saveDoc("comboTemplates", "combo", payload);
+  }
+
   async function saveMenuItem() {
     if (!canManage()) return;
 
@@ -1498,6 +2145,7 @@
     }
 
     var payload = buildMenuItem();
+    if (!validateSpecRequirements(payload, "此品項")) return;
     var firestoreData = {
       storeId: storeId,
       name: payload.name,
@@ -1510,6 +2158,13 @@
       enabled: payload.isActive,
       isStaple: payload.isStaple,
       requiresFlavor: payload.requiresFlavor,
+      requiresStaple: payload.requiresStaple,
+      flavorOptions: payload.flavorOptions,
+      stapleOptions: payload.stapleOptions,
+      posHidden: payload.posHidden === true,
+      posVisible: payload.posHidden !== true,
+      posDisabledFlavorOptions: payload.posDisabledFlavorOptions,
+      posDisabledStapleOptions: payload.posDisabledStapleOptions,
       quickAdd: payload.quickAdd,
       description: payload.description,
       imageUrl: payload.imageUrl,
@@ -1553,6 +2208,14 @@
         tags: item.tags,
         unit: item.unit,
         optionGroups: item.optionGroups,
+        requiresFlavor: item.requiresFlavor === true,
+        requiresStaple: item.requiresStaple === true,
+        flavorOptions: Array.isArray(item.flavorOptions) ? item.flavorOptions : [],
+        stapleOptions: Array.isArray(item.stapleOptions) ? item.stapleOptions : [],
+        posHidden: item.posHidden === true,
+        posVisible: item.posHidden !== true,
+        posDisabledFlavorOptions: Array.isArray(item.posDisabledFlavorOptions) ? item.posDisabledFlavorOptions : [],
+        posDisabledStapleOptions: Array.isArray(item.posDisabledStapleOptions) ? item.posDisabledStapleOptions : [],
         isActive: newActive,
         enabled: newActive,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1612,6 +2275,430 @@
     msg("營業狀態設定已儲存");
   }
 
+  function getDefaultKdsTimingRules() {
+    var helpers = window.LeLeShanOrders;
+    return (helpers && helpers.DEFAULT_KDS_TIMING_RULES)
+      ? JSON.parse(JSON.stringify(helpers.DEFAULT_KDS_TIMING_RULES))
+      : {
+        queueBaseMinutes: { first: 5, second: 7, third: 10, afterThirdIncrement: 3 },
+        amountRule: { baseAmount: 200, stepAmount: 100, stepMinutes: 2, roundUp: true },
+        longCookRule: { enabled: true, minMinutes: 6.5, keywords: ["火鍋料", "寬粉", "水餃", "玉米筍", "烏龍麵"] },
+        startBufferMinutes: 1,
+        overdueAlertAfterMinutes: 3
+      };
+  }
+
+  function getCurrentKdsTimingRules() {
+    var helpers = window.LeLeShanOrders;
+    if (helpers && typeof helpers.getKdsTimingRules === "function") {
+      return helpers.getKdsTimingRules(data.settings || {});
+    }
+    return getDefaultKdsTimingRules();
+  }
+
+  function fillKdsTimingForm() {
+    var r = getCurrentKdsTimingRules();
+    var q = r.queueBaseMinutes || {};
+    var a = r.amountRule || {};
+    var tiers = Array.isArray(a.tiers) && a.tiers.length >= 4 ? a.tiers : [
+      { upTo: 200, minutes: 0 }, { upTo: 400, minutes: 2 }, { upTo: 700, minutes: 4 }, { upTo: null, minutes: 6 }
+    ];
+    var lo = r.largeOrderRule || {};
+    var l = r.longCookRule || {};
+    function setVal(id, v) { var el = document.getElementById(id); if (el) el.value = (v == null ? "" : v); }
+    function setChk(id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; }
+
+    // queueBaseMinutes slots（v2.7）：若 stored 無 slots 則用 first/second/third + 預設再填回前 6 格
+    var defaultSlots = [5, 6, 8, 11, 14, 17];
+    var slotsByPos = {};
+    if (Array.isArray(q.slots) && q.slots.length) {
+      q.slots.forEach(function (s) {
+        if (s && Number.isFinite(Number(s.position))) slotsByPos[Number(s.position)] = Number(s.minutes);
+      });
+    }
+    for (var i = 1; i <= 6; i++) {
+      var val;
+      if (slotsByPos[i] != null && Number.isFinite(slotsByPos[i])) val = slotsByPos[i];
+      else if (i === 1 && Number.isFinite(Number(q.first))) val = Number(q.first);
+      else if (i === 2 && Number.isFinite(Number(q.second))) val = Number(q.second);
+      else if (i === 3 && Number.isFinite(Number(q.third))) val = Number(q.third);
+      else if (i > 3 && Number.isFinite(Number(q.third)) && Number.isFinite(Number(q.afterThirdIncrement))) {
+        val = Number(q.third) + (i - 3) * Number(q.afterThirdIncrement);
+      } else {
+        val = defaultSlots[i - 1];
+      }
+      setVal("kdst-queue-slot" + i, val);
+    }
+    var afterLast = q.afterLastIncrement != null ? Number(q.afterLastIncrement) : (Number.isFinite(Number(q.afterThirdIncrement)) ? Number(q.afterThirdIncrement) : 3);
+    setVal("kdst-queue-after-last", afterLast);
+    // tiered 金額加時
+    setVal("kdst-amt-tier1-upto", tiers[0] && tiers[0].upTo);
+    setVal("kdst-amt-tier1-min",  tiers[0] && tiers[0].minutes);
+    setVal("kdst-amt-tier2-upto", tiers[1] && tiers[1].upTo);
+    setVal("kdst-amt-tier2-min",  tiers[1] && tiers[1].minutes);
+    setVal("kdst-amt-tier3-upto", tiers[2] && tiers[2].upTo);
+    setVal("kdst-amt-tier3-min",  tiers[2] && tiers[2].minutes);
+    setVal("kdst-amt-tier4-min",  tiers[3] && tiers[3].minutes);
+    // 超大單
+    setChk("kdst-large-enabled", lo.enabled !== false);
+    setVal("kdst-large-item1", lo.itemCountThreshold1);
+    setVal("kdst-large-extra1", lo.extraMinutes1);
+    setVal("kdst-large-item2", lo.itemCountThreshold2);
+    setVal("kdst-large-extra2", lo.extraMinutes2);
+    setVal("kdst-large-group1", lo.groupCountThreshold1);
+    setVal("kdst-large-group2", lo.groupCountThreshold2);
+    // 長煮
+    setChk("kdst-long-enabled", l.enabled !== false);
+    setVal("kdst-long-min", l.minMinutes);
+    setVal("kdst-long-keywords", Array.isArray(l.keywords) ? l.keywords.join("\n") : "");
+    // 其他
+    setVal("kdst-buffer", r.startBufferMinutes);
+    setVal("kdst-overdue-alert", r.overdueAlertAfterMinutes);
+  }
+
+  function renderKdsTimingSummary() {
+    var el = document.getElementById("kds-timing-summary-text");
+    if (!el) return;
+    var r = getCurrentKdsTimingRules();
+    var q = r.queueBaseMinutes || {};
+    var a = r.amountRule || {};
+    var lo = r.largeOrderRule || {};
+    var l = r.longCookRule || {};
+    var keywordsStr = Array.isArray(l.keywords) && l.keywords.length ? l.keywords.join("、") : "（無）";
+
+    var tierStr;
+    if (Array.isArray(a.tiers) && a.tiers.length) {
+      var parts = [];
+      var prev = 0;
+      a.tiers.forEach(function (t, idx) {
+        var mins = Number(t.minutes) || 0;
+        if (t.upTo == null) {
+          parts.push(prev + 1 + "+ 元 → +" + mins + " 分（封頂）");
+        } else {
+          var lower = idx === 0 ? 0 : (prev + 1);
+          parts.push(lower + "–" + t.upTo + " 元 → +" + mins + " 分");
+          prev = Number(t.upTo);
+        }
+      });
+      tierStr = parts.join("、");
+    } else {
+      tierStr = esc(a.baseAmount) + "元以上，每" + esc(a.stepAmount) + "元 +" + esc(a.stepMinutes) + "分（legacy 線性）";
+    }
+
+    var largeStr = lo.enabled === false
+      ? "未啟用"
+      : ("item≥" + esc(lo.itemCountThreshold1) + " 或 group≥" + esc(lo.groupCountThreshold1) + " → +" + esc(lo.extraMinutes1) + " 分；"
+        + "item≥" + esc(lo.itemCountThreshold2) + " 或 group≥" + esc(lo.groupCountThreshold2) + " → +" + esc(lo.extraMinutes2) + " 分（取較大級）");
+
+    var queueStr;
+    if (Array.isArray(q.slots) && q.slots.length) {
+      var sortedSlots = q.slots.slice().sort(function (a, b) { return Number(a.position) - Number(b.position); });
+      var inc = Number(q.afterLastIncrement);
+      if (!Number.isFinite(inc)) inc = 3;
+      var lastPos = Number(sortedSlots[sortedSlots.length - 1].position);
+      queueStr = sortedSlots.map(function (s) { return "第" + s.position + "張=" + s.minutes + "分"; }).join("、") + "、第" + (lastPos + 1) + "張起每張 +" + inc + " 分";
+    } else {
+      queueStr = "1=" + esc(q.first) + "分、2=" + esc(q.second) + "分、3=" + esc(q.third) + "分、第4張起每張+" + esc(q.afterThirdIncrement) + "分";
+    }
+
+    el.innerHTML =
+      '<div class="admin-form" style="max-width:780px;">' +
+      '<p><strong>隊列基礎：</strong>' + esc(queueStr) + '</p>' +
+      '<p><strong>金額加時：</strong>' + esc(tierStr) + '</p>' +
+      '<p><strong>超大單加時：</strong>' + esc(largeStr) + '</p>' +
+      '<p><strong>長時食材：</strong>' + (l.enabled === false ? "未啟用" : ("最低 " + esc(l.minMinutes) + " 分；關鍵字：" + esc(keywordsStr))) + '</p>' +
+      '<p><strong>其他：</strong>提前緩衝 ' + esc(r.startBufferMinutes) + ' 分、逾時 ' + esc(r.overdueAlertAfterMinutes) + ' 分強警示</p>' +
+      '</div>';
+  }
+
+  async function saveKdsTiming(event) {
+    event.preventDefault();
+    if (!canManage()) return;
+    function numOrDefault(id, fallback) {
+      var el = document.getElementById(id);
+      var v = el ? Number(el.value) : NaN;
+      return Number.isFinite(v) ? v : fallback;
+    }
+    var defaults = getDefaultKdsTimingRules();
+    var keywordsRaw = (document.getElementById("kdst-long-keywords") || {}).value || "";
+    var keywords = keywordsRaw.split(/\r?\n/).map(function (s) { return String(s || "").trim(); }).filter(Boolean);
+
+    var tiers = [
+      { upTo: numOrDefault("kdst-amt-tier1-upto", defaults.amountRule.tiers[0].upTo), minutes: numOrDefault("kdst-amt-tier1-min", defaults.amountRule.tiers[0].minutes) },
+      { upTo: numOrDefault("kdst-amt-tier2-upto", defaults.amountRule.tiers[1].upTo), minutes: numOrDefault("kdst-amt-tier2-min", defaults.amountRule.tiers[1].minutes) },
+      { upTo: numOrDefault("kdst-amt-tier3-upto", defaults.amountRule.tiers[2].upTo), minutes: numOrDefault("kdst-amt-tier3-min", defaults.amountRule.tiers[2].minutes) },
+      { upTo: null, minutes: numOrDefault("kdst-amt-tier4-min", defaults.amountRule.tiers[3].minutes) }
+    ];
+
+    var defaultSlots = Array.isArray(defaults.queueBaseMinutes.slots) ? defaults.queueBaseMinutes.slots : [
+      { position: 1, minutes: 5 }, { position: 2, minutes: 6 }, { position: 3, minutes: 8 },
+      { position: 4, minutes: 11 }, { position: 5, minutes: 14 }, { position: 6, minutes: 17 }
+    ];
+    var queueSlots = [1,2,3,4,5,6].map(function (pos) {
+      var ds = defaultSlots.find(function (s) { return Number(s.position) === pos; }) || { minutes: 5 };
+      return { position: pos, minutes: numOrDefault("kdst-queue-slot" + pos, ds.minutes) };
+    });
+    var afterLastInc = numOrDefault("kdst-queue-after-last", defaults.queueBaseMinutes.afterLastIncrement != null ? defaults.queueBaseMinutes.afterLastIncrement : 3);
+
+    var kdsTimingRules = {
+      queueBaseMinutes: {
+        mode: "parallel_capacity",
+        slots: queueSlots,
+        afterLastIncrement: afterLastInc,
+        // legacy 欄位同步維護，保留對舊程式碼的相容性
+        first: queueSlots[0].minutes,
+        second: queueSlots[1].minutes,
+        third: queueSlots[2].minutes,
+        afterThirdIncrement: afterLastInc
+      },
+      amountRule: {
+        mode: "tiered_cap",
+        baseAmount: tiers[0].upTo,
+        tiers: tiers
+      },
+      largeOrderRule: {
+        enabled: !!checked("kdst-large-enabled"),
+        itemCountThreshold1: numOrDefault("kdst-large-item1", defaults.largeOrderRule.itemCountThreshold1),
+        extraMinutes1: numOrDefault("kdst-large-extra1", defaults.largeOrderRule.extraMinutes1),
+        itemCountThreshold2: numOrDefault("kdst-large-item2", defaults.largeOrderRule.itemCountThreshold2),
+        extraMinutes2: numOrDefault("kdst-large-extra2", defaults.largeOrderRule.extraMinutes2),
+        groupCountThreshold1: numOrDefault("kdst-large-group1", defaults.largeOrderRule.groupCountThreshold1),
+        groupCountThreshold2: numOrDefault("kdst-large-group2", defaults.largeOrderRule.groupCountThreshold2)
+      },
+      longCookRule: {
+        enabled: !!checked("kdst-long-enabled"),
+        minMinutes: numOrDefault("kdst-long-min", defaults.longCookRule.minMinutes),
+        keywords: keywords.length ? keywords : defaults.longCookRule.keywords
+      },
+      startBufferMinutes: numOrDefault("kdst-buffer", defaults.startBufferMinutes),
+      overdueAlertAfterMinutes: numOrDefault("kdst-overdue-alert", defaults.overdueAlertAfterMinutes)
+    };
+
+    await db.collection("settings").doc(storeId).set({
+      storeId: storeId,
+      kdsTimingRules: kdsTimingRules,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    closeModal();
+    await loadScoped();
+    msg("KDS 出餐時間規則已儲存");
+  }
+
+  function runKdsTimingSimulator() {
+    var helpers = window.LeLeShanOrders;
+    var resultEl = document.getElementById("kdst-sim-result");
+    if (!helpers || typeof helpers.estimateOrderPrepMinutes !== "function") {
+      if (resultEl) resultEl.textContent = "估時函式尚未載入，請重新整理頁面";
+      return;
+    }
+    var pos = Number((document.getElementById("kdst-sim-position") || {}).value);
+    if (!Number.isFinite(pos) || pos < 1) pos = 1;
+    var amount = Number((document.getElementById("kdst-sim-amount") || {}).value) || 0;
+    var itemsRaw = (document.getElementById("kdst-sim-items") || {}).value || "";
+    var itemNames = itemsRaw.split(/\r?\n/).map(function (s) { return String(s || "").trim(); }).filter(Boolean);
+
+    // 若表單有編輯中但尚未儲存的值，優先用表單值讓使用者即時預覽
+    var rules;
+    var form = document.getElementById("kds-timing-form");
+    if (form && form.offsetParent !== null) {
+      var defaults = getDefaultKdsTimingRules();
+      function num(id, fb) { var el = document.getElementById(id); var v = el ? Number(el.value) : NaN; return Number.isFinite(v) ? v : fb; }
+      var keywordsRaw = (document.getElementById("kdst-long-keywords") || {}).value || "";
+      var keywords = keywordsRaw.split(/\r?\n/).map(function (s) { return String(s || "").trim(); }).filter(Boolean);
+      var formTiers = [
+        { upTo: num("kdst-amt-tier1-upto", defaults.amountRule.tiers[0].upTo), minutes: num("kdst-amt-tier1-min", defaults.amountRule.tiers[0].minutes) },
+        { upTo: num("kdst-amt-tier2-upto", defaults.amountRule.tiers[1].upTo), minutes: num("kdst-amt-tier2-min", defaults.amountRule.tiers[1].minutes) },
+        { upTo: num("kdst-amt-tier3-upto", defaults.amountRule.tiers[2].upTo), minutes: num("kdst-amt-tier3-min", defaults.amountRule.tiers[2].minutes) },
+        { upTo: null, minutes: num("kdst-amt-tier4-min", defaults.amountRule.tiers[3].minutes) }
+      ];
+      var simDefaultSlots = Array.isArray(defaults.queueBaseMinutes.slots) ? defaults.queueBaseMinutes.slots : [];
+      var simSlots = [1,2,3,4,5,6].map(function (pos) {
+        var ds = simDefaultSlots.find(function (s) { return Number(s.position) === pos; }) || { minutes: 5 };
+        return { position: pos, minutes: num("kdst-queue-slot" + pos, ds.minutes) };
+      });
+      var simAfterLast = num("kdst-queue-after-last", defaults.queueBaseMinutes.afterLastIncrement != null ? defaults.queueBaseMinutes.afterLastIncrement : 3);
+      rules = {
+        queueBaseMinutes: {
+          mode: "parallel_capacity",
+          slots: simSlots,
+          afterLastIncrement: simAfterLast,
+          first: simSlots[0].minutes,
+          second: simSlots[1].minutes,
+          third: simSlots[2].minutes,
+          afterThirdIncrement: simAfterLast
+        },
+        amountRule: { mode: "tiered_cap", baseAmount: formTiers[0].upTo, tiers: formTiers },
+        largeOrderRule: {
+          enabled: !!checked("kdst-large-enabled"),
+          itemCountThreshold1: num("kdst-large-item1", defaults.largeOrderRule.itemCountThreshold1),
+          extraMinutes1: num("kdst-large-extra1", defaults.largeOrderRule.extraMinutes1),
+          itemCountThreshold2: num("kdst-large-item2", defaults.largeOrderRule.itemCountThreshold2),
+          extraMinutes2: num("kdst-large-extra2", defaults.largeOrderRule.extraMinutes2),
+          groupCountThreshold1: num("kdst-large-group1", defaults.largeOrderRule.groupCountThreshold1),
+          groupCountThreshold2: num("kdst-large-group2", defaults.largeOrderRule.groupCountThreshold2)
+        },
+        longCookRule: {
+          enabled: !!checked("kdst-long-enabled"),
+          minMinutes: num("kdst-long-min", defaults.longCookRule.minMinutes),
+          keywords: keywords.length ? keywords : defaults.longCookRule.keywords
+        },
+        startBufferMinutes: num("kdst-buffer", defaults.startBufferMinutes),
+        overdueAlertAfterMinutes: num("kdst-overdue-alert", defaults.overdueAlertAfterMinutes)
+      };
+    } else {
+      rules = getCurrentKdsTimingRules();
+    }
+
+    var fakeOrder = {
+      id: "__sim__",
+      total: amount,
+      items: itemNames.map(function (n) { return { name: n, qty: 1 }; })
+    };
+
+    // 模擬 group / item 數：填了就優先用，沒填就從 items 推估
+    var simGroupRaw = (document.getElementById("kdst-sim-group-count") || {}).value;
+    var simItemRaw = (document.getElementById("kdst-sim-item-count") || {}).value;
+    var simContext = { queuePosition: pos };
+    var hasSimGroup = simGroupRaw !== "" && simGroupRaw != null && Number.isFinite(Number(simGroupRaw));
+    var hasSimItem = simItemRaw !== "" && simItemRaw != null && Number.isFinite(Number(simItemRaw));
+    if (hasSimGroup) simContext.groupCount = Number(simGroupRaw);
+    if (hasSimItem) simContext.itemCount = Number(simItemRaw);
+
+    var result = helpers.estimateOrderPrepMinutes(fakeOrder, simContext, rules);
+    var bd = result.breakdown || {};
+    var matchedNames = Array.isArray(bd.longCookMatchedNames) ? bd.longCookMatchedNames : [];
+
+    if (!resultEl) return;
+    resultEl.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;max-width:560px;">' +
+      '<div>排隊位置</div><div><strong>第 ' + esc(bd.queuePosition || pos) + ' 張</strong></div>' +
+      '<div>隊列基礎分鐘</div><div><strong>' + esc(bd.queueBaseMinutes || 0) + ' 分</strong></div>' +
+      '<div>金額加時分鐘</div><div><strong>+' + esc(bd.amountMinutes || 0) + ' 分</strong></div>' +
+      '<div>超大單加時</div><div><strong>+' + esc(bd.extraLargeOrderMinutes || 0) + ' 分</strong></div>' +
+      '<div>group / item 統計</div><div><strong>' + esc(bd.groupCount || 0) + ' 組 / ' + esc(bd.itemCount || 0) + ' 項</strong></div>' +
+      '<div>長煮下限命中</div><div><strong>' + (bd.longCookFloorApplied ? "是" : "否") + '</strong></div>' +
+      '<div>命中食材</div><div><strong>' + esc(matchedNames.length ? matchedNames.join("、") : "—") + '</strong></div>' +
+      '<div style="border-top:1px solid #e5e7eb;margin-top:6px;padding-top:6px;">最終預估</div>' +
+      '<div style="border-top:1px solid #e5e7eb;margin-top:6px;padding-top:6px;"><strong style="color:#2563eb;font-size:1.05rem;">' + esc(result.prepMinutes) + ' 分</strong></div>' +
+      '</div>';
+  }
+
+  function employeePinValid(pin) {
+    return /^[0-9]{4}$/.test(String(pin || ""));
+  }
+
+  function populateEmployeeStoreSelect() {
+    var select = document.getElementById("employee-store-id");
+    if (!select) return;
+    var options = (isOwner() ? data.stores : data.stores.filter(function (s) { return s.id === storeId; }))
+      .map(function (s) {
+        return '<option value="' + esc(s.id) + '">' + esc(s.name || s.id) + "</option>";
+      }).join("");
+    select.innerHTML = options || '<option value="' + esc(storeId || "") + '">' + esc(storeId || "") + "</option>";
+    select.value = storeId || (data.stores[0] && data.stores[0].id) || "";
+    select.disabled = !isOwner();
+  }
+
+  function openEmployeePinForm(id) {
+    if (!canManage()) return;
+    var item = data.employees.find(function (entry) { return entry.id === id; });
+    if (!item) return;
+    var targetId = document.getElementById("employee-pin-target-id");
+    var targetLabel = document.getElementById("employee-pin-target-label");
+    var pinInput = document.getElementById("employee-pin-reset");
+    if (targetId) targetId.value = item.id;
+    if (targetLabel) targetLabel.value = (item.employeeId || "") + " / " + (item.name || "");
+    if (pinInput) pinInput.value = "";
+    openModal("employee-pin", "重設");
+  }
+
+  async function saveEmployee(event) {
+    event.preventDefault();
+    if (!canManage()) return;
+    if (savingEmployee) return;
+
+    var form = event.currentTarget || document.getElementById("employee-form");
+    var submitBtn = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
+
+    var originalId = val("employee-original-id");
+    var name = val("employee-name");
+    var employeeId = val("employee-id");
+    var employeeStoreId = val("employee-store-id") || storeId;
+    var isActive = checked("employee-active");
+    var pin = val("employee-pin");
+
+    if (!name || !employeeId) {
+      msg("員工姓名與員工編號不可空白");
+      return;
+    }
+    if (!originalId && !employeePinValid(pin)) {
+      msg("PIN 必須是 4 位數字");
+      return;
+    }
+
+    savingEmployee = true;
+    if (submitBtn) {
+      submitBtn.dataset.originalText = submitBtn.textContent || "儲存員工";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "儲存中...";
+    }
+
+    if (!functionsApi) { msg("Functions 服務未就緒，請重新整理"); savingEmployee = false; return; }
+    var callable = functionsApi.httpsCallable("upsertEmployee");
+    try {
+      await callable({
+        employeeDocId: originalId || null,
+        name: name,
+        employeeId: employeeId,
+        pin: pin || null,
+        storeId: employeeStoreId,
+        isActive: isActive,
+        sessionHours: EMPLOYEE_SESSION_HOURS
+      });
+      closeModal();
+      await loadScoped();
+      msg(originalId ? "員工資料已更新" : "員工已新增");
+    } catch (error) {
+      console.error("[AdminEmployee] save failed.", error);
+      var code = (error && error.code) || "";
+      if (code === "already-exists" || code === "functions/already-exists") {
+        msg("員工編號已存在，請使用其他編號");
+      } else {
+        msg((error && error.message) || "員工儲存失敗");
+      }
+    } finally {
+      savingEmployee = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = submitBtn.dataset.originalText || "儲存員工";
+      }
+    }
+  }
+
+  async function resetEmployeePin(event) {
+    event.preventDefault();
+    if (!canManage()) return;
+    var id = val("employee-pin-target-id");
+    var pin = val("employee-pin-reset");
+    if (!id) return;
+    if (!employeePinValid(pin)) {
+      msg("PIN 必須是 4 位數字");
+      return;
+    }
+    if (!functionsApi) { msg("Functions 服務未就緒，請重新整理"); return; }
+    var callable = functionsApi.httpsCallable("resetEmployeePin");
+    try {
+      await callable({ employeeDocId: id, pin: pin });
+      closeModal();
+      await loadScoped();
+      msg("員工 PIN 已重設");
+    } catch (error) {
+      console.error("[AdminEmployee] reset pin failed.", error);
+      msg((error && error.message) || "重設 PIN 失敗");
+    }
+  }
+
   function buildCategory() {
     var themeValue = val("category-bg-color") || DEFAULT_CATEGORY_COLOR;
     return {
@@ -1638,19 +2725,36 @@
       optionGroups: json("menu-option-groups"),
       isStaple: checked("menu-is-staple"),
       requiresFlavor: checked("menu-requires-flavor"),
+      requiresStaple: checked("menu-requires-staple"),
+      flavorOptions: readSpecOptionCheckboxes("menu-flavor-options"),
+      stapleOptions: readSpecOptionCheckboxes("menu-staple-options"),
+      posHidden: checked("menu-pos-hidden"),
+      posVisible: !checked("menu-pos-hidden"),
+      posDisabledFlavorOptions: readSpecOptionCheckboxes("menu-pos-disabled-flavors"),
+      posDisabledStapleOptions: readSpecOptionCheckboxes("menu-pos-disabled-staples"),
       quickAdd: checked("menu-quick-add"),
       isActive: checked("menu-enabled")
     };
   }
 
   function buildCombo() {
+    var sortValue = val("combo-sort");
     return {
       name: val("combo-name"),
       price: num("combo-price"),
-      sort: num("combo-sort"),
+      sort: sortValue === "" ? 999 : Number(sortValue),
+      category: "套餐",
       description: val("combo-description"),
       tags: csv("combo-tags"),
       optionGroups: readComboGroups(),
+      requiresFlavor: checked("combo-requires-flavor"),
+      requiresStaple: checked("combo-requires-staple"),
+      flavorOptions: readSpecOptionCheckboxes("combo-flavor-options"),
+      stapleOptions: readSpecOptionCheckboxes("combo-staple-options"),
+      posHidden: checked("combo-pos-hidden"),
+      posVisible: !checked("combo-pos-hidden"),
+      posDisabledFlavorOptions: readSpecOptionCheckboxes("combo-pos-disabled-flavors"),
+      posDisabledStapleOptions: readSpecOptionCheckboxes("combo-pos-disabled-staples"),
       enabled: checked("combo-enabled")
     };
   }
@@ -1698,6 +2802,30 @@
     var panelName = panelType(type);
     var form = document.getElementById(panelName + "-form");
     if (form) form.reset();
+    if (panelName === "menu" || panelName === "combo") {
+      var specOptions = getGlobalSpecOptions();
+      if (panelName === "menu") {
+        renderSpecOptionCheckboxes("menu-flavor-options", specOptions.flavorOptions, []);
+        renderSpecOptionCheckboxes("menu-staple-options", specOptions.stapleOptions, []);
+        renderSpecOptionCheckboxes("menu-pos-disabled-flavors", specOptions.flavorOptions, []);
+        renderSpecOptionCheckboxes("menu-pos-disabled-staples", specOptions.stapleOptions, []);
+      } else {
+        renderSpecOptionCheckboxes("combo-flavor-options", specOptions.flavorOptions, []);
+        renderSpecOptionCheckboxes("combo-staple-options", specOptions.stapleOptions, []);
+        renderSpecOptionCheckboxes("combo-pos-disabled-flavors", specOptions.flavorOptions, []);
+        renderSpecOptionCheckboxes("combo-pos-disabled-staples", specOptions.stapleOptions, []);
+      }
+      toggleSpecOptionVisibility();
+    }
+    if (panelName === "employee") {
+      var employeeIdInput = document.getElementById("employee-id");
+      if (employeeIdInput) employeeIdInput.disabled = false;
+      var pinWrap = document.getElementById("employee-pin-wrap");
+      if (pinWrap) pinWrap.classList.remove("hidden");
+    }
+    if (panelName === "store") {
+      renderStoreHoursGrid(defaultBusinessHours());
+    }
     if (panelName === "combo") renderComboGroups([]);
     if (panelName === "category") {
       var select = document.getElementById("category-bg-color");
@@ -1710,7 +2838,7 @@
   }
 
   function panelType(type) {
-    var map = { stores: "store", categories: "category", combos: "combo", flavors: "flavor", promotions: "promotion" };
+    var map = { stores: "store", categories: "category", combos: "combo", flavors: "flavor", promotions: "promotion", employees: "employee" };
     return map[type] || type;
   }
 
@@ -1723,7 +2851,10 @@
       flavor: "口味",
       inventory: "庫存",
       promotion: "優惠",
-      settings: "營業設定"
+      settings: "營業設定",
+      "kds-timing": "KDS 出餐時間規則",
+      employee: "員工",
+      "employee-pin": "PIN"
     };
     return map[type] || "資料";
   }
@@ -1736,6 +2867,7 @@
     if (type === "flavors") return data.flavors.find(function (item) { return item.id === id; });
     if (type === "inventory") return data.inventory.find(function (item) { return item.id === id; });
     if (type === "promotions") return data.promotions.find(function (item) { return item.id === id; });
+    if (type === "employees") return data.employees.find(function (item) { return item.id === id; });
     return null;
   }
 
@@ -1867,11 +2999,17 @@
       ["category-enabled", "category-enabled-label", "啟用中", "停用中"],
       ["menu-is-staple", "menu-is-staple-label", "主食類", "非主食"],
       ["menu-requires-flavor", "menu-requires-flavor-label", "需要選口味", "不需要口味"],
+      ["menu-requires-staple", "menu-requires-staple-label", "需要選主食", "不需要主食"],
+      ["menu-pos-hidden", "menu-pos-hidden-label", "POS 已隱藏", "POS 顯示中"],
       ["menu-quick-add", "menu-quick-add-label", "快速加購", "標準模式"],
       ["menu-enabled", "menu-enabled-label", "啟用中", "停用中"],
+      ["combo-requires-flavor", "combo-requires-flavor-label", "需要選口味", "不需要口味"],
+      ["combo-requires-staple", "combo-requires-staple-label", "需要選主食", "不需要主食"],
+      ["combo-pos-hidden", "combo-pos-hidden-label", "POS 已隱藏", "POS 顯示中"],
       ["combo-enabled", "combo-enabled-label", "啟用中", "停用中"],
       ["flavor-enabled", "flavor-enabled-label", "啟用中", "停用中"],
       ["promotion-enabled", "promotion-enabled-label", "啟用中", "停用中"],
+      ["employee-active", "employee-active-label", "啟用", "停用"],
       ["settings-open", "settings-open-label", "營業中", "休息中"],
       ["settings-promo-enabled", "settings-promo-enabled-label", "啟用中", "未啟用"]
     ].forEach(function (entry) {
@@ -1934,10 +3072,45 @@
     return item ? item.name : (categoryId || "未設定");
   }
 
+  function normalizeMenuCategoryName(item) {
+    var raw = item && (item.category || item.categoryId || item.categoryName || "");
+    var name = String(categoryName(raw) || "").trim();
+    if (!name) return "未分類";
+    if (name === "未設定") return "未分類";
+    return name;
+  }
+
+  function menuCategoryRank(name) {
+    var order = ["主食", "套餐", "肉品", "蔬菜", "火鍋料 A", "火鍋料 B", "飲品", "其他", "未分類"];
+    var index = order.indexOf(name);
+    return index >= 0 ? index : 999;
+  }
+
+  function groupMenuItemsByCategory(items) {
+    var groups = {};
+    (items || []).forEach(function (item) {
+      var groupName = normalizeMenuCategoryName(item);
+      if (!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(item);
+    });
+    return Object.keys(groups).sort(function (left, right) {
+      var leftRank = menuCategoryRank(left);
+      var rightRank = menuCategoryRank(right);
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return String(left || "").localeCompare(String(right || ""), "zh-Hant");
+    }).map(function (name) {
+      return {
+        name: name,
+        items: groups[name].slice().sort(byMenuSort)
+      };
+    });
+  }
+
   function normalizeMenuItem(item) {
     var normalized = { ...item };
     normalized.name = normalized.name || "";
     normalized.price = Number(normalized.price || 0);
+    normalized.category = normalized.category || "套餐";
     normalized.category = normalized.category || normalized.categoryId || "未分類";
     normalized.categoryId = normalized.category;
     normalized.sortOrder = Number(normalized.sortOrder != null ? normalized.sortOrder : (normalized.sort != null ? normalized.sort : 999));
@@ -1949,8 +3122,33 @@
     normalized.tags = Array.isArray(normalized.tags) ? normalized.tags : [];
     normalized.unit = normalized.unit || "";
     normalized.optionGroups = Array.isArray(normalized.optionGroups) ? normalized.optionGroups : [];
-    normalized.requiresFlavor = normalized.requiresFlavor !== false;
+    normalized.requiresFlavor = normalized.requiresFlavor === true;
+    normalized.requiresStaple = normalized.requiresStaple === true;
+    normalized.flavorOptions = Array.isArray(normalized.flavorOptions) ? normalized.flavorOptions : [];
+    normalized.stapleOptions = Array.isArray(normalized.stapleOptions) ? normalized.stapleOptions : [];
+    normalized.posHidden = normalized.posHidden === true || normalized.posVisible === false;
+    normalized.posDisabledFlavorOptions = Array.isArray(normalized.posDisabledFlavorOptions) ? normalized.posDisabledFlavorOptions : [];
+    normalized.posDisabledStapleOptions = Array.isArray(normalized.posDisabledStapleOptions) ? normalized.posDisabledStapleOptions : [];
     normalized.quickAdd = normalized.quickAdd === true;
+    return normalized;
+  }
+
+  function normalizeComboTemplate(item) {
+    var normalized = { ...item };
+    normalized.name = normalized.name || "";
+    normalized.price = Number(normalized.price || 0);
+    normalized.sort = Number(normalized.sort != null ? normalized.sort : 999);
+    normalized.description = normalized.description || "";
+    normalized.tags = Array.isArray(normalized.tags) ? normalized.tags : [];
+    normalized.optionGroups = Array.isArray(normalized.optionGroups) ? normalized.optionGroups : [];
+    normalized.enabled = normalized.enabled !== false && normalized.isActive !== false;
+    normalized.requiresFlavor = normalized.requiresFlavor === true;
+    normalized.requiresStaple = normalized.requiresStaple === true;
+    normalized.flavorOptions = Array.isArray(normalized.flavorOptions) ? normalized.flavorOptions : [];
+    normalized.stapleOptions = Array.isArray(normalized.stapleOptions) ? normalized.stapleOptions : [];
+    normalized.posHidden = normalized.posHidden === true || normalized.posVisible === false;
+    normalized.posDisabledFlavorOptions = Array.isArray(normalized.posDisabledFlavorOptions) ? normalized.posDisabledFlavorOptions : [];
+    normalized.posDisabledStapleOptions = Array.isArray(normalized.posDisabledStapleOptions) ? normalized.posDisabledStapleOptions : [];
     return normalized;
   }
 
@@ -2004,13 +3202,11 @@
   }
 
   function orderStatusText(status) {
-    var map = {
-      new: "新訂單",
-      preparing: "準備中",
-      done: "已完成",
-      cancelled: "已取消"
-    };
-    return map[status] || status;
+    if (window.LeLeShanOrderStatus && typeof window.LeLeShanOrderStatus.getLabel === "function") {
+      return window.LeLeShanOrderStatus.getLabel(status);
+    }
+    var meta = window.LeLeShanOrders.statusMeta(status);
+    return meta.label;
   }
 
   function orderItemsSummary(items, groups) {
@@ -2053,6 +3249,12 @@
   function byCreatedDesc(left, right) {
     var rightValue = right.createdAt || right.created_at || right.imported_at || right.updated_at || right.order_time;
     var leftValue = left.createdAt || left.created_at || left.imported_at || left.updated_at || left.order_time;
+    return toDate(rightValue) - toDate(leftValue);
+  }
+
+  function byUpdatedDesc(left, right) {
+    var rightValue = right.updatedAt || right.updated_at || right.createdAt || right.created_at;
+    var leftValue = left.updatedAt || left.updated_at || left.createdAt || left.created_at;
     return toDate(rightValue) - toDate(leftValue);
   }
 
@@ -2556,7 +3758,7 @@
   }
 
   function msg(text) {
-    el.status.textContent = text;
+    if (el.status) el.status.textContent = text;
     console.log("[Admin]", text);
   }
 
@@ -2574,6 +3776,12 @@
     el.lists.orders.innerHTML = displayed.map(function (order) {
       var normalizedOrder = window.LeLeShanOrders.normalizeOrder(order, order.id);
       var meta = window.LeLeShanOrders.statusMeta(normalizedOrder.status);
+      if (window.LeLeShanOrderStatus && typeof window.LeLeShanOrderStatus.getLabel === "function") {
+        meta = {
+          tone: meta.tone,
+          label: window.LeLeShanOrderStatus.getLabel(normalizedOrder.status)
+        };
+      }
       var archivedBadge = order.archived
         ? '<span style="background:#e5e5e5;color:#888;border-radius:4px;padding:1px 6px;font-size:0.75rem;margin-left:4px;">封存</span>'
         : "";
@@ -2737,6 +3945,9 @@
   }
 
   function orderStatusText(status) {
+    if (window.LeLeShanOrderStatus && typeof window.LeLeShanOrderStatus.getLabel === "function") {
+      return window.LeLeShanOrderStatus.getLabel(status);
+    }
     var meta = window.LeLeShanOrders.statusMeta(status);
     return meta.label;
   }
@@ -3003,4 +4214,362 @@
   }
 
   // HELPER_MARKER
+
+  // ── LINE Binding ─────────────────────────────────────────────
+
+  var lineBindState = {
+    targetCollection: null,
+    targetDocId: null,
+    targetName: null,
+    token: null,
+    expiresAt: null,
+    countdownTimer: null,
+    pollTimer: null,
+    unsubscribeBinding: null
+  };
+
+  async function loadAdmins() {
+    try {
+      var snap = isOwner()
+        ? await db.collection("admins").get()
+        : await db.collection("admins").where("storeId", "==", storeId).get();
+      data.admins = snap.docs.map(function (doc) {
+        var d = doc.data() || {};
+        d.id = doc.id;
+        return d;
+      });
+    } catch (e) {
+      console.warn("[AdminLine] loadAdmins failed.", e);
+      data.admins = [];
+    }
+  }
+
+  async function loadAndRenderAdmins() {
+    await loadAdmins();
+    renderAdminsLineSection();
+  }
+
+  function renderAdminsLineSection() {
+    if (!el.adminsLineList) return;
+    var admins = data.admins || [];
+    if (!admins.length) {
+      el.adminsLineList.innerHTML = '<article class="admin-empty-card" style="padding:12px 16px;font-size:.88rem;color:var(--admin-muted);">沒有管理員帳號資料</article>';
+      return;
+    }
+    el.adminsLineList.innerHTML = admins.map(function (item) {
+      return buildAdminLineCard(item, "admins");
+    }).join("");
+  }
+
+  function renderEmployeeLineBinding() {
+    if (!el.lists.employees) return;
+    el.lists.employees.innerHTML = (data.employees || []).map(function (item) {
+      var isBound = item.line_binding_status === "bound" && item.line_user_id;
+      var notifyChecked = item.notify_line_new_orders ? " checked" : "";
+      var confirmChecked = item.can_confirm_line_orders ? " checked" : "";
+      var toggleDisabled = !isBound ? " disabled" : "";
+      var toggleRowClass = !isBound ? " disabled" : "";
+
+      var togglesHtml = canManage()
+        ? '<div class="admin-line-item__toggles" style="margin-top:8px;">' +
+            '<label class="line-toggle-row' + toggleRowClass + '" title="' + (isBound ? "" : "請先綁定 LINE 才能啟用通知") + '">' +
+              '<input type="checkbox"' + notifyChecked + toggleDisabled +
+                ' data-line-notify-toggle="true" data-target-collection="employees" data-target-id="' + esc(item.id) + '">' +
+              '<span class="toggle-label-text">接收 LINE 新訂單通知</span>' +
+            '</label>' +
+            '<label class="line-toggle-row' + toggleRowClass + '" title="' + (isBound ? "" : "請先綁定 LINE 才能啟用") + '">' +
+              '<input type="checkbox"' + confirmChecked + toggleDisabled +
+                ' data-line-confirm-toggle="true" data-target-collection="employees" data-target-id="' + esc(item.id) + '">' +
+              '<span class="toggle-label-text">可確認 LINE 訂單</span>' +
+            '</label>' +
+          '</div>'
+        : "";
+
+      var action = canManage()
+        ? '<div class="admin-order-actions">' +
+            '<button type="button" data-edit="employees" data-id="' + esc(item.id) + '">編輯</button>' +
+            '<button type="button" data-employee-reset-pin="' + esc(item.id) + '">重設 PIN</button>' +
+            buildLineBindButtonsHtml("employees", item.id, item.name || item.employeeId || item.id, item) +
+          '</div>' +
+          togglesHtml
+        : "";
+      return buildCard(item.name || item.employeeId || item.id, [
+        { label: "員工姓名", value: item.name || "" },
+        { label: "員工編號", value: item.employeeId || "" },
+        { label: "所屬門市", value: item.storeId || "" },
+        { label: "啟用狀態", value: statusPill(item.isActive !== false ? "啟用" : "停用", item.isActive !== false), html: true },
+        { label: "LINE 綁定", value: buildLineBindStatusHtml(item), html: true },
+        { label: "更新時間", value: item.updatedAt ? formatDate(item.updatedAt) : (item.createdAt ? formatDate(item.createdAt) : "—") }
+      ], action);
+    }).join("") || emptyCard("目前沒有員工資料");
+  }
+
+  function buildLineBindStatusHtml(item) {
+    var isBound = item.line_binding_status === "bound" && item.line_user_id;
+    if (isBound) {
+      var masked = String(item.line_user_id).slice(0, 4) + "..." + String(item.line_user_id).slice(-4);
+      return '<span class="line-bind-status-badge line-bind-status-badge--bound">✅ 已綁定 <span class="line-masked-uid">' + esc(masked) + '</span></span>';
+    }
+    return '<span class="line-bind-status-badge line-bind-status-badge--unbound">⬜ 未綁定</span>';
+  }
+
+  function buildLineBindButtonsHtml(collection, docId, name, item) {
+    if (!canManage()) return "";
+    var isBound = item.line_binding_status === "bound" && item.line_user_id;
+    if (isBound) {
+      return '<button type="button" class="line-bind-btn line-bind-btn--rebind" data-line-rebind="true" data-target-collection="' + esc(collection) + '" data-target-id="' + esc(docId) + '" data-target-name="' + esc(name) + '">重新綁定</button>' +
+        '<button type="button" class="line-bind-btn line-bind-btn--unbind" data-line-unbind="true" data-target-collection="' + esc(collection) + '" data-target-id="' + esc(docId) + '" data-target-name="' + esc(name) + '">解除綁定</button>';
+    }
+    return '<button type="button" class="line-bind-btn line-bind-btn--bind" data-line-bind="true" data-target-collection="' + esc(collection) + '" data-target-id="' + esc(docId) + '" data-target-name="' + esc(name) + '">綁定 LINE</button>';
+  }
+
+  function buildAdminLineCard(item, collection) {
+    var isBound = item.line_binding_status === "bound" && item.line_user_id;
+    var masked = isBound ? (String(item.line_user_id).slice(0, 4) + "..." + String(item.line_user_id).slice(-4)) : "";
+    var boundAt = (isBound && item.line_bound_at) ? formatDate(item.line_bound_at) : "";
+
+    var statusHtml = isBound
+      ? '<span class="line-bind-status-badge line-bind-status-badge--bound">✅ 已綁定</span>' +
+        (masked ? ' <span class="line-masked-uid">' + esc(masked) + '</span>' : "") +
+        (boundAt ? '<div class="line-bind-bound-at">綁定於 ' + esc(boundAt) + '</div>' : "")
+      : '<span class="line-bind-status-badge line-bind-status-badge--unbound">⬜ 未綁定</span>';
+
+    var bindActions = "";
+    if (canManage()) {
+      if (isBound) {
+        bindActions = '<button type="button" class="line-bind-btn line-bind-btn--rebind" data-line-rebind="true" data-target-collection="' + esc(collection) + '" data-target-id="' + esc(item.id) + '" data-target-name="' + esc(item.name || item.id) + '">重新綁定</button>' +
+          '<button type="button" class="line-bind-btn line-bind-btn--unbind" data-line-unbind="true" data-target-collection="' + esc(collection) + '" data-target-id="' + esc(item.id) + '" data-target-name="' + esc(item.name || item.id) + '">解除綁定</button>';
+      } else {
+        bindActions = '<button type="button" class="line-bind-btn line-bind-btn--bind" data-line-bind="true" data-target-collection="' + esc(collection) + '" data-target-id="' + esc(item.id) + '" data-target-name="' + esc(item.name || item.id) + '">綁定 LINE</button>';
+      }
+    }
+
+    return '<article class="admin-line-item">' +
+      '<div class="admin-line-item__info">' +
+        '<div class="admin-line-item__name">' + esc(item.name || item.id) + '</div>' +
+        '<div class="admin-line-item__meta">' +
+          '<span class="admin-role-badge admin-role-badge--' + esc(item.role || "admin") + '">' + esc(item.role || "admin") + '</span>' +
+          (item.storeId ? '<span style="font-size:.75rem;color:var(--admin-muted);">' + esc(item.storeId) + '</span>' : '') +
+        '</div>' +
+        '<div style="margin-top:8px;">' + statusHtml + '</div>' +
+      '</div>' +
+      '<div class="admin-line-item__actions">' + bindActions + '</div>' +
+    '</article>';
+  }
+
+  function openLineBindModal(targetCollection, targetDocId, targetName) {
+    if (!el.lineBindModal) return;
+    lineBindState.targetCollection = targetCollection;
+    lineBindState.targetDocId = targetDocId;
+    lineBindState.targetName = targetName || "未知帳號";
+
+    if (el.lineBindTargetLabel) el.lineBindTargetLabel.textContent = "綁定對象：" + (targetName || "未知帳號");
+    setLineBindModalStatus("正在產生 QR Code...", "loading");
+    if (el.lineBindQrCanvas) el.lineBindQrCanvas.innerHTML = "";
+    if (el.lineBindCountdown) el.lineBindCountdown.textContent = "";
+    if (el.lineBindRegenBtn) el.lineBindRegenBtn.classList.add("hidden");
+
+    el.lineBindModal.classList.remove("hidden");
+    generateLineBindToken(targetCollection, targetDocId, targetName);
+  }
+
+  function closeLineBindModal() {
+    if (!el.lineBindModal) return;
+    el.lineBindModal.classList.add("hidden");
+    clearLineBindTimers();
+  }
+
+  function clearLineBindTimers() {
+    if (lineBindState.countdownTimer) { clearInterval(lineBindState.countdownTimer); lineBindState.countdownTimer = null; }
+    if (lineBindState.pollTimer) { clearInterval(lineBindState.pollTimer); lineBindState.pollTimer = null; }
+    if (lineBindState.unsubscribeBinding) { try { lineBindState.unsubscribeBinding(); } catch (e) {} lineBindState.unsubscribeBinding = null; }
+  }
+
+  function setLineBindModalStatus(text, type) {
+    if (!el.lineBindModalStatus) return;
+    el.lineBindModalStatus.textContent = text;
+    el.lineBindModalStatus.className = "line-bind-modal-status line-bind-modal-status--" + (type || "loading");
+  }
+
+  async function generateLineBindToken(targetCollection, targetDocId, targetName) {
+    clearLineBindTimers();
+    if (el.lineBindQrCanvas) el.lineBindQrCanvas.innerHTML = "";
+    if (el.lineBindRegenBtn) el.lineBindRegenBtn.classList.add("hidden");
+    setLineBindModalStatus("正在產生 QR Code...", "loading");
+
+    try {
+      var callable = functionsApi.httpsCallable("createLineBindingToken");
+      var result = await callable({
+        targetCollection: targetCollection || lineBindState.targetCollection,
+        targetDocId: targetDocId || lineBindState.targetDocId,
+        targetName: targetName || lineBindState.targetName
+      });
+
+      if (!result.data || !result.data.ok) {
+        setLineBindModalStatus("❌ 產生 QR Code 失敗", "error");
+        if (el.lineBindRegenBtn) el.lineBindRegenBtn.classList.remove("hidden");
+        return;
+      }
+
+      lineBindState.token = result.data.token;
+      lineBindState.expiresAt = new Date(result.data.expiresAt);
+      var bindUrl = result.data.bindUrl;
+
+      // Generate QR Code
+      if (el.lineBindQrCanvas) {
+        el.lineBindQrCanvas.innerHTML = "";
+        el.lineBindQrCanvas.style.opacity = "1";
+        if (typeof QRCode !== "undefined") {
+          try {
+            new QRCode(el.lineBindQrCanvas, {
+              text: bindUrl,
+              width: 200,
+              height: 200,
+              colorDark: "#000000",
+              colorLight: "#ffffff",
+              correctLevel: QRCode.CorrectLevel.H
+            });
+            // Sanity check: QRCode renders a <canvas> or <svg> child; if nothing appeared, treat as failure
+            setTimeout(function() {
+              if (el.lineBindQrCanvas && el.lineBindQrCanvas.childNodes.length === 0) {
+                console.warn("[AdminLine] QRCode render produced no output, showing URL fallback.");
+                el.lineBindQrCanvas.innerHTML =
+                  '<div style="padding:12px;font-size:.8rem;color:#e11d48;">⚠️ QR Code 顯示失敗，請複製下方連結</div>' +
+                  '<div style="padding:8px 12px;font-size:.72rem;word-break:break-all;color:#333;">' + esc(bindUrl) + '</div>';
+              }
+            }, 300);
+          } catch (qrErr) {
+            console.error("[AdminLine] QRCode render failed:", qrErr);
+            el.lineBindQrCanvas.innerHTML =
+              '<div style="padding:12px;font-size:.8rem;color:#e11d48;">⚠️ QR Code 產生失敗，請複製下方連結</div>' +
+              '<div style="padding:8px 12px;font-size:.72rem;word-break:break-all;color:#333;">' + esc(bindUrl) + '</div>';
+          }
+        } else {
+          // QRCode library not loaded — show copyable URL
+          console.warn("[AdminLine] QRCode library not loaded, falling back to URL display.");
+          el.lineBindQrCanvas.innerHTML =
+            '<div style="padding:12px;font-size:.8rem;color:#e11d48;">⚠️ QR Code 套件未載入，請複製下方連結</div>' +
+            '<div style="padding:8px 12px;font-size:.72rem;word-break:break-all;color:#333;">' + esc(bindUrl) + '</div>';
+        }
+      }
+
+      setLineBindModalStatus("⏳ 等待員工掃碼...", "waiting");
+      startBindingCountdown();
+      startBindingPoll(lineBindState.token);
+
+    } catch (error) {
+      console.error("[AdminLine] generateLineBindToken failed.", error);
+      setLineBindModalStatus("❌ 產生 QR Code 失敗：" + ((error && error.message) || "未知錯誤"), "error");
+      if (el.lineBindRegenBtn) el.lineBindRegenBtn.classList.remove("hidden");
+    }
+  }
+
+  function startBindingCountdown() {
+    if (lineBindState.countdownTimer) clearInterval(lineBindState.countdownTimer);
+    var expiresAt = lineBindState.expiresAt;
+    if (!expiresAt) return;
+
+    function updateCountdown() {
+      var remaining = Math.max(0, expiresAt.getTime() - Date.now());
+      var mins = Math.floor(remaining / 60000);
+      var secs = Math.floor((remaining % 60000) / 1000);
+      if (!el.lineBindCountdown) return;
+      if (remaining <= 0) {
+        el.lineBindCountdown.textContent = "QR Code 已過期";
+        el.lineBindCountdown.className = "line-bind-countdown urgent";
+        clearInterval(lineBindState.countdownTimer);
+        setLineBindModalStatus("⏰ QR Code 已過期，請重新產生", "expired");
+        if (el.lineBindRegenBtn) el.lineBindRegenBtn.classList.remove("hidden");
+        if (el.lineBindQrCanvas) el.lineBindQrCanvas.style.opacity = "0.3";
+        clearLineBindTimers();
+        return;
+      }
+      el.lineBindCountdown.textContent = "有效時間：" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0");
+      el.lineBindCountdown.className = remaining < 60000 ? "line-bind-countdown urgent" : "line-bind-countdown";
+    }
+    updateCountdown();
+    lineBindState.countdownTimer = setInterval(updateCountdown, 1000);
+  }
+
+  function startBindingPoll(token) {
+    if (lineBindState.pollTimer) clearInterval(lineBindState.pollTimer);
+    if (lineBindState.unsubscribeBinding) { try { lineBindState.unsubscribeBinding(); } catch (e) {} }
+
+    // Use Firestore onSnapshot for real-time binding detection
+    try {
+      var unsubscribe = db.collection("line_bindings").doc(token).onSnapshot(function (snap) {
+        if (!snap.exists) return;
+        var data2 = snap.data() || {};
+        if (data2.used === true) {
+          setLineBindModalStatus("✅ 綁定成功！LINE 帳號已綁定完成", "success");
+          if (el.lineBindCountdown) el.lineBindCountdown.textContent = "";
+          if (el.lineBindRegenBtn) el.lineBindRegenBtn.classList.add("hidden");
+          clearLineBindTimers();
+          // Reload admins data to reflect new binding status
+          setTimeout(function () {
+            loadAndRenderAdmins();
+            renderEmployeeLineBinding();
+          }, 1000);
+        }
+      }, function (err) {
+        console.warn("[AdminLine] onSnapshot error.", err);
+        // Fall back to polling if onSnapshot fails
+        lineBindState.pollTimer = setInterval(function () { pollBindingStatus(token); }, 3000);
+      });
+      lineBindState.unsubscribeBinding = unsubscribe;
+    } catch (e) {
+      // Fall back to polling
+      lineBindState.pollTimer = setInterval(function () { pollBindingStatus(token); }, 3000);
+    }
+  }
+
+  async function pollBindingStatus(token) {
+    try {
+      var snap = await db.collection("line_bindings").doc(token).get();
+      if (!snap.exists) return;
+      var bindData = snap.data() || {};
+      if (bindData.used === true) {
+        setLineBindModalStatus("✅ 綁定成功！LINE 帳號已綁定完成", "success");
+        clearLineBindTimers();
+        setTimeout(function () {
+          loadAndRenderAdmins();
+          renderEmployeeLineBinding();
+        }, 1000);
+      }
+    } catch (e) {
+      console.warn("[AdminLine] pollBindingStatus failed.", e);
+    }
+  }
+
+  async function doUnbindLine(targetCollection, targetDocId, targetName) {
+    if (!canManage()) return;
+    try {
+      var callable = functionsApi.httpsCallable("unbindLine");
+      await callable({ targetCollection: targetCollection, targetDocId: targetDocId });
+      msg("「" + (targetName || "帳號") + "」已解除 LINE 綁定");
+      await loadAndRenderAdmins();
+      await loadScoped();
+    } catch (e) {
+      console.error("[AdminLine] unbindLine failed.", e);
+      msg((e && e.message) || "解除綁定失敗");
+    }
+  }
+
+  async function saveLineNotificationSetting(targetCollection, targetDocId, field, value) {
+    if (!canManage()) return;
+    try {
+      var callable = functionsApi.httpsCallable("updateLineNotificationSettings");
+      var payload = { targetCollection: targetCollection, targetDocId: targetDocId };
+      payload[field] = value;
+      await callable(payload);
+      // Update local data without full reload
+      var items = targetCollection === "admins" ? data.admins : data.employees;
+      var item = items && items.find(function (i) { return i.id === targetDocId; });
+      if (item) item[field] = value;
+    } catch (e) {
+      console.error("[AdminLine] saveLineNotificationSetting failed.", e);
+      msg((e && e.message) || "設定更新失敗");
+    }
+  }
+
 })();

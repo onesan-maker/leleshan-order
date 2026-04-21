@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>LELESHAN POS 員工登入</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --pl-bg-0: #050608;
+      --pl-bg-1: #0b0d12;
+      --pl-bg-2: #12090c;
+      --pl-red: #c8102e;
+      --pl-red-soft: rgba(200, 16, 46, 0.35);
+      --pl-red-glow: rgba(255, 44, 77, 0.26);
+      --pl-text: #f3f6ff;
+      --pl-muted: #9da9bb;
+      --pl-panel: rgba(12, 15, 22, 0.72);
+      --pl-border: rgba(255, 255, 255, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      color: var(--pl-text);
+      font-family: "Noto Sans TC", sans-serif;
+      background:
+        radial-gradient(900px 520px at 78% 46%, rgba(255, 38, 70, 0.12), transparent 65%),
+        radial-gradient(680px 380px at 12% 86%, rgba(200, 16, 46, 0.1), transparent 66%),
+        linear-gradient(135deg, var(--pl-bg-0) 0%, var(--pl-bg-1) 56%, var(--pl-bg-2) 100%);
+      overflow: hidden;
+    }
+
+    .pl-bg-grid,
+    .pl-bg-scan {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .pl-bg-grid {
+      opacity: 0.09;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(ellipse at center, #000 40%, transparent 88%);
+    }
+
+    .pl-bg-scan::before {
+      content: "";
+      position: absolute;
+      inset: -140%;
+      background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(255, 30, 64, 0.06) 46%,
+        rgba(255, 30, 64, 0.12) 50%,
+        rgba(255, 30, 64, 0.06) 54%,
+        transparent 100%
+      );
+      animation: pl-scan 10s linear infinite;
+    }
+
+    @keyframes pl-scan {
+      from { transform: translateY(-32%); }
+      to { transform: translateY(32%); }
+    }
+
+    .pl-shell {
+      position: relative;
+      z-index: 1;
+      min-height: 100%;
+      display: grid;
+      grid-template-columns: minmax(340px, 520px) 1fr;
+      align-items: center;
+      gap: clamp(16px, 5vw, 72px);
+      padding: clamp(18px, 4vw, 52px);
+    }
+
+    .pl-panel {
+      position: relative;
+      background: var(--pl-panel);
+      border: 1px solid var(--pl-border);
+      border-radius: 24px;
+      padding: clamp(22px, 3vw, 36px);
+      backdrop-filter: blur(14px);
+      box-shadow:
+        0 24px 48px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+        0 0 28px rgba(255, 36, 68, 0.14);
+    }
+
+    .pl-panel::after {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 24px;
+      pointer-events: none;
+      border: 1px solid rgba(255, 36, 68, 0.28);
+      mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 72%);
+    }
+
+    .pl-kicker {
+      margin: 0 0 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      color: #fda4af;
+      opacity: 0.85;
+      text-transform: uppercase;
+    }
+
+    .pl-title {
+      margin: 0;
+      font-size: clamp(1.75rem, 4vw, 2.6rem);
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+      font-weight: 900;
+      text-shadow:
+        0 0 22px rgba(255, 62, 102, 0.34),
+        0 0 54px rgba(255, 62, 102, 0.14);
+      position: relative;
+      overflow: hidden;
+      animation: pl-breathe 5.2s ease-in-out infinite;
+    }
+
+    .pl-title::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -130%;
+      width: 120%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.36), transparent);
+      animation: pl-shine 8s ease-in-out infinite;
+    }
+
+    @keyframes pl-breathe {
+      0%, 100% { text-shadow: 0 0 18px rgba(255, 62, 102, 0.24), 0 0 48px rgba(255, 62, 102, 0.1); }
+      50% { text-shadow: 0 0 26px rgba(255, 62, 102, 0.4), 0 0 60px rgba(255, 62, 102, 0.17); }
+    }
+
+    @keyframes pl-shine {
+      0%, 76%, 100% { left: -130%; }
+      84% { left: 108%; }
+    }
+
+    .pl-subtitle {
+      margin: 6px 0 0;
+      font-size: clamp(1rem, 1.5vw, 1.2rem);
+      color: #d9e2f3;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .pl-help {
+      margin: 12px 0 0;
+      color: var(--pl-muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    .pl-form {
+      display: grid;
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .pl-field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .pl-label {
+      font-size: 0.82rem;
+      letter-spacing: 0.03em;
+      color: #c9d4e7;
+      font-weight: 700;
+    }
+
+    .pl-input {
+      width: 100%;
+      height: 48px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(7, 10, 16, 0.78);
+      color: #f5f9ff;
+      padding: 0 14px;
+      font-size: 1rem;
+      font-weight: 600;
+      outline: none;
+      transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+    }
+
+    .pl-input::placeholder { color: #7f8ca2; }
+
+    .pl-input:focus {
+      border-color: rgba(255, 75, 108, 0.84);
+      box-shadow:
+        0 0 0 2px rgba(255, 46, 86, 0.18),
+        0 0 20px rgba(255, 46, 86, 0.24);
+      background: rgba(9, 12, 18, 0.9);
+    }
+
+    #employee-pin.pl-input {
+      letter-spacing: 0.16em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    .pl-submit {
+      position: relative;
+      overflow: hidden;
+      margin-top: 4px;
+      width: 100%;
+      height: 50px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 122, 147, 0.5);
+      background: linear-gradient(135deg, #6f0017 0%, #b1092b 56%, #d80b31 100%);
+      color: #fff3f5;
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: transform .16s ease, box-shadow .18s ease, filter .18s ease;
+      box-shadow:
+        0 10px 22px rgba(168, 8, 40, 0.34),
+        0 0 18px rgba(255, 39, 76, 0.22);
+    }
+
+    .pl-submit::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -140%;
+      width: 120%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
+      transition: none;
+    }
+
+    .pl-submit:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        0 14px 26px rgba(168, 8, 40, 0.4),
+        0 0 22px rgba(255, 39, 76, 0.3);
+      filter: brightness(1.04);
+    }
+
+    .pl-submit:hover::before {
+      animation: pl-btn-shine .9s ease;
+    }
+
+    .pl-submit:active {
+      transform: translateY(0);
+      filter: brightness(0.98);
+    }
+
+    .pl-submit:disabled {
+      opacity: 0.82;
+      cursor: wait;
+      transform: none;
+      filter: saturate(0.88);
+    }
+
+    .pl-submit.is-loading::after {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      right: 14px;
+      top: calc(50% - 9px);
+      animation: pl-spin .8s linear infinite;
+    }
+
+    @keyframes pl-btn-shine {
+      from { left: -140%; }
+      to { left: 130%; }
+    }
+
+    @keyframes pl-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .pl-error {
+      min-height: 22px;
+      margin-top: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(252, 165, 165, 0.36);
+      background: rgba(127, 29, 29, 0.25);
+      color: #fecaca;
+      padding: 10px 12px;
+      font-size: .88rem;
+      animation: pl-fade-in .2s ease;
+    }
+
+    .pl-error.hidden {
+      display: none;
+    }
+
+    @keyframes pl-fade-in {
+      from { opacity: 0; transform: translateY(2px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pl-side {
+      min-height: 380px;
+      border-radius: 24px;
+      background:
+        radial-gradient(420px 220px at 52% 44%, rgba(255, 39, 76, 0.18), transparent 72%),
+        radial-gradient(340px 180px at 62% 68%, rgba(255, 90, 120, 0.12), transparent 78%),
+        rgba(7, 10, 16, 0.34);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(2px);
+    }
+
+    @media (max-width: 980px) {
+      .pl-shell {
+        grid-template-columns: 1fr;
+        gap: 20px;
+        align-content: center;
+      }
+      .pl-side {
+        display: none;
+      }
+      .pl-panel {
+        width: min(100%, 560px);
+        margin: 0 auto;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        overflow: auto;
+      }
+      .pl-shell {
+        padding: 16px;
+      }
+      .pl-panel {
+        border-radius: 18px;
+        padding: 20px 16px;
+      }
+      .pl-submit {
+        width: 100%;
+      }
+      .pl-input {
+        height: 46px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="pl-bg-grid"></div>
+  <div class="pl-bg-scan"></div>
+
+  <main class="pl-shell">
+    <section class="pl-panel" aria-labelledby="pl-title">
+      <p class="pl-kicker">TERMINAL ACCESS</p>
+      <h1 class="pl-title" id="pl-title">LELESHAN POS</h1>
+      <p class="pl-subtitle">員工登入</p>
+      <p class="pl-help">請輸入員工編號與 PIN 以進入 POS</p>
+
+      <form id="pos-login-form" class="pl-form" novalidate>
+        <div class="pl-field">
+          <label class="pl-label" for="employee-id">員工編號</label>
+          <input id="employee-id" class="pl-input" type="text" inputmode="numeric" maxlength="3" autocomplete="username" placeholder="例如 001">
+        </div>
+
+        <div class="pl-field">
+          <label class="pl-label" for="employee-pin">4位 PIN</label>
+          <input id="employee-pin" class="pl-input" type="password" inputmode="numeric" maxlength="4" autocomplete="current-password" placeholder="請輸入 PIN">
+        </div>
+
+        <button id="pos-login-submit" class="pl-submit" type="submit">登入</button>
+      </form>
+
+      <div id="pos-login-error" class="pl-error hidden"></div>
+    </section>
+
+    <aside class="pl-side" aria-hidden="true"></aside>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
+  <script src="/config.public.js?v=20260413-1"></script>
+  <script src="/pos-session.js?v=20260414-1"></script>
+  <script src="/pos-login.js?v=20260421-diag1"></script>
+</body>
+</html>

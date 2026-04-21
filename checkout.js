@@ -278,10 +278,26 @@
       if (!groupedMap[gid]) groupedMap[gid] = [];
       groupedMap[gid].push(item);
     });
-    var orderGroups = cartGroupsList.map(function (g) {
-      return {
+    var groupMetaById = {};
+    cartGroupsList.forEach(function (g, idx) {
+      if (!g || !g.id) return;
+      groupMetaById[g.id] = {
         id: g.id,
-        label: g.label,
+        index: idx + 1,
+        label: g.label || ""
+      };
+    });
+
+    var orderGroups = cartGroupsList.map(function (g, gIdx) {
+      var currentGroupMeta = groupMetaById[g && g.id] || {
+        id: (g && g.id) || "",
+        index: gIdx + 1,
+        label: (g && g.label) || ""
+      };
+      return {
+        id: currentGroupMeta.id,
+        label: currentGroupMeta.label,
+        index: currentGroupMeta.index,
         items: (groupedMap[g.id] || []).map(function (item) {
           var qty = Number(item.quantity || 0);
           var unitPrice = Number(item.unitPrice || 0);
@@ -289,6 +305,14 @@
             sku: item.itemId, itemId: item.itemId, type: item.type || "",
             name: item.name, qty: qty,
             flavor: item.flavorName || "", staple: item.stapleName || "",
+            selectedFlavor: item.selectedFlavor || item.flavorName || "",
+            selectedStaple: item.selectedStaple || item.stapleName || "",
+            sourceGroupId: currentGroupMeta.id,
+            sourceGroupIndex: currentGroupMeta.index,
+            sourceGroupLabel: currentGroupMeta.label,
+            groupId: currentGroupMeta.id,
+            groupIndex: currentGroupMeta.index,
+            groupLabel: currentGroupMeta.label,
             options: item.options || [],
             unit_price: unitPrice, subtotal: unitPrice * qty,
             item_note: item.itemNote || ""
@@ -308,6 +332,12 @@
       items: app.state.cart.map(function (item) {
         var quantity = Number(item.quantity || 0);
         var unitPrice = Number(item.unitPrice || 0);
+        var sourceGroupId = item.groupId || firstGroupId;
+        var sourceGroupMeta = groupMetaById[sourceGroupId] || {
+          id: sourceGroupId,
+          index: 1,
+          label: (cartGroupsList[0] && cartGroupsList[0].label) || ""
+        };
         return {
           sku: item.itemId,
           itemId: item.itemId,
@@ -320,8 +350,16 @@
           qty: quantity,
           flavorId: item.flavorId || "",
           flavor: item.flavorName,
+          selectedFlavor: item.selectedFlavor || item.flavorName || "",
           stapleId: item.stapleId || "",
           staple: item.stapleName || "",
+          selectedStaple: item.selectedStaple || item.stapleName || "",
+          sourceGroupId: sourceGroupMeta.id,
+          sourceGroupIndex: sourceGroupMeta.index,
+          sourceGroupLabel: sourceGroupMeta.label,
+          groupId: sourceGroupMeta.id,
+          groupIndex: sourceGroupMeta.index,
+          groupLabel: sourceGroupMeta.label,
           priceAdjustment: Number(item.priceAdjustment || 0),
           options: item.options || [],
           unit_price: unitPrice,
@@ -332,7 +370,7 @@
       }),
       subtotal: totalPrice,
       total: totalPrice,
-      status: "new",
+      status: "accepted",
       userId: app.state.profile ? app.state.profile.userId : null,
       lineUserId: app.state.profile ? app.state.profile.userId : null,
       lineDisplayName: app.state.profile ? (app.state.profile.displayName || null) : null,
@@ -385,8 +423,8 @@
             actorId:   payload.lineUserId || "",
             actorName: payload.customer_name || "",
             fromStatus: null,
-            toStatus:   "new",
-            message:    "LIFF 建單，取餐號碼 " + pickupNumber
+            toStatus:   "accepted",
+            message:    "LIFF 建單，取餐號碼 " + pickupNumber + "（已直接進入製作中）"
           }));
         });
       });
@@ -439,6 +477,7 @@
       console.log("[Order] Firestore write success.", { documentId: ref.id, pickupNumber: pickupNumber });
       var pickupLabel = (app.state.pickupDateLabel || app.state.pickupDateValue || "") + (app.state.pickupTime ? " " + app.state.pickupTime : "");
       var cartSnapshot = app.state.cart.slice();
+      var groupsSnapshot = (app.state.cartGroups || []).map(function (g) { return { id: g.id, label: g.label }; });
 
       app.state.cart = [];
       app.state.cartGroups = [{ id: "g-a", label: "A點" }];
@@ -455,7 +494,7 @@
       }
       app.modules.ui.renderProfile(app);
       app.modules.cart.renderCart();
-      app.modules.ui.showOrderSuccess(app, pickupNumber, cartSnapshot, pickupLabel);
+      app.modules.ui.showOrderSuccess(app, pickupNumber, cartSnapshot, pickupLabel, groupsSnapshot);
       clearPendingCheckoutState(app);
       window.LeLeShanStorage.clearCheckoutDraft();
       if (app.el.submitMessage) {

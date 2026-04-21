@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>樂樂山 LINE 帳號綁定</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      background: linear-gradient(135deg, #0c1117 0%, #10151d 100%);
+      color: #f5f7fa;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; margin: 0; padding: 24px;
+    }
+    .bind-card {
+      background: #18202b; border: 1px solid rgba(255,255,255,.12);
+      border-radius: 24px; padding: 36px 32px; max-width: 420px; width: 100%;
+      text-align: center; box-shadow: 0 24px 48px rgba(0,0,0,.35);
+    }
+    .bind-logo { font-size: 3rem; margin-bottom: 16px; }
+    h1 { font-size: 1.4rem; font-weight: 900; margin: 0 0 6px; }
+    .bind-store { color: #9aa8b8; font-size: .9rem; margin-bottom: 28px; }
+    .bind-status {
+      padding: 16px 20px; border-radius: 14px; font-weight: 700;
+      font-size: .95rem; margin-bottom: 16px; line-height: 1.5;
+    }
+    .bind-status--loading { background: rgba(56,189,248,.14); color: #7dd3fc; border: 1px solid rgba(56,189,248,.25); }
+    .bind-status--success { background: rgba(34,197,94,.18); color: #86efac; border: 1px solid rgba(34,197,94,.3); }
+    .bind-status--error { background: rgba(239,68,68,.18); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+    .bind-status--expired { background: rgba(245,158,11,.18); color: #fcd34d; border: 1px solid rgba(245,158,11,.3); }
+    .bind-name { font-size: 1.05rem; font-weight: 900; color: #fdba74; margin: 10px 0 20px; }
+    .bind-hint { color: #6b7a8d; font-size: .82rem; margin-top: 18px; line-height: 1.6; }
+    .bind-close-hint { color: #9aa8b8; font-size: .85rem; margin-top: 14px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="bind-card">
+    <div class="bind-logo">🔗</div>
+    <h1>LINE 帳號綁定</h1>
+    <p class="bind-store">樂樂山後台</p>
+    <div id="bind-status" class="bind-status bind-status--loading">正在初始化，請稍候...</div>
+    <div id="bind-name" class="bind-name hidden"></div>
+    <div id="bind-close-hint" class="bind-close-hint hidden"></div>
+    <p class="bind-hint">請使用員工自己的 LINE 帳號完成此綁定流程。<br>綁定完成後即可接收 LINE 訂單通知。</p>
+  </div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
+  <script src="/config.public.js?v=20260413-1"></script>
+  <script src="/line-bind.js?v=20260418-1"></script>
+</body>
+</html>

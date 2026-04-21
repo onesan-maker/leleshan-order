@@ -1,0 +1,39 @@
+10. 任務拆分（P1–P4）
+🟢 P1｜狀態機統一 + pending_confirmation 閘門（最低風險核心重構）
+項目	內容
+目標	建立唯一狀態機、加入 pending_confirmation 閘門、LINE 下單進入此閘門但 UI 先不暴露（dark launch）
+修改範圍	order-helpers.js（新增 ORDER_STATE_MACHINE、deprecate 舊 STATUS_META）、order-status-labels.js（合併進 order-helpers）、checkout.js（LIFF 下單改寫入 pending_confirmation）、firestore.rules（新增 pending_confirmation 讀寫規則）
+影響模組	LIFF 前台、Firestore 寫入
+風險等級	🟡 中（動到 LIFF 主線，需完整測）
+驗收	1. LINE 下單後 Firestore 寫入 status=pending_confirmation<br>2. KDS 照舊顯示（因為暫時把 pending_confirmation 映射到 new 顯示——UI 尚未改）<br>3. POS 下單照舊寫 accepted<br>4. 舊訂單讀取正常（用 LEGACY_STATUS_MAP）
+交付對象	⚠️ Claude Code（跨檔案狀態映射，有破壞性風險）
+
+
+🟡 P2｜KDS 三欄布局 + 確認動作 UI
+項目	內容
+目標	KDS 加入「待確認」欄位、店員可在 KDS 按確定接單（POS 也加相同邏輯）
+修改範圍	kds.js 改為三欄 render、ops.css 加欄位 + 確認區樣式、pos.js 加「新訂單待確認」區塊、新增共用 confirmOrder() 函式（Transaction 實作）、取消原因 modal
+影響模組	KDS、POS
+風險等級	🟡 中
+驗收	1. LINE 下單後 KDS 左欄紅色閃爍卡片出現<br>2. 按「確定接單」→ 狀態變 accepted，卡片移到中欄<br>3. 按「取消」彈 modal 選原因 → 狀態 cancelled<br>4. POS 同時也能按確認（transaction 測試：兩邊同時按，只有一邊成功）
+交付對象	⚠️ Claude Code（UI + Firestore Transaction 並行）
+
+
+🔴 P3｜LINE Cloud Function 通知系統
+項目	內容
+目標	Cloud Function 監聽 orders 寫入 → 分別推播員工 + 顧客；員工推播可按鈕回呼
+修改範圍	functions/index.js 新增 onOrderWrite trigger、onLineWebhook 處理員工按鈕回呼、staffPush 邏輯（查 admins 裡有 lineUserId 的員工）、顧客 4 個節點推播（received/accepted/ready/cancelled）
+影響模組	Cloud Functions（新）、orders collection（notification 欄位）、LINE Messaging API（需設定 channel + webhook URL）
+風險等級	🔴 高（外部依賴 LINE API + 費用）
+驗收	1. LINE 下單後 3 秒內員工 LINE 收到 Flex Message<br>2. 員工按 ✅ → orders 狀態變 accepted（用 Firebase callable function 驗證）<br>3. 員工按 ❌ 選原因 → 狀態變 cancelled 並寫入 cancellation.reasonCode<br>4. 顧客在 ready 時收到通知，其他狀態不誤發<br>5. LINE 未綁定顧客 → notification.ready.error 記錄但不崩潰
+交付對象	❌ 需人工設計 + Claude Code 實作（API key、webhook URL 需人工配置）
+
+
+🟡 P4｜group/item 資料模型遷移
+項目	內容
+目標	新訂單一律寫 order.groups[] + item.groupId；normalizeGroups 從推測派降級為 fallback；刪除 partId/sourceGroupId/personIndex 等冗餘欄位（寫入端）
+修改範圍	order-helpers.js（buildCreatePayload 改寫）、pos.js 建立 groups 時寫入正式 schema、checkout.js（LIFF）同步、kds.js 的 normalizeGroups 改為 fallback only、後台一鍵腳本幫舊訂單補 groups 欄位（可選）
+影響模組	寫入端（LIFF、POS）+ 讀取端（KDS、取餐看板、後台）
+風險等級	🟡 中（新舊資料並存期長）
+驗收	1. 新訂單 groups[] 欄位正確寫入（手動測：兩組不同口味）<br>2. KDS 卡片顯示「第一組」「第二組」一致<br>3. 舊訂單（只有 partId 的）仍能正確顯示<br>4. 後台訂單列表 group 顯示一致<br>5. 取餐看板 source label（LINE / 現場 / 電話）統一
+交付對象	⚠️ Claude Code（資料結構變更，易踩雷）

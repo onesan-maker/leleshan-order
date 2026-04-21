@@ -7,38 +7,55 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/ops.css?v=20260404-1">
+  <link rel="stylesheet" href="/ops.css?v=20260420-2">
 </head>
 <body class="board-page">
   <div class="ops-page">
     <div class="board-shell">
+
       <header class="ops-topbar board-topbar">
         <div class="board-brand">
-          <div class="ops-subtitle">樂樂山</div>
-          <h1>取餐看板</h1>
+          <div class="board-brand__store">樂樂山</div>
+          <h1 class="board-brand__title">取餐看板</h1>
+          <div class="board-brand__sub">請留意您的取餐號碼</div>
         </div>
-        <div id="board-clock" class="board-clock"></div>
+        <div class="board-header-right">
+          <div id="board-clock" class="board-clock"></div>
+          <div class="board-header-hint">餐點完成後請至櫃台取餐</div>
+        </div>
       </header>
 
       <div id="board-error" class="ops-error hidden"></div>
 
       <main class="board-grid">
-        <section class="board-column">
-          <h2>製作中</h2>
+        <section class="board-column board-column--processing">
+          <div class="board-col-head">
+            <div class="board-col-head__dot"></div>
+            <h2>製作中</h2>
+          </div>
           <div id="board-processing" class="board-column__list"></div>
         </section>
         <section class="board-column board-column--ready">
-          <h2>可取餐</h2>
+          <div class="board-col-head">
+            <div class="board-col-head__dot"></div>
+            <h2>可取餐</h2>
+          </div>
           <div id="board-ready" class="board-column__list"></div>
         </section>
       </main>
+
+      <div id="board-recent-wrap" class="board-recent-wrap hidden">
+        <div class="board-recent-label">最近完成</div>
+        <div id="board-recent" class="board-recent"></div>
+      </div>
+
     </div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="/config.public.js?v=20260413-1"></script>
-  <script src="/order-helpers.js?v=20260404-1"></script>
-  <script src="/pickup-board.js?v=20260404-1"></script>
+  <script src="/order-helpers.js?v=20260421-parallel-cap-v27"></script>
+  <script src="/pickup-board.js?v=20260421-sync-kds-v1"></script>
 </body>
 </html>

@@ -17,6 +17,22 @@
     ],
     "rewrites": [
       {
+        "source": "pos-login",
+        "destination": "/pos-login.html"
+      },
+      {
+        "source": "pos-login/**",
+        "destination": "/pos-login.html"
+      },
+      {
+        "source": "pos-admin",
+        "destination": "/pos-admin.html"
+      },
+      {
+        "source": "pos-admin/**",
+        "destination": "/pos-admin.html"
+      },
+      {
         "source": "pos",
         "destination": "/pos.html"
       },
@@ -47,6 +63,14 @@
       {
         "source": "pickup-board/**",
         "destination": "/pickup-board.html"
+      },
+      {
+        "source": "line-bind",
+        "destination": "/line-bind.html"
+      },
+      {
+        "source": "line-bind/**",
+        "destination": "/line-bind.html"
       },
       {
         "source": "admin-orders",

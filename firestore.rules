@@ -110,6 +110,15 @@ service cloud.firestore {
       allow write: if canManage(storeId);
     }
 
+    match /employees/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.storeId);
+      allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
+    }
+
+    match /posSessions/{docId} {
+      allow read, write: if false;
+    }
+
     // 每日取餐號碼計數器，下單時 transaction 讀寫，需公開可寫
     match /order_counters/{dateStr} {
       allow read: if true;
@@ -118,8 +127,12 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow create: if request.resource.data.storeId is string
-        && request.resource.data.status == 'new'
-        && request.resource.data.source in ['liff', 'onsite', 'pos', 'manual', 'ubereats', 'foodpanda'];
+        && request.resource.data.status in ['new', 'accepted']
+        && request.resource.data.source in ['liff', 'onsite', 'pos', 'manual', 'ubereats', 'foodpanda', 'line', 'walk_in', 'phone']
+        || (isAdmin()
+            && request.resource.data.storeId is string
+            && canManage(request.resource.data.storeId)
+            && request.resource.data.isTest == true);
       allow read: if canReadOrders(resource.data.storeId)
         || canReadPublicBoard()
         || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
@@ -131,7 +144,11 @@ service cloud.firestore {
                 && (request.resource.data.status == 'cancelled'
                     || request.resource.data.customerHidden == true)
                 || request.resource.data.archived == true));
-      allow delete: if isOwner();
+      allow delete: if isOwner()
+        || (isAdmin()
+            && resource.data.storeId is string
+            && canManage(resource.data.storeId)
+            && resource.data.isTest == true);
     }
 
     // order_items：每筆訂單品項明細（可公開建立，管理員可讀）
@@ -223,6 +240,41 @@ service cloud.firestore {
 
     match /call/{docId} {
       allow read, write: if docId == "current";
+    }
+
+    match /line_bindings/{token} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // store_runtime/current_session_<storeId>：全店目前當班員工主 session
+    // POS 寫入 / 清除，KDS 只讀。為配合 POS 未以 Firebase Auth 登入的現狀，
+    // 允許公開寫入但限定 shape 與 source，避免被當作通用 KV。
+    match /store_runtime/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.storeId is string
+        && request.resource.data.source in ['pos', 'kds', 'system']
+        && request.resource.data.sessionActive is bool;
+    }
+
+    // shift_logs：交班 / 登入 / 登出紀錄；只能新增，不能修改
+    match /shift_logs/{docId} {
+      allow read: if isAdmin() && sameStore(resource.data.storeId);
+      allow create: if request.resource.data.storeId is string
+        && request.resource.data.type in ['login', 'logout', 'switch']
+        && request.resource.data.employeeId is string
+        && request.resource.data.timestamp == request.time;
+      allow update, delete: if false;
+    }
+
+    // order_logs：員工對訂單的狀態操作紀錄；只能新增，不能修改
+    match /order_logs/{docId} {
+      allow read: if canReadOrders(resource.data.storeId);
+      allow create: if request.resource.data.storeId is string
+        && request.resource.data.orderId is string
+        && request.resource.data.action is string
+        && request.resource.data.timestamp == request.time;
+      allow update, delete: if false;
     }
   }
 }

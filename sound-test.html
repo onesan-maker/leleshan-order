@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>KDS 音效測試</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #111;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 20px;
+    }
+
+    button {
+      width: 200px;
+      height: 60px;
+      font-size: 18px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn1 { background: #ef4444; }
+    .btn2 { background: #22c55e; }
+    .btn3 { background: #3b82f6; }
+    .btn4 { background: #f59e0b; }
+  </style>
+</head>
+<body>
+
+  <h1>KDS 音效測試</h1>
+
+  <button class="btn1" onclick="playBeep()">警告音1（逼）</button>
+  <button class="btn2" onclick="playHeartbeat()">警告音2（心跳）</button>
+  <button class="btn3" onclick="playAlert()">警告音3（強提示）</button>
+  <button class="btn4" onclick="playNewOrderBell()">警告音4（新單鈴聲）</button>
+
+  <script src="sound-test.js"></script>
+
+</body>
+</html>

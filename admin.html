@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- UTF-8 required: 禁止使用未指定編碼工具覆蓋本檔 -->
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
@@ -33,6 +34,7 @@
         <a href="/admin/users" data-view="users">會員管理</a>
         <a href="/admin/promotions" data-view="promotions">優惠管理</a>
         <a href="/admin/settings" data-view="settings">營業狀態設定</a>
+        <a href="/admin/kds-timing" data-view="kds-timing">KDS 出餐時間規則</a>
       </nav>
       <button id="admin-logout-btn" class="admin-logout-btn" type="button">登出</button>
     </aside>
@@ -242,6 +244,34 @@
         <div id="promotions-list" class="admin-list"></div>
       </section>
 
+      <section id="view-kds-timing" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>KDS 出餐時間規則</h2>
+          <button type="button" data-open-form="kds-timing">編輯規則</button>
+        </div>
+        <div class="admin-panel">
+          <p id="kds-timing-summary-text">尚未設定，使用預設值</p>
+        </div>
+
+        <div class="admin-section-head">
+          <h3>試算器</h3>
+          <span style="color:var(--admin-muted);font-size:.86rem;">共用同一套 estimateOrderPrepMinutes 邏輯</span>
+        </div>
+        <div class="admin-panel">
+          <div class="admin-form" style="max-width:720px;">
+            <label><span>模擬排隊位置（1、2、3、...）</span><input id="kdst-sim-position" type="number" min="1" step="1" value="1"></label>
+            <label><span>模擬訂單金額</span><input id="kdst-sim-amount" type="number" min="0" step="1" value="100"></label>
+            <label><span>模擬品項名稱（每行一個）</span><textarea id="kdst-sim-items" rows="4" placeholder="例如：&#10;寬粉&#10;豬肉片"></textarea></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;">
+              <label><span>模擬 group 數（可留空）</span><input id="kdst-sim-group-count" type="number" min="0" step="1" placeholder="依品項推估"></label>
+              <label><span>模擬 item 數（可留空）</span><input id="kdst-sim-item-count" type="number" min="0" step="1" placeholder="依品項推估"></label>
+            </div>
+            <button id="kdst-sim-run-btn" type="button">試算</button>
+            <div id="kdst-sim-result" style="margin-top:10px;color:var(--admin-muted);font-size:.9rem;">尚未試算</div>
+          </div>
+        </div>
+      </section>
+
       <section id="view-settings" class="admin-view hidden">
         <div class="admin-section-head">
           <h2>營業狀態設定</h2>
@@ -279,6 +309,13 @@
             <label><span>門市代碼</span><input id="store-id" placeholder="例如：store_1" required></label>
             <label><span>門市名稱</span><input id="store-name" placeholder="例如：樂樂山新竹店" required></label>
             <label class="switch-field"><span>門市狀態</span><span class="switch-row"><input id="store-active" type="checkbox" checked><span class="switch-ui"></span><span id="store-active-label">啟用中</span></span></label>
+            <fieldset class="admin-form-fieldset store-hours">
+              <legend>營業時段（員工 LINE 推播靜音窗）</legend>
+              <p class="admin-form-hint">此時段內，系統不會推播員工 LINE（員工靠 KDS 查看）；時段外收到的訂單會推播員工並附取消按鈕。公休日整天一律推播。</p>
+              <div id="store-hours-grid" class="store-hours-grid">
+                <!-- 由 admin.js 動態渲染週一～週日 -->
+              </div>
+            </fieldset>
             <button type="submit">儲存門市</button>
           </form>
         </section>
@@ -377,6 +414,57 @@
           </form>
         </section>
 
+        <section data-form-panel="kds-timing" class="admin-form-panel hidden">
+          <form id="kds-timing-form" class="admin-form">
+            <h4 style="margin:0 0 4px;">A. 排隊基礎時間（有限平行處理模型）</h4>
+            <p style="margin:-2px 0 4px;color:var(--admin-muted);font-size:.82rem;">前 2 單可近似平行（5→6），第 3 單起進入明顯等待，第 4 單後每張 +3</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 10px;">
+              <label><span>第 1 張</span><input id="kdst-queue-slot1" type="number" min="0" step="1" placeholder="5"></label>
+              <label><span>第 2 張</span><input id="kdst-queue-slot2" type="number" min="0" step="1" placeholder="6"></label>
+              <label><span>第 3 張</span><input id="kdst-queue-slot3" type="number" min="0" step="1" placeholder="8"></label>
+              <label><span>第 4 張</span><input id="kdst-queue-slot4" type="number" min="0" step="1" placeholder="11"></label>
+              <label><span>第 5 張</span><input id="kdst-queue-slot5" type="number" min="0" step="1" placeholder="14"></label>
+              <label><span>第 6 張</span><input id="kdst-queue-slot6" type="number" min="0" step="1" placeholder="17"></label>
+              <label style="grid-column:span 3;"><span>第 7 張之後每張 +</span><input id="kdst-queue-after-last" type="number" min="0" step="1" placeholder="3"></label>
+            </div>
+
+            <h4 style="margin:12px 0 4px;">B. 金額加時（分段封頂）</h4>
+            <p style="margin:-2px 0 4px;color:var(--admin-muted);font-size:.82rem;">依訂單總額分四段，最後一段封頂</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 10px;align-items:end;">
+              <label><span>第1段 ≤</span><input id="kdst-amt-tier1-upto" type="number" min="0" step="1" placeholder="200"></label>
+              <label style="grid-column:span 2;"><span>第1段 分鐘</span><input id="kdst-amt-tier1-min" type="number" min="0" step="1" placeholder="0"></label>
+              <label><span>第2段 ≤</span><input id="kdst-amt-tier2-upto" type="number" min="0" step="1" placeholder="400"></label>
+              <label style="grid-column:span 2;"><span>第2段 分鐘</span><input id="kdst-amt-tier2-min" type="number" min="0" step="1" placeholder="2"></label>
+              <label><span>第3段 ≤</span><input id="kdst-amt-tier3-upto" type="number" min="0" step="1" placeholder="700"></label>
+              <label style="grid-column:span 2;"><span>第3段 分鐘</span><input id="kdst-amt-tier3-min" type="number" min="0" step="1" placeholder="4"></label>
+              <label style="grid-column:span 3;"><span>第4段（以上，封頂）分鐘</span><input id="kdst-amt-tier4-min" type="number" min="0" step="1" placeholder="6"></label>
+            </div>
+
+            <h4 style="margin:12px 0 4px;">B2. 超大單加時</h4>
+            <label class="switch-field"><span>啟用超大單加時</span><span class="switch-row"><input id="kdst-large-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="kdst-large-enabled-label">啟用中</span></span></label>
+            <p style="margin:-2px 0 4px;color:var(--admin-muted);font-size:.82rem;">group / item 規則取較大級，不重複相加</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;">
+              <label><span>item 數 ≥（第1級）</span><input id="kdst-large-item1" type="number" min="1" step="1" placeholder="25"></label>
+              <label><span>加時（第1級）</span><input id="kdst-large-extra1" type="number" min="0" step="1" placeholder="1"></label>
+              <label><span>item 數 ≥（第2級）</span><input id="kdst-large-item2" type="number" min="1" step="1" placeholder="35"></label>
+              <label><span>加時（第2級）</span><input id="kdst-large-extra2" type="number" min="0" step="1" placeholder="2"></label>
+              <label><span>group 數 ≥（第1級）</span><input id="kdst-large-group1" type="number" min="1" step="1" placeholder="3"></label>
+              <label><span>group 數 ≥（第2級）</span><input id="kdst-large-group2" type="number" min="1" step="1" placeholder="4"></label>
+            </div>
+
+            <h4 style="margin:12px 0 4px;">C. 特殊長時食材</h4>
+            <label class="switch-field"><span>啟用最低分鐘數規則</span><span class="switch-row"><input id="kdst-long-enabled" type="checkbox" checked><span class="switch-ui"></span><span id="kdst-long-enabled-label">啟用中</span></span></label>
+            <label><span>最低分鐘數</span><input id="kdst-long-min" type="number" min="0" step="0.5" placeholder="6.5"></label>
+            <label><span>食材關鍵字（每行一個）</span><textarea id="kdst-long-keywords" rows="5" placeholder="火鍋料&#10;寬粉&#10;水餃&#10;玉米筍&#10;烏龍麵"></textarea></label>
+
+            <h4 style="margin:12px 0 4px;">D. 其他</h4>
+            <label><span>提前開做緩衝分鐘</span><input id="kdst-buffer" type="number" min="0" step="1" placeholder="1"></label>
+            <label><span>逾時幾分鐘強警示</span><input id="kdst-overdue-alert" type="number" min="1" step="1" placeholder="3"></label>
+
+            <button type="submit">儲存規則</button>
+          </form>
+        </section>
+
         <section data-form-panel="settings" class="admin-form-panel hidden">
           <form id="settings-form" class="admin-form">
             <label class="switch-field"><span>門市營業狀態</span><span class="switch-row"><input id="settings-open" type="checkbox"><span class="switch-ui"></span><span id="settings-open-label">休息中</span></span></label>
@@ -397,12 +485,15 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
   <script src="/config.public.js?v=20260413-1"></script>
   <script src="/admin-auth-helper.js?v=20260406-1"></script>
   <script src="/defaults.js?v=20260403-1"></script>
-  <script src="/order-helpers.js?v=20260411-1"></script>
+  <script src="/order-helpers.js?v=20260421-parallel-cap-v27"></script>
   <script src="/platform-order-module.js?v=20260403-1"></script>
   <script src="/platform-api-placeholders.js?v=20260403-1"></script>
-  <script src="/admin.js?v=20260412-2"></script>
+  <script src="/qrcode.min.js"></script>
+  <script src="/order-status-labels.js?v=20260418-2"></script>
+  <script src="/admin.js?v=20260421-parallel-cap-v27"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=20260413-2">
+  <link rel="stylesheet" href="./styles.css?v=20260420-1">
 </head>
 <body>
   <div class="page-shell">
@@ -18,8 +18,9 @@
         <h1>樂樂山 麻辣燙</h1>
         <p class="hero__text">椒麻夠味，脆爽上癮</p>
         <div class="hero__chips">
-          <span>麻辣燙</span>
-          <span>湯滷川味</span>
+          <span class="hero__chip--brand">3秒頂級脆爽</span>
+          <span class="hero__chip--gold">五種口味</span>
+          <span>藤椒麻辣</span>
           <span>預約取餐</span>
         </div>
       </div>
@@ -57,47 +58,53 @@
       <p id="promo-banner-text"></p>
     </section>
 
+    <div id="sticky-flavor-bar" class="sticky-flavor-bar hidden" aria-hidden="true">
+      <div class="sticky-flavor-bar__panel">
+        <div class="sticky-flavor-bar__eyebrow">STEP 1</div>
+        <div class="sticky-flavor-bar__title">選擇口味</div>
+        <div id="sticky-flavor-tabs" class="flavor-switch-bar__tabs"></div>
+      </div>
+    </div>
+
     <main class="content">
-      <section class="step-card">
+      <section class="step-card step-card--flavor-header" id="flavor-step-card">
         <div class="section-heading">
           <div>
             <p class="eyebrow">STEP 1</p>
             <h2>選擇口味</h2>
           </div>
         </div>
-        <div id="flavor-options" class="choice-grid"></div>
-      </section>
-
-      <section class="step-card">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">STEP 2</p>
-            <h2>選擇🔥 套餐（最划算）或自由單點</h2>
-          </div>
+        <div class="flavor-switch-bar" id="product-flavor-bar">
+          <div id="product-flavor-tabs" class="flavor-switch-bar__tabs"></div>
         </div>
-        <div id="order-type-options" class="choice-grid"></div>
-        <p class="step-hint">🔥 套餐（最划算）與自由單點可以同時加，切換後繼續加入即可。</p>
       </section>
 
       <div id="step3-section">
-        <section id="combo-section" class="step-card hidden">
+        <section id="combo-section" class="step-card">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">STEP 3A</p>
+              <p class="eyebrow">STEP 2</p>
               <h2>🔥 套餐（最划算）</h2>
             </div>
+            <span class="section-flavor-chip" id="combo-flavor-chip"></span>
           </div>
+          <div id="combo-threshold-hint" class="combo-threshold-hint"></div>
           <div id="combo-root" class="menu-grid"></div>
+          <div id="combo-upsell-root" class="hidden"></div>
         </section>
 
-        <section id="single-section" class="step-card hidden">
+        <section id="single-section" class="step-card">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">STEP 3B</p>
+              <p class="eyebrow">STEP 3</p>
               <h2>自由單點</h2>
             </div>
+            <span class="section-flavor-chip" id="single-flavor-chip"></span>
           </div>
-          <div id="single-root" class="single-root"></div>
+          <div id="single-section-content" class="single-section-content">
+            <div id="single-root" class="single-root"></div>
+          </div>
+          <button id="single-section-toggle" class="single-section-toggle" type="button" aria-expanded="false" aria-controls="single-section-content"><span class="single-section-toggle__copy"><span class="single-section-toggle__title">還有更多單點商品</span><span class="single-section-toggle__desc">點這裡展開全部單點</span></span><span class="single-section-toggle__arrow" aria-hidden="true">›</span></button>
         </section>
       </div>
 
@@ -200,6 +207,7 @@
     <div class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="quantity-modal-title">
       <h3 id="quantity-modal-title">請選擇數量</h3>
       <p id="quantity-modal-item-name">請選擇品項</p>
+      <p id="quantity-modal-item-meta" class="quantity-modal__item-meta hidden"></p>
       <p id="quantity-modal-price" class="quantity-modal__price hidden"></p>
       <div id="quantity-modal-detail" class="quantity-modal__detail hidden">
         <div class="quantity-modal__detail-row">
@@ -217,8 +225,25 @@
       </div>
       <div id="quantity-modal-portion" class="quantity-modal__portion hidden"></div>
       <div id="quantity-modal-options" class="quantity-modal__options"></div>
+      <div id="quantity-modal-actions" class="modal-card__actions hidden">
+        <button id="quantity-modal-cancel" class="ghost-btn modal-card__ghost" type="button">取消</button>
+        <button id="quantity-modal-confirm" class="primary-btn modal-card__button" type="button">確認加入</button>
+      </div>
       <div id="quantity-modal-success" class="hidden">
         <p id="quantity-modal-success-text" class="quantity-modal__success-text"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="flavor-confirm-modal" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal-card flavor-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="flavor-confirm-title">
+      <h3 id="flavor-confirm-title">這份要用哪個口味？</h3>
+      <p id="flavor-confirm-item-name" class="flavor-confirm__item-name"></p>
+      <p id="flavor-confirm-current" class="flavor-confirm__current"></p>
+      <div id="flavor-confirm-options" class="flavor-confirm__options"></div>
+      <div class="modal-card__actions">
+        <button id="flavor-confirm-cancel" class="ghost-btn modal-card__ghost" type="button">取消</button>
+        <button id="flavor-confirm-submit" class="primary-btn modal-card__button" type="button">確認加入</button>
       </div>
     </div>
   </div>
@@ -240,12 +265,12 @@
   <script src="./config.public.js?v=20260413-1"></script>
   <script src="./defaults.js?v=20260408-1"></script>
   <script src="./storage.js?v=20260404-1"></script>
-  <script src="./order-helpers.js?v=20260411-1"></script>
-  <script src="./ui.js?v=20260413-2"></script>
-  <script src="./cart.js?v=20260413-2"></script>
+  <script src="./order-helpers.js?v=20260418-3"></script>
+  <script src="./ui.js?v=20260420-1"></script>
+  <script src="./cart.js?v=20260420-1"></script>
   <script src="./auth.js?v=20260404-1"></script>
-  <script src="./checkout.js?v=20260412-1"></script>
+  <script src="./checkout.js?v=20260418-2"></script>
   <script src="./member.js?v=20260410-2"></script>
-  <script src="./app.js?v=20260412-1"></script>
+  <script src="./app.js?v=20260416-2"></script>
 </body>
 </html>

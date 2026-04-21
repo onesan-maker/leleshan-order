@@ -130,53 +130,13 @@
     return ["line_order", "line", "liff", "online", "line-liff", "line_liff"].indexOf(v) >= 0;
   }
 
-  function isSoundTargetStatus(status) {
-    var v = String(status || "").trim().toLowerCase();
-    return v === "pending_confirmation";
-  }
-
-  function didEnterTargetStatus(prevOrder, nextOrder) {
-    if (!prevOrder || !nextOrder) return false;
-    var ps = String(prevOrder.status || "").trim().toLowerCase();
-    var ns = String(nextOrder.status || "").trim().toLowerCase();
-    return ps !== ns && isSoundTargetStatus(ns);
-  }
-
-  var BELL_CYCLE_MS = 1000; // bell ~0.35s + 靜音 ~0.65s = 約 1 秒一循環
-  var pendingRingMap = new Map(); // orderId → stop flag object
-
-  function startRinging(order) {
-    var id = String(order.id);
-    if (pendingRingMap.has(id)) return;
-    var handle = { active: true };
-    pendingRingMap.set(id, handle);
-    console.log("[KDS_SOUND] started ringing", id);
-
-    function ring() {
-      if (!handle.active) return;
-      if (isSoundEnabled()) {
-        try {
-          playNewOrderBell();
-          console.log("[KDS_SOUND] ring", id);
-        } catch (e) {
-          console.warn("[KDS_SOUND] ring failed", id, e);
-        }
-      }
-      setTimeout(ring, BELL_CYCLE_MS);
-    }
-    ring();
-  }
-
-  function stopRinging(orderId) {
-    var id = String(orderId);
-    var handle = pendingRingMap.get(id);
-    if (!handle) return;
-    handle.active = false;
-    pendingRingMap.delete(id);
-    console.log("[KDS_SOUND] stopped ringing", id);
+  function isNewAcceptedOrder(order) {
+    var v = String(order.status || "").trim().toLowerCase();
+    return v === "accepted" && isOnlineOrderSource(order.source);
   }
 
   // ── 製作中逾時音效（單一音軌）────────────────────────────────
+  var BELL_CYCLE_MS    = 10000;   // ring loop interval: 10s
   var workAlertMap    = new Map(); // orderId → { alerted5, alerted10, ringing }
   var globalRingHandle = null;    // 全局唯一 ring loop handle
 
@@ -207,44 +167,62 @@
     anyRinging ? startGlobalRing() : stopGlobalRing();
   }
 
-  function getWorkElapsedMs(order) {
-    var helpers = window.LeLeShanOrders;
-    var ms = helpers.toMillis(order.started_at) || helpers.toMillis(order.created_at);
-    return ms ? Date.now() - ms : 0;
-  }
+  // 逾時聲響規則（以 pickupAt 為基準）：
+  //   - 剛進入 overdue：短鳴 10 秒 burst
+  //   - overdue 持續 >= overdueAlertAfterMinutes（預設 3）：持續鳴響，直到訂單離開製作中
 
   function tickWorkOrderAlerts() {
-    if (!state.orders || !state.orders.length) return;
+    if (!state.orders || !state.orders.length) {
+      workAlertMap.clear();
+      syncGlobalRing();
+      return;
+    }
+    var helpers = window.LeLeShanOrders;
+    var nowMs = Date.now();
+    var env = buildTimingEnv();
     var workOrders = state.orders.filter(function (o) {
       return o.status === "accepted" || o.status === "preparing";
     });
     var activeIds = new Set(workOrders.map(function (o) { return String(o.id); }));
 
-    // 訂單離開製作中 → 清除記錄
     workAlertMap.forEach(function (_, id) {
       if (!activeIds.has(id)) workAlertMap.delete(id);
     });
 
     workOrders.forEach(function (order) {
-      var id   = String(order.id);
-      var mins = getWorkElapsedMs(order) / 60000;
-      if (!workAlertMap.has(id)) workAlertMap.set(id, { alerted5: false, alerted10: false, ringing: false });
+      var id = String(order.id);
+      var meta = helpers.getKdsTimingMeta(order, nowMs, { queueInfo: env.queueInfo }, env.rules);
+      if (!workAlertMap.has(id)) {
+        workAlertMap.set(id, { alertedEnter: false, alertedSustain: false, ringing: false });
+      }
       var rec = workAlertMap.get(id);
 
-      if (mins >= 10 && !rec.alerted10) {
-        rec.alerted10 = true;
-        rec.ringing   = true; // 持續響，直到訂單離開製作中
-        console.log("[KDS_WORK] 10min", id, mins.toFixed(1) + "min");
-      } else if (mins >= 5 && !rec.alerted5) {
-        rec.alerted5  = true;
-        rec.ringing   = true;
-        console.log("[KDS_WORK] 5min", id, mins.toFixed(1) + "min");
-        setTimeout(function () {          // 10 秒後：若尚未升級到 10 分鐘就停
+      if (meta.statusPhase !== "overdue") {
+        // 還沒逾時：不響（即使是 should_start 或 waiting_to_start）
+        if (rec.ringing) {
+          rec.ringing = false;
+          console.log("[KDS_ALERT] ring off (phase=" + meta.statusPhase + ")", id);
+        }
+        return;
+      }
+
+      // 已逾時
+      var sustainThreshold = Number(env.rules && env.rules.overdueAlertAfterMinutes);
+      if (!Number.isFinite(sustainThreshold) || sustainThreshold < 1) sustainThreshold = 3;
+      if (meta.overdueMinutes >= sustainThreshold && !rec.alertedSustain) {
+        rec.alertedSustain = true;
+        rec.ringing = true;
+        console.log("[KDS_ALERT] overdue sustained", id, meta.overdueMinutes + "min");
+      } else if (!rec.alertedEnter) {
+        rec.alertedEnter = true;
+        rec.ringing = true;
+        console.log("[KDS_ALERT] overdue enter", id, meta.overdueMinutes + "min");
+        setTimeout(function () {
           var cur = workAlertMap.get(id);
-          if (cur && !cur.alerted10) {
+          if (cur && !cur.alertedSustain) {
             cur.ringing = false;
             syncGlobalRing();
-            console.log("[KDS_WORK] 5min ring ended", id);
+            console.log("[KDS_ALERT] overdue burst ended", id);
           }
         }, 10000);
       }
@@ -254,33 +232,15 @@
   }
 
   // ── 狀態分組定義 ────────────────────────────────────────────
-  // KDS 顯示的狀態（normalized 後）
-  var KDS_VISIBLE = ["new", "accepted", "preparing", "ready"];
-  var PENDING_STATUSES   = ["pending_confirmation", "new", "accepted"];
+  var KDS_VISIBLE        = ["accepted", "preparing", "ready"];
   var PREPARING_STATUSES = ["preparing"];
   var READY_STATUSES     = ["ready"];
 
-  // source → 顯示標籤
-  var SOURCE_LABELS = {
-    walk_in:   "現場",
-    phone:     "電話",
-    line:      "LINE",
-    liff:      "LINE",
-    pos:       "現場",
-    manual:    "人工",
-    ubereats:  "UberEats",
-    foodpanda: "Foodpanda"
-  };
+  // source 標籤：改呼叫 window.LeLeShanOrders.sourceLabel(src, { short: true })
+  //   若日後 KDS 需要顯示 source chip，一律走此 helper，不要在本檔再定義表。
 
   // ── 狀態機：每個狀態的按鈕動作 ──────────────────────────────
   var STATUS_ACTIONS = {
-    pending_confirmation: [
-      { label: "✓ 接單", next: "accepted", cls: "primary-btn" }
-    ],
-    new: [
-      { label: "✓ 接單", next: "accepted", cls: "secondary-btn" },
-      { label: "▶ 開始製作", next: "preparing", cls: "primary-btn" }
-    ],
     accepted: [
       { label: "🔔 完成出餐", next: "ready", cls: "primary-btn" }
     ],
@@ -292,14 +252,23 @@
     ]
   };
 
-  var state = { storeId: "", orders: [], filter: "all", context: null, connectionState: "connected" };
+  var state = { storeId: "", orders: [], filter: "all", context: null, connectionState: "connected", station: "boil", currentSession: null, sessionUnsub: null, settings: null, settingsUnsub: null };
+  // 本分頁 session 內已嘗試鎖定過的 orderId，避免重複觸發 transaction
+  var lockAttemptIds = new Set();
+
+  function resolveStationFromQuery() {
+    var qs = new URLSearchParams(window.location.search);
+    var raw = String(qs.get("kds") || "").toLowerCase();
+    return raw === "pack" ? "pack" : "boil";
+  }
+
+  function stationLabel(station) {
+    return station === "pack" ? "包裝站" : "烹煮站";
+  }
   var el    = {};
   var itemCheckedState = {};
   var ITEM_CHECKED_STORAGE_KEY = "kds_item_checked";
-  var cancelPressTimer = null;
-  var cancelPressTarget = null;
-  var cancelPressTriggered = false;
-  var expandedCol = null; // null | "pending" | "work" | "ready"
+  var expandedCol = null; // null | "work" | "ready"
 
   document.addEventListener("DOMContentLoaded", function () {
     cache();
@@ -310,54 +279,35 @@
       soundBtn.onclick = toggleSound;
       updateSoundUI();
     }
+    bindCancelModal();
     window.LeLeShanStaffAuth.init({
       loadingEl: el.loading,
       errorEl:   el.error,
       onReady:   start
     });
-    // 每秒更新等待時間文字（不重渲整張卡，避免閃爍）
     setInterval(tickWaitBars, 1000);
-    setInterval(tickWorkOrderAlerts, 10000); // 每 10 秒檢查製作中逾時
+    setInterval(tickWorkOrderAlerts, 10000);
   });
 
-  // ── 待確認呼吸警示 helpers ───────────────────────────────────
-  var PENDING_BREATHE_MS  = 12 * 60 * 1000; // 12 分鐘閾值（pending + work 共用）
-  var _breatheActiveIds   = new Set();       // log dedup：pending breathe
-  var _workLateActiveIds  = new Set();       // log dedup：work late
+  // ── Phase 導向警示 helpers ───────────────────────────────────
+  var _overdueActiveIds = new Set();
 
-  // LINE 訂單以 scheduled_pickup_at 起算（若無 fallback created_at）
-  // 其他訂單以 created_at 起算
-  function getPendingAlertBaseMs(order) {
+  function isActiveWorkStatus(status) {
+    var st = String(status || "").toLowerCase();
+    return st === "accepted" || st === "preparing" || st === "pending_confirmation" || st === "new";
+  }
+
+  function getOrderPhase(order, nowMs, env) {
+    if (!order) return null;
     var helpers = window.LeLeShanOrders;
-    var src = String(order.source || "").toLowerCase();
-    var isLine = src === "liff" || src === "line" || src === "line_order" || src === "online";
-    if (isLine && order.scheduled_pickup_at) {
-      var t = helpers.toMillis(order.scheduled_pickup_at);
-      if (t) return t;
-    }
-    return helpers.toMillis(order.created_at) || 0;
-  }
-
-  function shouldApplyPendingBreathe(order, nowMs) {
-    if (!order) return false;
-    if (String(order.status || "").toLowerCase() !== "pending_confirmation") return false;
-    var baseMs = getPendingAlertBaseMs(order);
-    if (!baseMs) return false;
-    return (nowMs - baseMs) >= PENDING_BREATHE_MS;
-  }
-
-  function shouldApplyWorkLate(order, nowMs) {
-    if (!order) return false;
-    var st = String(order.status || "").toLowerCase();
-    if (st !== "accepted" && st !== "preparing") return false;
-    var baseMs = getPendingAlertBaseMs(order);
-    if (!baseMs) return false;
-    return (nowMs - baseMs) >= PENDING_BREATHE_MS;
+    env = env || buildTimingEnv();
+    return helpers.getKdsTimingMeta(order, nowMs, { queueInfo: env.queueInfo }, env.rules).statusPhase;
   }
 
   function tickWaitBars() {
     if (!state.orders || !state.orders.length) return;
     var nowMs = Date.now();
+    var env = buildTimingEnv();
     var nodes = document.querySelectorAll(".kds-card[data-id]");
     nodes.forEach(function (card) {
       var oid = card.getAttribute("data-id");
@@ -367,82 +317,77 @@
       }
       if (!o) return;
 
-      // 等待時間文字
+      // 時間狀態區：主/次文案
       var bar = card.querySelector(".kds-card__wait-bar");
       if (bar) {
-        var info = getWaitInfo(o);
-        bar.textContent = info.text;
-        bar.classList.remove("warn", "crit");
-        if (info.cls) bar.classList.add(info.cls);
+        var info = getWaitInfo(o, nowMs, env);
+        var primaryEl = bar.querySelector(".kds-card__wait-primary");
+        var secondaryEl = bar.querySelector(".kds-card__wait-secondary");
+        if (primaryEl) primaryEl.textContent = info.text;
+        else bar.textContent = info.text;
+        if (secondaryEl) secondaryEl.textContent = info.secondary || "";
+        bar.classList.remove("wait", "warn", "crit");
+        bar.classList.add(info.cls || "wait");
+        bar.setAttribute("data-phase", info.phase || "");
       }
 
-      var st = String(o.status || "").toLowerCase();
+      var isActive = isActiveWorkStatus(o.status);
+      var phase = getOrderPhase(o, nowMs, env);
 
-      // 紅色呼吸警示：pending_confirmation 超過 12 分鐘
-      if (st === "pending_confirmation") {
-        var applyPending = shouldApplyPendingBreathe(o, nowMs);
-        if (applyPending && !_breatheActiveIds.has(o.id)) {
-          _breatheActiveIds.add(o.id);
-          var baseMs = getPendingAlertBaseMs(o);
-          console.log("[KDS_ALERT] pending breathe on", {
-            id: o.id, source: o.source, status: o.status,
-            createdAt: o.created_at, scheduledPickupAt: o.scheduled_pickup_at,
-            waitMs: nowMs - baseMs
-          });
-        } else if (!applyPending && _breatheActiveIds.has(o.id)) {
-          _breatheActiveIds.delete(o.id);
-          console.log("[KDS_ALERT] pending breathe off", { id: o.id, status: o.status });
-        }
-        card.classList.toggle("kds-card--alert-breathe", applyPending);
-        card.classList.remove("kds-card--late-work");
-
-      // 橘紅脈動警示：accepted / preparing 超過 12 分鐘
-      } else if (st === "accepted" || st === "preparing") {
-        var applyWork = shouldApplyWorkLate(o, nowMs);
-        if (applyWork && !_workLateActiveIds.has(o.id)) {
-          _workLateActiveIds.add(o.id);
-          var wBaseMs = getPendingAlertBaseMs(o);
-          console.log("[KDS_ALERT] work late on", {
-            id: o.id, source: o.source, status: o.status,
-            waitMs: nowMs - wBaseMs
-          });
-        } else if (!applyWork && _workLateActiveIds.has(o.id)) {
-          _workLateActiveIds.delete(o.id);
-          console.log("[KDS_ALERT] work late off", { id: o.id, status: o.status });
-        }
-        card.classList.toggle("kds-card--late-work", applyWork);
-        card.classList.remove("kds-card--alert-breathe");
-
-      // 其他狀態（ready 等）：清除兩個 class
-      } else {
-        if (_breatheActiveIds.has(o.id)) {
-          _breatheActiveIds.delete(o.id);
-          console.log("[KDS_ALERT] pending breathe off", { id: o.id, status: o.status });
-        }
-        if (_workLateActiveIds.has(o.id)) {
-          _workLateActiveIds.delete(o.id);
-          console.log("[KDS_ALERT] work late off", { id: o.id, status: o.status });
-        }
-        card.classList.remove("kds-card--alert-breathe", "kds-card--late-work");
+      // 紅色 breathing 只在真正逾時且訂單仍在製作中 / 待開做
+      var overdue = isActive && phase === "overdue";
+      if (overdue && !_overdueActiveIds.has(o.id)) {
+        _overdueActiveIds.add(o.id);
+        console.log("[KDS_ALERT] overdue on", { id: o.id, status: o.status });
+      } else if (!overdue && _overdueActiveIds.has(o.id)) {
+        _overdueActiveIds.delete(o.id);
+        console.log("[KDS_ALERT] overdue off", { id: o.id, status: o.status });
       }
+      card.classList.toggle("kds-card--overdue", overdue);
+      // 舊 class 保留相容；新邏輯下不再啟用
+      card.classList.remove("kds-card--late-work", "kds-card--alert-breathe");
+      card.setAttribute("data-phase", phase || "");
     });
   }
 
 
   function cache() {
-    el.loading      = document.getElementById("auth-loading");
-    el.error        = document.getElementById("auth-error");
-    el.storeMeta    = document.getElementById("ops-store-meta");
-    el.userMeta     = document.getElementById("ops-user-meta");
-    el.lastUpdate   = document.getElementById("kds-last-update");
-    el.statPending  = document.getElementById("stat-pending");
-    el.statPreparing= document.getElementById("stat-preparing");
-    el.statReady    = document.getElementById("stat-ready");
-    el.statVisible  = document.getElementById("stat-visible");
-    el.connBanner   = document.getElementById("kds-conn-banner");
-    el.list         = document.getElementById("kds-list");
-    el.tabs         = Array.prototype.slice.call(document.querySelectorAll("[data-kds-filter]"));
-    el.enableAudio  = document.getElementById("kds-enable-audio-btn");
+    el.loading    = document.getElementById("auth-loading");
+    el.error      = document.getElementById("auth-error");
+    el.storeMeta  = document.getElementById("ops-store-meta");
+    el.userMeta   = document.getElementById("ops-user-meta");
+    el.lastUpdate = document.getElementById("kds-last-update");
+    el.connBanner = document.getElementById("kds-conn-banner");
+    el.list       = document.getElementById("kds-list");
+    el.tabs       = Array.prototype.slice.call(document.querySelectorAll("[data-kds-filter]"));
+    el.enableAudio = document.getElementById("kds-enable-audio-btn");
+    el.dutyText    = document.getElementById("kds-duty");
+    el.stationBadge = document.getElementById("kds-station-badge");
+    el.lockBar     = document.getElementById("kds-lock-bar");
+  }
+
+  function applyStationMode() {
+    var station = state.station;
+    document.body.classList.remove("kds-mode-boil", "kds-mode-pack");
+    document.body.classList.add("kds-mode-" + station);
+    if (el.stationBadge) el.stationBadge.textContent = stationLabel(station);
+    if (el.lastUpdate) el.lastUpdate.setAttribute("data-station", station);
+  }
+
+  function updateDutyDisplay() {
+    var sess = state.currentSession;
+    var active = !!(sess && sess.sessionActive && sess.employeeId);
+    if (el.dutyText) {
+      if (active) {
+        el.dutyText.textContent = "目前值班：" + sess.employeeName + " (" + sess.employeeId + ")";
+        el.dutyText.classList.remove("kds-duty--empty");
+      } else {
+        el.dutyText.textContent = "目前值班：未登入";
+        el.dutyText.classList.add("kds-duty--empty");
+      }
+    }
+    document.body.classList.toggle("kds-locked", !active);
+    if (el.lockBar) el.lockBar.style.display = active ? "none" : "";
   }
 
   function loadCheckedState() {
@@ -554,34 +499,23 @@
   function applyExpanded() {
     var board = document.getElementById("kds-board");
     if (!board) return;
+    // 站別模式下只顯示單欄（另一欄 display:none），不做雙欄展開／收合
+    if (state.station === "boil" || state.station === "pack") {
+      board.removeAttribute("data-expanded");
+      board.style.setProperty("grid-template-columns", "1fr", "important");
+      return;
+    }
     var widths = {
-      pending: "minmax(0, 1fr) 60px 60px",
-      work:    "60px minmax(0, 1fr) 60px",
-      ready:   "60px 60px minmax(0, 1fr)"
+      work:  "minmax(0, 1fr) 60px",
+      ready: "60px minmax(0, 1fr)"
     };
-    if (expandedCol) {
+    if (expandedCol && widths[expandedCol]) {
       board.setAttribute("data-expanded", expandedCol);
       board.style.setProperty("grid-template-columns", widths[expandedCol], "important");
     } else {
       board.removeAttribute("data-expanded");
       board.style.removeProperty("grid-template-columns");
     }
-  }
-
-  function clearCancelPressVisual(button) {
-    if (!button) return;
-    button.style.outline = "";
-    button.style.outlineOffset = "";
-  }
-
-  function clearCancelPressState() {
-    if (cancelPressTimer) {
-      clearTimeout(cancelPressTimer);
-      cancelPressTimer = null;
-    }
-    clearCancelPressVisual(cancelPressTarget);
-    cancelPressTarget = null;
-    cancelPressTriggered = false;
   }
 
   function showConnectionBanner(message, tone) {
@@ -630,9 +564,53 @@
   function start(context) {
     state.storeId = context.storeId;
     state.context = context;
-    el.storeMeta.textContent = "門市：" + state.storeId;
-    el.userMeta.textContent  = "登入：" + (context.admin.name || context.user.email || context.user.uid) +
-                               " ／ " + context.admin.role;
+    state.station = resolveStationFromQuery();
+    applyStationMode();
+    // 在訂閱回報前，一律視為「未登入值班員工」，鎖定所有狀態操作
+    state.currentSession = null;
+    updateDutyDisplay();
+    el.storeMeta.textContent = "門市：" + state.storeId + "｜站別：" + stationLabel(state.station);
+    if (el.userMeta) el.userMeta.textContent = "";
+
+    // 訂閱全店目前當班員工（POS 控制），兩台 KDS 將同步顯示
+    if (window.LeLeShanOpsSession) {
+      if (state.sessionUnsub) { try { state.sessionUnsub(); } catch(_) {} }
+      state.sessionUnsub = window.LeLeShanOpsSession.subscribeSession(
+        context.db, state.storeId,
+        function (sess) {
+          state.currentSession = sess;
+          state.sessionSubscribeError = null;
+          updateDutyDisplay();
+          console.log("[KDS] current_session update", sess);
+        },
+        function (err) {
+          state.currentSession = null;
+          state.sessionSubscribeError = err;
+          console.error("[KDS] subscribe store_runtime failed", err);
+          if (el.lockBar) {
+            el.lockBar.textContent = "無法讀取值班員工狀態（" + (err && err.code || "error") + "），請確認 Firestore 規則已部署";
+          }
+          updateDutyDisplay();
+        }
+      );
+    } else {
+      console.warn("[KDS] LeLeShanOpsSession unavailable — kept locked");
+    }
+
+    // 訂閱店家設定（出餐時間規則等）
+    if (state.settingsUnsub) { try { state.settingsUnsub(); } catch(_) {} }
+    try {
+      state.settingsUnsub = context.db.collection("settings").doc(state.storeId).onSnapshot(function (snap) {
+        state.settings = snap && snap.exists ? snap.data() : null;
+        console.log("[KDS] settings update", state.settings && state.settings.kdsTimingRules ? "has kdsTimingRules" : "defaults");
+        render();
+      }, function (err) {
+        console.error("[KDS] subscribe settings failed", err);
+        state.settings = null;
+      });
+    } catch (e) {
+      console.warn("[KDS] settings subscribe exception", e);
+    }
 
     window.LeLeShanOrders.subscribeStoreOrders({
       db:      context.db,
@@ -659,36 +637,19 @@
           console.log("[KDS_SOUND] baseline initialized, ids:", orders.map(function (o) { return o.id; }));
         } else {
           var newlyAppeared = getNewlyAppearedOrders(orders, previousOrderMap);
-
-          console.log("[KDS_SOUND] newly appeared", newlyAppeared.map(function (o) {
-            return { id: o.id, status: o.status, source: o.source, pickupNumber: o.pickupNumber || o.display_code || "" };
-          }));
-
-          // 1. 全新文件：直接判斷 status + source
+          // 新進 accepted LINE 訂單：播一次提示音
           newlyAppeared.forEach(function (order) {
-            var shouldPlay = isOnlineOrderSource(order.source) && isSoundTargetStatus(order.status);
+            var shouldPlay = isNewAcceptedOrder(order);
             console.log("[KDS_SOUND] evaluate new doc", { id: order.id, source: order.source, status: order.status, shouldPlay: shouldPlay });
-            if (shouldPlay) startRinging(order);
+            if (shouldPlay && isSoundEnabled()) {
+              try { playNewOrderBeep(); } catch (e) {}
+            }
           });
-
-          // 2. 已存在文件：status 轉換進入目標狀態
-          orders.forEach(function (order) {
-            var prevOrder = previousOrderMap.get(String(order.id));
-            if (!prevOrder) return;
-            if (!didEnterTargetStatus(prevOrder, order)) return;
-            if (!isOnlineOrderSource(order.source)) return;
-            console.log("[KDS_SOUND] status transition", { id: order.id, from: prevOrder.status, to: order.status, source: order.source });
-            startRinging(order);
-          });
-
-          // 3. 停止已確認訂單的響鈴
-          pendingRingMap.forEach(function (timerId, orderId) {
-            var cur = currentMap.get(orderId);
-            if (!cur || !isSoundTargetStatus(cur.status)) stopRinging(orderId);
-          });
-
           previousOrderMap = currentMap;
         }
+
+        // 第一次看到活躍工作單且尚未鎖定估時 → 觸發一次性 transaction 寫回
+        tickEnsureLocks();
 
         render();
       },
@@ -725,68 +686,89 @@
       }
     });
 
-    el.list.addEventListener("pointerdown", function (event) {
+    // 取消訂單：點擊 → 開啟原因選擇 modal
+    el.list.addEventListener("click", function (event) {
       var cancelBtn = event.target.closest("[data-cancel-order]");
       if (!cancelBtn) return;
-      clearCancelPressState();
-      cancelPressTarget = cancelBtn;
-      cancelPressTriggered = false;
-      cancelBtn.style.outline = "2px solid rgba(239,68,68,.6)";
-      cancelBtn.style.outlineOffset = "2px";
-      if (typeof cancelBtn.setPointerCapture === "function") {
-        try { cancelBtn.setPointerCapture(event.pointerId); } catch (_) {}
-      }
-      cancelPressTimer = setTimeout(function () {
-        if (!cancelPressTarget) return;
-        var orderId = cancelPressTarget.getAttribute("data-order-id");
-        clearCancelPressVisual(cancelPressTarget);
-        cancelPressTimer = null;
-        cancelPressTriggered = true;
-        cancelPressTarget = null;
-        if (orderId) {
-          changeStatus(orderId, "cancelled");
-        }
-      }, 1500);
+      var orderId = cancelBtn.getAttribute("data-order-id");
+      if (orderId) showCancelModal(orderId);
     });
-
-    function cancelHoldIfPending(event, strictTarget) {
-      if (!cancelPressTarget) return;
-      if (strictTarget) {
-        var targetBtn = event.target.closest ? event.target.closest("[data-cancel-order]") : null;
-        if (targetBtn !== cancelPressTarget) return;
-      }
-      clearCancelPressState();
-    }
-
-    el.list.addEventListener("pointerup", function (event) {
-      cancelHoldIfPending(event, true);
-    });
-
-    el.list.addEventListener("pointercancel", function (event) {
-      cancelHoldIfPending(event, false);
-    });
-
-    el.list.addEventListener("pointerleave", function (event) {
-      if (!cancelPressTarget) return;
-      if (event.target !== cancelPressTarget) return;
-      clearCancelPressState();
-    }, true);
   }
 
-  async function changeStatus(orderId, nextStatus) {
+  // ── 取消訂單 Modal ─────────────────────────────────────────────
+  var _cancelModalOrderId = null;
+
+  function showCancelModal(orderId) {
+    _cancelModalOrderId = orderId;
+    var modal = document.getElementById("kds-cancel-modal");
+    if (modal) modal.hidden = false;
+    var dismissBtn = document.getElementById("kds-cancel-dismiss");
+    if (dismissBtn) dismissBtn.focus();
+  }
+
+  function hideCancelModal() {
+    _cancelModalOrderId = null;
+    var modal = document.getElementById("kds-cancel-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  function bindCancelModal() {
+    var modal = document.getElementById("kds-cancel-modal");
+    if (!modal) return;
+    var backdrop = document.getElementById("kds-cancel-backdrop");
+    var dismissBtn = document.getElementById("kds-cancel-dismiss");
+    if (backdrop) backdrop.addEventListener("click", hideCancelModal);
+    if (dismissBtn) dismissBtn.addEventListener("click", hideCancelModal);
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") hideCancelModal();
+    });
+    modal.querySelectorAll("[data-reason]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var reason = btn.getAttribute("data-reason");
+        var orderId = _cancelModalOrderId;
+        hideCancelModal();
+        if (orderId && reason) changeStatus(orderId, "cancelled", reason);
+      });
+    });
+  }
+
+  async function changeStatus(orderId, nextStatus, cancelReason) {
     var ctx = state.context;
     if (!ctx) return;
+    var sess = state.currentSession;
+    if (!sess || !sess.sessionActive || !sess.employeeId) {
+      handleError(new Error("尚未設定值班員工，請先至 POS 登入或交班"));
+      return;
+    }
+    var prev = (state.orders.filter(function (o) { return o.id === orderId; })[0] || {}).status || "";
+    var employeeId = sess.employeeId;
+    var employeeName = sess.employeeName || "";
     try {
-      console.log("[KDS] Changing status.", { orderId: orderId, nextStatus: nextStatus });
+      console.log("[KDS] Changing status.", { orderId: orderId, nextStatus: nextStatus, cancelReason: cancelReason || null, by: employeeId });
       await window.LeLeShanOrders.updateOrderStatus({
-        db:        ctx.db,
-        orderId:   orderId,
-        storeId:   state.storeId,
-        nextStatus: nextStatus,
-        actorType: "staff",
-        actorUid:  ctx.user.uid,
-        actorName: ctx.admin.name || ctx.user.email || ""
+        db:          ctx.db,
+        orderId:     orderId,
+        storeId:     state.storeId,
+        nextStatus:  nextStatus,
+        cancelReason: cancelReason || null,
+        actorType:   "staff",
+        actorUid:    "emp:" + employeeId,
+        actorName:   employeeName
       });
+      if (window.LeLeShanOrderLog) {
+        window.LeLeShanOrderLog.logOrderAction(ctx.db, {
+          orderId:      orderId,
+          storeId:      state.storeId,
+          action:       window.LeLeShanOrderLog.actionFor(nextStatus),
+          statusBefore: prev,
+          statusAfter:  nextStatus,
+          employeeId:   employeeId,
+          employeeName: employeeName,
+          station:      state.station,
+          deviceType:   "kds",
+          cancelReason: cancelReason || null
+        });
+      }
     } catch (error) {
       console.error("[KDS] changeStatus failed.", error);
       handleError(error);
@@ -801,65 +783,41 @@
   function render() {
     var helpers = window.LeLeShanOrders;
 
-    // ── 嚴格三欄分桶（直接走 state.orders，避免 KDS_VISIBLE 漏掉 pending_confirmation） ──
-    console.log("[KDS] incoming orders:", state.orders.map(function (o) {
-      return { id: o.id, status: o.status, source: o.source };
-    }));
-    var cols = { pending: [], work: [], ready: [] };
+    var cols = { work: [], ready: [] };
     state.orders.forEach(function (o) {
       if (o.status === "completed" || o.status === "cancelled" || o.status === "picked_up") return;
-      if (o.status === "pending_confirmation") cols.pending.push(o);
-      else if (o.status === "ready") cols.ready.push(o);
-      else if (o.status === "accepted" || o.status === "preparing") cols.work.push(o);
-      // 其他狀態（如 "new"）不顯示，避免誤入待確認欄
+      if (o.status === "ready") cols.ready.push(o);
+      else if (o.status === "accepted" || o.status === "preparing" || o.status === "pending_confirmation" || o.status === "new") {
+        // pending_confirmation/new: 舊資料相容 → 歸入製作中
+        cols.work.push(o);
+      }
     });
 
     console.log("[KDS] bucket counts:", {
-      pending: cols.pending.length,
       work: cols.work.length,
       ready: cols.ready.length
     });
 
-    // 自診斷：印出本次 render 的真實資料來源（協助對照 Firestore）
-    try {
-      var statusCount = {};
-      state.orders.forEach(function (o) {
-        statusCount[o.status] = (statusCount[o.status] || 0) + 1;
-      });
-      console.log("[KDS] render snapshot", {
-        storeId: state.storeId,
-        totalOrders: state.orders.length,
-        statusCount: statusCount,
-        bucket: { pending: cols.pending.length, work: cols.work.length, ready: cols.ready.length },
-        pendingPickupNumbers: cols.pending.map(function (o) { return o.pickupNumber || o.id; }),
-        readyPickupNumbers: cols.ready.map(function (o) { return o.pickupNumber || o.id; })
-      });
-    } catch (_) {}
-
-    // 同步舊 stats DOM（仍隱藏，但保持一致）
-    var visibleTotal = cols.pending.length + cols.work.length + cols.ready.length;
-    if (el.statPending)   el.statPending.textContent   = String(cols.pending.length);
-    if (el.statPreparing) el.statPreparing.textContent = String(cols.work.length);
-    if (el.statReady)     el.statReady.textContent     = String(cols.ready.length);
-    if (el.statVisible)   el.statVisible.textContent   = String(visibleTotal);
-    cols.pending.sort(function (a, b) {
-      return helpers.toMillis(a.created_at) - helpers.toMillis(b.created_at);
-    });
+    // 製作欄位排序：依 startCookAt 由近到遠。
+    // 因 startCookAt = pickupAt - prep，overdue（pickupAt 在過去）的 startCookAt 最早，
+    // 自然排到最前面；should_start 其次；waiting_to_start 殿後。
+    var nowMs = Date.now();
+    var env = buildTimingEnv();
     cols.work.sort(function (a, b) {
-      return (helpers.toMillis(a.started_at) || helpers.toMillis(a.created_at))
-           - (helpers.toMillis(b.started_at) || helpers.toMillis(b.created_at));
+      var ma = helpers.getKdsTimingMeta(a, nowMs, { queueInfo: env.queueInfo }, env.rules);
+      var mb = helpers.getKdsTimingMeta(b, nowMs, { queueInfo: env.queueInfo }, env.rules);
+      return ma.startCookAtMs - mb.startCookAtMs;
     });
     cols.ready.sort(function (a, b) {
       return (helpers.toMillis(a.ready_at) || 0) - (helpers.toMillis(b.ready_at) || 0);
     });
 
-    var emptyLabels = { pending: "無待確認", work: "無製作中", ready: "無可取餐" };
-    ["pending", "work", "ready"].forEach(function (k) {
+    var emptyLabels = { work: "無製作中", ready: "無可取餐" };
+    ["work", "ready"].forEach(function (k) {
       var col  = document.getElementById("kds-col-" + k);
       var body = document.getElementById("kds-body-" + k);
       if (!body) return;
 
-      // expanded / collapsed 狀態
       if (col) {
         col.classList.toggle("kds-is-expanded",  expandedCol === k);
         col.classList.toggle("kds-is-collapsed", expandedCol !== null && expandedCol !== k);
@@ -869,7 +827,6 @@
         if (col) col.classList.remove("kds-has-expanded-invoice");
         body.innerHTML = '<div class="kds-empty">' + esc(emptyLabels[k]) + '</div>';
       } else if (expandedCol === k) {
-        // 展開欄：最多 4 張 invoice 式直長卡橫排
         if (col) col.classList.add("kds-has-expanded-invoice");
         var VISIBLE_N = 4;
         var visible = cols[k].slice(0, VISIBLE_N);
@@ -882,13 +839,18 @@
             ? '<div class="kds-hidden-count">+' + hiddenCount + ' 張較新訂單隱藏中（展開欄僅顯示最老 4 張）</div>'
             : '');
       } else {
-        // 其他欄（或全部未展開）：compact 卡
         if (col) col.classList.remove("kds-has-expanded-invoice");
         if (k === "ready") {
-          // ready 欄專用：包一層 scroll shell，限制最多 6 張可見
           body.innerHTML =
             '<div class="kds-ready-scroll-shell">' +
               '<div class="kds-ready-compact-grid">' +
+                cols[k].map(function (o) { return renderCardCompact(o); }).join("") +
+              '</div>' +
+            '</div>';
+        } else if (k === "work") {
+          body.innerHTML =
+            '<div class="kds-work-scroll-shell">' +
+              '<div class="kds-work-compact-grid">' +
                 cols[k].map(function (o) { return renderCardCompact(o); }).join("") +
               '</div>' +
             '</div>';
@@ -903,10 +865,6 @@
       if (sb) sb.textContent = String(cols[k].length);
     });
 
-    document.body.classList.toggle("kds-pending-mode", cols.pending.length > 0);
-    var pendingCol = document.getElementById("kds-col-pending");
-    if (pendingCol) pendingCol.classList.toggle("kds-active", cols.pending.length > 0);
-
     var workCol = document.getElementById("kds-col-work");
     if (workCol) {
       workCol.classList.remove("kds-overload", "kds-busy");
@@ -915,47 +873,6 @@
     }
     var readyCol = document.getElementById("kds-col-ready");
     if (readyCol) readyCol.classList.toggle("kds-full", cols.ready.length >= 4);
-
-    updateAlertStrip(cols.pending);
-    updateOldestStat(cols.pending);
-  }
-
-  function updateAlertStrip(pendingList) {
-    var helpers = window.LeLeShanOrders;
-    var strip = document.getElementById("kds-alert-strip");
-    if (!strip) return;
-    if (!pendingList || pendingList.length === 0) {
-      strip.hidden = true;
-      return;
-    }
-    strip.hidden = false;
-    var count = document.getElementById("kds-alert-count");
-    var oldest = document.getElementById("kds-alert-oldest");
-    var marquee = document.getElementById("kds-alert-marquee");
-    if (count) count.textContent = pendingList.length + " 筆";
-    if (oldest) {
-      var mins = Math.floor((Date.now() - helpers.toMillis(pendingList[0].created_at)) / 60000);
-      oldest.textContent = "最老 " + mins + " 分";
-    }
-    if (marquee) {
-      marquee.textContent = pendingList.map(function (o) {
-        return getPickupNumber(o) + " " + getCustomerName(o);
-      }).join("  ·  ") + "    ····   ";
-    }
-  }
-
-  function updateOldestStat(pendingList) {
-    var helpers = window.LeLeShanOrders;
-    var oldestEl = document.getElementById("kds-sb-oldest");
-    if (!oldestEl) return;
-    if (!pendingList || pendingList.length === 0) {
-      oldestEl.textContent = "—";
-      oldestEl.style.color = "var(--kds-muted)";
-      return;
-    }
-    var mins = Math.floor((Date.now() - helpers.toMillis(pendingList[0].created_at)) / 60000);
-    oldestEl.textContent = mins + " 分";
-    oldestEl.style.color = mins >= 5 ? "var(--kds-pending)" : mins >= 3 ? "#f59e0b" : "var(--kds-text)";
   }
 
   // ── Group normalization ──────────────────────────────────────
@@ -992,6 +909,10 @@
       return match ? parsePositive(match[1]) : 0;
     }
 
+    // ⚠️ LEGACY FALLBACK — 僅為 pre-2026-04 訂單相容用。
+    // 新訂單（P4, 2026-04-21 起）會有完整 order.groups[]，不會走到這裡。
+    // 此函式讀取舊欄位（partId / sourceGroupId / groupKey / seatLabel / assignee / personIndex / seatIndex）
+    // 做群組重建，請勿依賴它處理新資料；若有新需求請寫進正式 schema。
     function rebuildByHints(orderRef, itemList) {
       var sourceGroupMeta = {};
       var sourceGroupMetaByLabel = {};
@@ -1323,22 +1244,81 @@
     return "";
   }
 
-  function getWaitInfo(order) {
+  // 收集目前活躍工作單（用來算 queuePosition）
+  function getActiveWorkOrders() {
+    return (state.orders || []).filter(function (o) {
+      var st = String(o.status || "").toLowerCase();
+      return st === "new" || st === "pending_confirmation" || st === "accepted" || st === "preparing";
+    });
+  }
+
+  // 建立一個 render/tick 期間共用的 timing 環境：rules + queueInfo
+  function buildTimingEnv() {
     var helpers = window.LeLeShanOrders;
-    var ms = helpers.toMillis(order.created_at);
-    if (!ms) return { cls: "", text: "—" };
-    var secs = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-    var mins = Math.floor(secs / 60);
-    var text = mins + ":" + String(secs % 60).padStart(2, "0");
-    var cls = "";
-    if (order.status === "pending_confirmation" || order.status === "new") {
-      if (mins >= 5) cls = "crit";
-      else if (mins >= 3) cls = "warn";
-    } else if (order.status === "preparing") {
-      if (mins >= 20) cls = "crit";
-      else if (mins >= 12) cls = "warn";
+    var rules = helpers.getKdsTimingRules(state.settings);
+    var queueInfo = helpers.buildKdsQueueInfo(getActiveWorkOrders());
+    return { rules: rules, queueInfo: queueInfo };
+  }
+
+  // 掃描所有活躍工作單，對「未鎖定估時」且本分頁未嘗試過的單觸發一次 ensureOrderTimingLocked
+  // 注意：
+  //   - 僅在首次需要時寫一次 Firestore
+  //   - 已鎖定的訂單：normalizeOrder 會帶出 order.timing，helpers.hasLockedTiming 會檢出，快速路徑回傳
+  //   - lockAttemptIds 避免同一分頁重複嘗試（即使 transaction 失敗也不重試）
+  function tickEnsureLocks() {
+    var helpers = window.LeLeShanOrders;
+    if (!state.context || !state.context.db || !helpers || typeof helpers.ensureOrderTimingLocked !== "function") return;
+    var actives = getActiveWorkOrders();
+    if (!actives.length) return;
+    var env = buildTimingEnv();
+    var db = state.context.db;
+    actives.forEach(function (order) {
+      var id = String(order && order.id || "");
+      if (!id) return;
+      if (helpers.hasLockedTiming(order)) return;
+      if (lockAttemptIds.has(id)) return;
+      lockAttemptIds.add(id);
+      console.log("[KDS_LOCK] attempt", { id: id, queuePosition: env.queueInfo.map[id] });
+      helpers.ensureOrderTimingLocked({
+        db: db,
+        orderId: id,
+        order: order,
+        context: { queueInfo: env.queueInfo },
+        rules: env.rules
+      }).then(function (timing) {
+        if (timing) {
+          console.log("[KDS_LOCK] locked", { id: id, lockedPrepMinutes: timing.lockedPrepMinutes, queuePositionAtLock: timing.queuePositionAtLock });
+        }
+      });
+    });
+  }
+
+  function getWaitInfo(order, nowMs, env) {
+    var helpers = window.LeLeShanOrders;
+    env = env || buildTimingEnv();
+    var meta = helpers.getKdsTimingMeta(
+      order,
+      typeof nowMs === "number" ? nowMs : Date.now(),
+      { queueInfo: env.queueInfo },
+      env.rules
+    );
+    var isActive = order.status === "accepted" || order.status === "preparing" || order.status === "pending_confirmation" || order.status === "new";
+    var cls = "wait";
+    if (isActive) {
+      if (meta.statusPhase === "overdue") cls = "crit";
+      else if (meta.statusPhase === "should_start") cls = "warn";
+      else cls = "wait";
+    } else {
+      cls = "wait";
     }
-    return { cls: cls, text: text };
+    return {
+      cls: cls,
+      text: meta.primaryLabel,
+      secondary: meta.secondaryLabel,
+      phase: meta.statusPhase,
+      isScheduled: meta.isScheduled,
+      meta: meta
+    };
   }
 
   function collectAllItemKeys(order, groups) {
@@ -1362,24 +1342,19 @@
   function renderCard(order /* , visible */) {
     var helpers    = window.LeLeShanOrders;
     var status     = order.status;
-    var isPending  = status === "pending_confirmation" || status === "new";
-    var groups     = isPending ? [] : normalizeGroups(order);
+    var groups     = normalizeGroups(order);
     var allKeys    = collectAllItemKeys(order, groups);
     var allChecked = allKeys.length > 0 && allKeys.every(function (k) { return isItemChecked(k); });
     var wait       = getWaitInfo(order);
-    var elapsedMin = Math.floor((Date.now() - helpers.toMillis(order.created_at)) / 60000);
 
-    var statusKey = isPending ? "pending"
-      : status === "ready" ? "ready"
+    var statusKey = status === "ready" ? "ready"
       : status === "preparing" ? "preparing"
       : "accepted";
 
     var cls = "kds-card kds-card--" + statusKey;
-    if (status === "preparing" && allChecked) cls += " all-checked";
-    if (isPending && elapsedMin >= 8) cls += " kds-critical";
+    if ((status === "preparing" || status === "accepted") && allChecked) cls += " all-checked";
 
-    // CTA
-    var primary = (STATUS_ACTIONS[status] || [])[0] || null;
+    var primary = (STATUS_ACTIONS[status] || STATUS_ACTIONS["accepted"])[0] || null;
     var ctaHtml = "";
     if (primary) {
       var ctaClass = "";
@@ -1394,19 +1369,16 @@
       ctaHtml = '<button class="kds-btn kds-btn--main pickup" type="button" disabled style="opacity:0.5">—</button>';
     }
 
-    // 來源 badge（pending 不顯示預約）
     var srcCode = getSourceCode(order);
     var srcHtml = '<span class="kds-src kds-src--' + esc(srcCode) + '">' + esc(getSourceLabel(order)) + '</span>';
-    if (!isPending && helpers.isFutureScheduled(order)) {
+    if (wait.isScheduled && srcCode === "line") {
+      srcHtml += '<span class="kds-src kds-src--reserve">LINE預約</span>';
+    } else if (wait.isScheduled) {
       srcHtml += '<span class="kds-src kds-src--reserve">預約</span>';
     }
 
-    // body：pending 顯示金額；製作/完成 顯示品項
     var bodyHtml = "";
-    if (isPending) {
-      var total = Number(order.total || 0);
-      bodyHtml = '<div class="kds-card__amount">$ ' + total.toLocaleString() + '</div>';
-    } else if (groups && groups.length) {
+    if (groups && groups.length) {
       bodyHtml = groups.map(function (g, gi) {
         var badge = GROUP_BADGE_LABELS[gi] || String(gi + 1);
         var totalQty = (g.items || []).reduce(function (n, i) { return n + Number(i.qty || 0); }, 0);
@@ -1450,9 +1422,12 @@
 
     var note = getNoteText(order);
 
-    return '<article class="' + cls + '" data-id="' + esc(order.id) + '">' +
+    return '<article class="' + cls + '" data-id="' + esc(order.id) + '" data-phase="' + esc(wait.phase) + '">' +
       '<div class="kds-card__hero">' +
-        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '">' + esc(wait.text) + '</div>' +
+        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '" data-phase="' + esc(wait.phase) + '">' +
+          '<span class="kds-card__wait-primary">' + esc(wait.text) + '</span>' +
+          '<span class="kds-card__wait-secondary">' + esc(wait.secondary || "") + '</span>' +
+        '</div>' +
         '<div class="kds-card__number">' + esc(getPickupNumber(order)) + '</div>' +
       '</div>' +
       '<div class="kds-card__meta">' +
@@ -1463,7 +1438,7 @@
       (note ? '<div class="kds-note">' + esc(note) + '</div>' : '') +
       '<div class="kds-card__cta">' +
         ctaHtml +
-        '<button class="kds-btn kds-btn--sub" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">✕</button>' +
+        '<button class="kds-btn kds-btn--cancel" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">取消</button>' +
       '</div>' +
       '</article>';
   }
@@ -1471,23 +1446,19 @@
   function renderCardInvoice(order) {
     var helpers    = window.LeLeShanOrders;
     var status     = order.status;
-    var isPending  = status === "pending_confirmation" || status === "new";
     var groups     = normalizeGroups(order);
     var allKeys    = collectAllItemKeys(order, groups);
     var allChecked = allKeys.length > 0 && allKeys.every(function (k) { return isItemChecked(k); });
     var wait       = getWaitInfo(order);
-    var elapsedMin = Math.floor((Date.now() - helpers.toMillis(order.created_at)) / 60000);
 
-    var statusKey = isPending ? "pending"
-      : status === "ready" ? "ready"
+    var statusKey = status === "ready" ? "ready"
       : status === "preparing" ? "preparing"
       : "accepted";
 
     var cls = "kds-card kds-card--invoice kds-card--" + statusKey;
-    if (status === "preparing" && allChecked) cls += " all-checked";
-    if (isPending && elapsedMin >= 8) cls += " kds-critical";
+    if ((status === "preparing" || status === "accepted") && allChecked) cls += " all-checked";
 
-    var primary = (STATUS_ACTIONS[status] || [])[0] || null;
+    var primary = (STATUS_ACTIONS[status] || STATUS_ACTIONS["accepted"])[0] || null;
     var ctaHtml = "";
     if (primary) {
       var ctaClass = "";
@@ -1504,7 +1475,9 @@
 
     var srcCode = getSourceCode(order);
     var srcHtml = '<span class="kds-src kds-src--' + esc(srcCode) + '">' + esc(getSourceLabel(order)) + '</span>';
-    if (!isPending && helpers.isFutureScheduled(order)) {
+    if (wait.isScheduled && srcCode === "line") {
+      srcHtml += '<span class="kds-src kds-src--reserve">LINE預約</span>';
+    } else if (wait.isScheduled) {
       srcHtml += '<span class="kds-src kds-src--reserve">預約</span>';
     }
 
@@ -1553,9 +1526,12 @@
 
     var note = getNoteText(order);
 
-    return '<article class="' + cls + '" data-id="' + esc(order.id) + '">' +
+    return '<article class="' + cls + '" data-id="' + esc(order.id) + '" data-phase="' + esc(wait.phase) + '">' +
       '<div class="kds-card__hero">' +
-        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '">' + esc(wait.text) + '</div>' +
+        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '" data-phase="' + esc(wait.phase) + '">' +
+          '<span class="kds-card__wait-primary">' + esc(wait.text) + '</span>' +
+          '<span class="kds-card__wait-secondary">' + esc(wait.secondary || "") + '</span>' +
+        '</div>' +
         '<div class="kds-card__number">' + esc(getPickupNumber(order)) + '</div>' +
       '</div>' +
       '<div class="kds-card__meta">' +
@@ -1566,20 +1542,18 @@
       (note ? '<div class="kds-note">' + esc(note) + '</div>' : '') +
       '<div class="kds-card__cta">' +
         ctaHtml +
-        '<button class="kds-btn kds-btn--sub" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">✕</button>' +
+        '<button class="kds-btn kds-btn--cancel" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">取消</button>' +
       '</div>' +
       '</article>';
   }
 
   function renderCardCompact(order) {
     var status    = order.status;
-    var isPending = status === "pending_confirmation" || status === "new";
-    var statusKey = isPending ? "pending"
-      : status === "ready" ? "ready"
+    var statusKey = status === "ready" ? "ready"
       : status === "preparing" ? "preparing" : "accepted";
     var wait    = getWaitInfo(order);
     var total   = Number(order.total || 0);
-    var primary = (STATUS_ACTIONS[status] || [])[0] || null;
+    var primary = (STATUS_ACTIONS[status] || STATUS_ACTIONS["accepted"])[0] || null;
 
     var ctaClass = "";
     if (primary) {
@@ -1594,18 +1568,29 @@
           'data-next-status="' + esc(primary.next) + '">' + esc(primary.label) + '</button>'
       : '<button class="kds-btn kds-btn--main pickup" type="button" disabled style="opacity:0.5">—</button>';
 
-    return '<article class="kds-card kds-card--compact kds-card--' + statusKey + '" data-id="' + esc(order.id) + '">' +
+    var compactSrcCode = getSourceCode(order);
+    var compactSrcHtml = '<span class="kds-src kds-src--' + esc(compactSrcCode) + '">' + esc(getSourceLabel(order)) + '</span>';
+    if (wait.isScheduled && compactSrcCode === "line") {
+      compactSrcHtml += '<span class="kds-src kds-src--reserve">LINE預約</span>';
+    } else if (wait.isScheduled) {
+      compactSrcHtml += '<span class="kds-src kds-src--reserve">預約</span>';
+    }
+
+    return '<article class="kds-card kds-card--compact kds-card--' + statusKey + '" data-id="' + esc(order.id) + '" data-phase="' + esc(wait.phase) + '">' +
       '<div class="kds-card__hero">' +
-        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '">' + esc(wait.text) + '</div>' +
+        '<div class="kds-card__wait-bar ' + esc(wait.cls) + '" data-phase="' + esc(wait.phase) + '">' +
+          '<span class="kds-card__wait-primary">' + esc(wait.text) + '</span>' +
+          '<span class="kds-card__wait-secondary">' + esc(wait.secondary || "") + '</span>' +
+        '</div>' +
         '<div class="kds-card__number" data-expand="' + statusKey + '">' + esc(getPickupNumber(order)) + '</div>' +
       '</div>' +
       '<div class="kds-card__meta kds-card__meta--compact">' +
-        '<span class="kds-src kds-src--' + esc(getSourceCode(order)) + '">' + esc(getSourceLabel(order)) + '</span>' +
+        compactSrcHtml +
         '<span class="kds-card__name">' + esc(getCustomerName(order)) + '</span>' +
       '</div>' +
       '<div class="kds-card__amount">$ ' + total.toLocaleString() + '</div>' +
       '<div class="kds-card__cta">' + ctaHtml +
-        '<button class="kds-btn kds-btn--sub" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">✕</button>' +
+        '<button class="kds-btn kds-btn--cancel" type="button" data-cancel-order="true" data-order-id="' + esc(order.id) + '">取消</button>' +
       '</div>' +
       '</article>';
   }
@@ -1639,7 +1624,7 @@
     html += '<span class="kds-src kds-src--' + esc(getSourceCode(order)) + '">' + esc(getSourceLabel(order)) + '</span>';
     html += '<span class="kds-pm__name">' + esc(getCustomerName(order)) + '</span>';
     if (createdStr) {
-      html += '<span class="kds-pm__time">建單 ' + esc(createdStr) + '・等待 ' + esc(wait.text) + '</span>';
+      html += '<span class="kds-pm__time">建單 ' + esc(createdStr) + '・' + esc(wait.text) + '</span>';
     }
     html += '</div>';
 
@@ -1648,6 +1633,25 @@
     html += '<span class="kds-pm__total">$ ' + total.toLocaleString() + '</span>';
     if (pickupStr) html += '<span class="kds-pm__pickup">' + esc(pickupStr) + '</span>';
     html += '</div>';
+
+    // 估時資訊（breakdown）
+    var bd = wait.meta && wait.meta.breakdown;
+    if (bd) {
+      var matchedNames = Array.isArray(bd.longCookMatchedNames) ? bd.longCookMatchedNames : (Array.isArray(bd.longCookMatchedItems) ? bd.longCookMatchedItems.map(function (m) { return m.name || m; }) : []);
+      html += '<div class="kds-pm__timing">';
+      html += '<div class="kds-pm__timing-head">估時資訊' + (bd.locked ? '（已鎖定 ' + esc(bd.estimatedBy || "kds_rule_v2") + '）' : '（即時估算）') + '</div>';
+      html += '<div class="kds-pm__timing-grid">';
+      html += '<div><span>最終預估</span><strong>' + esc(wait.meta.prepMinutes) + ' 分</strong></div>';
+      html += '<div><span>排隊位置</span><strong>第 ' + esc(bd.queuePosition || 0) + ' 張</strong></div>';
+      html += '<div><span>隊列基礎</span><strong>' + esc(bd.queueBaseMinutes || 0) + ' 分</strong></div>';
+      html += '<div><span>金額加時</span><strong>+' + esc(bd.amountMinutes || 0) + ' 分</strong></div>';
+      html += '<div><span>超大單加時</span><strong>+' + esc(bd.extraLargeOrderMinutes || 0) + ' 分</strong></div>';
+      html += '<div><span>group/item</span><strong>' + esc(bd.groupCount || 0) + ' / ' + esc(bd.itemCount || 0) + '</strong></div>';
+      html += '<div><span>長煮下限</span><strong>' + (bd.longCookFloorApplied ? '命中' : '未命中') + '</strong></div>';
+      html += '<div><span>命中食材</span><strong>' + esc(matchedNames.length ? matchedNames.join("、") : "—") + '</strong></div>';
+      html += '</div>';
+      html += '</div>';
+    }
 
     // 備註
     if (note) html += '<div class="kds-pm__note">📝 ' + esc(note) + '</div>';
@@ -1699,11 +1703,10 @@
 
     document.getElementById("kds-preview-num").textContent = getPickupNumber(order);
 
-    var statusKey = (order.status === "pending_confirmation" || order.status === "new") ? "pending"
-      : order.status === "ready" ? "ready"
+    var statusKey = order.status === "ready" ? "ready"
       : order.status === "preparing" ? "preparing"
       : "accepted";
-    var statusLabels = { pending: "待確認", accepted: "製作中", preparing: "製作中", ready: "可取餐" };
+    var statusLabels = { accepted: "製作中", preparing: "製作中", ready: "可取餐" };
     var badge = document.getElementById("kds-preview-status");
     badge.textContent = statusLabels[statusKey] || "";
     badge.className   = "kds-modal__status-badge is-" + statusKey;

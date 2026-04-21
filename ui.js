@@ -21,10 +21,17 @@
     el.profileMeta = document.getElementById("profile-meta");
     el.logoutBtn = document.getElementById("logout-btn");
     el.flavorOptions = document.getElementById("flavor-options");
-    el.orderTypeOptions = document.getElementById("order-type-options");
+    el.productFlavorTabs = document.getElementById("product-flavor-tabs");
+    el.stickyFlavorBar = document.getElementById("sticky-flavor-bar");
+    el.stickyFlavorTabs = document.getElementById("sticky-flavor-tabs");
+    el.flavorStepCard = document.getElementById("flavor-step-card");
     el.comboSection = document.getElementById("combo-section");
+    el.comboThresholdHint = document.getElementById("combo-threshold-hint");
     el.singleSection = document.getElementById("single-section");
+    el.singleSectionToggle = document.getElementById("single-section-toggle");
+    el.singleSectionContent = document.getElementById("single-section-content");
     el.comboRoot = document.getElementById("combo-root");
+    el.comboUpsellRoot = document.getElementById("combo-upsell-root");
     el.singleRoot = document.getElementById("single-root");
     el.cartItems = document.getElementById("cart-items");
     el.giftSelectionPanel = document.getElementById("gift-selection-panel");
@@ -57,6 +64,7 @@
     el.loginRequiredCancel = document.getElementById("login-required-cancel");
     el.quantityModal = document.getElementById("quantity-modal");
     el.quantityModalItemName = document.getElementById("quantity-modal-item-name");
+    el.quantityModalItemMeta = document.getElementById("quantity-modal-item-meta");
     el.quantityModalPrice = document.getElementById("quantity-modal-price");
     el.quantityModalDetail = document.getElementById("quantity-modal-detail");
     el.quantityModalType = document.getElementById("quantity-modal-type");
@@ -66,13 +74,23 @@
     el.quantityModalStaple = document.getElementById("quantity-modal-staple");
     el.quantityModalPortion = document.getElementById("quantity-modal-portion");
     el.quantityModalOptions = document.getElementById("quantity-modal-options");
+    el.quantityModalActions = document.getElementById("quantity-modal-actions");
+    el.quantityModalCancel = document.getElementById("quantity-modal-cancel");
     el.quantityModalSuccess = document.getElementById("quantity-modal-success");
     el.quantityModalSuccessText = document.getElementById("quantity-modal-success-text");
     el.quantityModalConfirm = document.getElementById("quantity-modal-confirm");
+    el.flavorConfirmModal = document.getElementById("flavor-confirm-modal");
+    el.flavorConfirmItemName = document.getElementById("flavor-confirm-item-name");
+    el.flavorConfirmCurrent = document.getElementById("flavor-confirm-current");
+    el.flavorConfirmOptions = document.getElementById("flavor-confirm-options");
+    el.flavorConfirmCancel = document.getElementById("flavor-confirm-cancel");
+    el.flavorConfirmSubmit = document.getElementById("flavor-confirm-submit");
     el.viewCartBtnSticky = document.getElementById("view-cart-btn-sticky");
     el.cartListStart = document.getElementById("cart-list-start");
     el.pickupReservationNotice = document.getElementById("pickup-reservation-notice");
     el.memberNavBtn = document.getElementById("member-nav-btn");
+    bindSingleSectionToggle(app);
+    setupStickyFlavorBar(app);
   }
 
   function bindModalDismiss(app, overlay, closeFn) {
@@ -87,6 +105,7 @@
     if (app.state.activeModal === "login-required") closeLoginRequiredModal(app);
     if (app.state.activeModal === "store-status") closeStoreStatusModal(app);
     if (app.state.activeModal === "quantity-select") closeQuantityModal(app);
+    if (app.state.activeModal === "flavor-confirm" && app.modules && app.modules.cart) app.modules.cart.cancelFlavorSelection();
   }
 
   function setMessage(app, message, type) {
@@ -203,17 +222,17 @@
   function renderQuantityModalDetail(app, payload) {
     if (!app.el.quantityModalDetail || !payload) return;
     var isCombo = payload.type === "combo";
-    var flavorOptions = app.state.flavors.map(function (flavor) {
+    var flavorOptions = (Array.isArray(payload.flavorOptions) && payload.flavorOptions.length ? payload.flavorOptions : app.state.flavors).map(function (flavor) {
       return { id: flavor.id, name: flavor.name };
     });
 
-    // 口味欄位：只有 requiresFlavor !== false 且有口味選項才顯示（與 unit 無關）
-    var showFlavor = payload.requiresFlavor !== false && flavorOptions.length > 0;
-    // 主食欄位：只有套餐才顯示
-    var showStaple = isCombo && payload.stapleOptions && payload.stapleOptions.length > 0;
+    // 口味欄位：只有 requiresFlavor=true 且有口味選項才顯示
+    var showFlavor = payload.requiresFlavor === true && flavorOptions.length > 0;
+    // 主食欄位：requiresStaple=true 時顯示
+    var showStaple = payload.requiresStaple === true && payload.stapleOptions && payload.stapleOptions.length > 0;
     // detail 區塊：只有有東西要顯示才顯示
     // 注意：直接用 style.display 以免 display:grid 的 CSS 比 .hidden 優先序更高而蓋掉
-    var showDetail = isCombo || showFlavor || showStaple;
+    var showDetail = showFlavor || showStaple || isCombo;
     app.el.quantityModalDetail.style.display = showDetail ? "" : "none";
 
     if (app.el.quantityModalType) {
@@ -268,7 +287,7 @@
 
     if (app.el.quantityModalFlavor && app.el.quantityModalFlavor.value) {
       pending.flavorId = app.el.quantityModalFlavor.value;
-      var flavor = app.state.flavors.find(function (item) {
+      var flavor = (pending.flavorOptions || app.state.flavors || []).find(function (item) {
         return item.id === pending.flavorId;
       }) || null;
       pending.flavorName = flavor ? flavor.name : pending.flavorName;
@@ -281,6 +300,27 @@
     app.el.quantityModalPrice.classList.remove("hidden");
   }
 
+  function renderQuantityChoices(app, payload) {
+    if (!app.el.quantityModalOptions || !payload) return;
+    var selectedQuantity = Number((app.state.pendingCartSelection && app.state.pendingCartSelection.selectedQuantity) || payload.selectedQuantity || 1);
+    var requiresConfirm = payload.requiresFlavor === true || payload.requiresStaple === true;
+    app.el.quantityModalOptions.innerHTML = [1, 2, 3, 4, 5].map(function (quantity) {
+      var activeClass = selectedQuantity === quantity ? " quantity-modal__choice--selected" : "";
+      return '<button type="button" class="quantity-modal__choice' + activeClass + '" data-quantity-choice="' + quantity + '">' + quantity + '份</button>';
+    }).join("");
+    Array.prototype.slice.call(app.el.quantityModalOptions.querySelectorAll("[data-quantity-choice]")).forEach(function (button) {
+      button.addEventListener("click", function () {
+        var quantity = Number(button.getAttribute("data-quantity-choice"));
+        if (requiresConfirm) {
+          if (app.state.pendingCartSelection) app.state.pendingCartSelection.selectedQuantity = quantity;
+          renderQuantityChoices(app, payload);
+          return;
+        }
+        app.modules.cart.applyPendingQuantity(quantity);
+      });
+    });
+  }
+
   function portionGroupLabel(index) {
     return "第" + (index + 1) + "份";
   }
@@ -289,8 +329,7 @@
     var el = app.el.quantityModalPortion;
     if (!el) return;
 
-    // Only for single items
-    if (!payload || payload.type !== "single") {
+    if (!payload) {
       el.classList.add("hidden");
       el.innerHTML = "";
       return;
@@ -399,7 +438,15 @@
     app.state.activeModal = "quantity-select";
     app.el.quantityModal.classList.remove("hidden");
     app.el.quantityModal.setAttribute("aria-hidden", "false");
+    var confirmMode = payload.requiresFlavor === true || payload.requiresStaple === true;
+    var currentTitle = document.getElementById("quantity-modal-title");
+    if (currentTitle) currentTitle.textContent = confirmMode ? "請選擇這份內容" : "請選擇數量";
     app.el.quantityModalItemName.textContent = payload.name || "請選擇品項";
+    if (app.el.quantityModalItemMeta) {
+      var metaText = (payload.detailDisplay || payload.detail || "").trim();
+      app.el.quantityModalItemMeta.textContent = metaText;
+      app.el.quantityModalItemMeta.classList.toggle("hidden", !metaText);
+    }
     if (app.el.quantityModalPrice) {
       var basePrice = Number(payload.basePrice || 0);
       if (basePrice > 0) {
@@ -409,8 +456,15 @@
         app.el.quantityModalPrice.classList.add("hidden");
       }
     }
+    if (app.state.pendingCartSelection) {
+      if (!app.state.pendingCartSelection.selectedQuantity) app.state.pendingCartSelection.selectedQuantity = 1;
+      app.state.pendingCartSelection.committed = false;
+    }
     app.el.quantityModalSuccess.classList.add("hidden");
     app.el.quantityModalOptions.classList.remove("hidden");
+    if (app.el.quantityModalActions) {
+      app.el.quantityModalActions.classList.toggle("hidden", !(payload.requiresFlavor === true || payload.requiresStaple === true));
+    }
     renderQuantityModalDetail(app, payload);
     renderPortionSection(app, payload);
     if (app.el.quantityModalFlavor) {
@@ -424,19 +478,13 @@
       };
     }
     updateQuantityModalPrice(app, payload);
-    app.el.quantityModalOptions.innerHTML = [1, 2, 3, 4, 5].map(function (quantity) {
-      return '<button type="button" class="quantity-modal__choice" data-quantity-choice="' + quantity + '">' + quantity + '份</button>';
-    }).join("");
-    Array.prototype.slice.call(app.el.quantityModalOptions.querySelectorAll("[data-quantity-choice]")).forEach(function (button) {
-      button.addEventListener("click", function () {
-        app.modules.cart.applyPendingQuantity(Number(button.getAttribute("data-quantity-choice")));
-      });
-    });
+    renderQuantityChoices(app, payload);
   }
 
   function showQuantityAddedSuccess(app, selection, quantity) {
     if (!app.el.quantityModalSuccess || !app.el.quantityModalSuccessText || !app.el.quantityModalOptions) return;
     app.el.quantityModalOptions.classList.add("hidden");
+    if (app.el.quantityModalActions) app.el.quantityModalActions.classList.add("hidden");
     Array.prototype.slice.call(app.el.quantityModalOptions.querySelectorAll("[data-quantity-choice]")).forEach(function (button) {
       button.disabled = true;
     });
@@ -452,7 +500,7 @@
     }, 1000);
   }
 
-  function showOrderSuccess(app, pickupNumber, cartSnapshot, pickupLabel) {
+  function showOrderSuccess(app, pickupNumber, cartSnapshot, pickupLabel, groupsSnapshot) {
     var screen = document.getElementById('order-success-screen');
     if (!screen) {
       if (!app.el.submitMessage) return;
@@ -477,10 +525,27 @@
     if (itemsEl) {
       var regularItems = (cartSnapshot || []).filter(function (item) { return !item.isGift; });
       var giftItems = (cartSnapshot || []).filter(function (item) { return !!item.isGift; });
-      itemsEl.innerHTML = regularItems.map(function (item) {
-        var meta = item.flavorName ? '（' + escapeHtml(item.flavorName) + '）' : '';
-        return '<div class="oss-item"><span>' + escapeHtml(item.name) + meta + ' x' + Number(item.quantity || 0) + '</span><span>NT$ ' + Number(item.price || 0) + '</span></div>';
-      }).join('') + (giftItems.length ? '<div class="oss-gifts">贈品：' + giftItems.map(function (i) { return escapeHtml(i.name); }).join('、') + '</div>' : '');
+      var CHINESE_NUMS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+      var multipleGroups = groupsSnapshot && groupsSnapshot.length > 1;
+      var html = '';
+      if (multipleGroups) {
+        groupsSnapshot.forEach(function (group, idx) {
+          var groupItems = regularItems.filter(function (item) { return item.groupId === group.id; });
+          if (!groupItems.length) return;
+          html += '<div class="oss-group-header">第' + (CHINESE_NUMS[idx] || (idx + 1)) + '份</div>';
+          html += groupItems.map(function (item) {
+            var meta = item.flavorName ? '（' + escapeHtml(item.flavorName) + '）' : '';
+            return '<div class="oss-item"><span>' + escapeHtml(item.name) + meta + ' x' + Number(item.quantity || 0) + '</span><span>NT$ ' + Number(item.price || 0) + '</span></div>';
+          }).join('');
+        });
+      } else {
+        html = regularItems.map(function (item) {
+          var meta = item.flavorName ? '（' + escapeHtml(item.flavorName) + '）' : '';
+          return '<div class="oss-item"><span>' + escapeHtml(item.name) + meta + ' x' + Number(item.quantity || 0) + '</span><span>NT$ ' + Number(item.price || 0) + '</span></div>';
+        }).join('');
+      }
+      html += giftItems.length ? '<div class="oss-gifts">贈品：' + giftItems.map(function (i) { return escapeHtml(i.name); }).join('、') + '</div>' : '';
+      itemsEl.innerHTML = html;
     }
 
     // Enter success page-state: hide everything except success screen
@@ -497,6 +562,46 @@
     }
   }
 
+  function openFlavorConfirmModal(app, payload) {
+    if (!app.el.flavorConfirmModal || !payload) return;
+    app.state.activeModal = "flavor-confirm";
+    app.el.flavorConfirmModal.classList.remove("hidden");
+    app.el.flavorConfirmModal.setAttribute("aria-hidden", "false");
+    if (app.el.flavorConfirmItemName) app.el.flavorConfirmItemName.textContent = payload.name || "";
+    var currentFlavor = app.state.flavors.find(function (item) {
+      return item.id === app.state.selectedFlavor;
+    }) || app.state.flavors[0] || { id: "", name: "" };
+    if (app.el.flavorConfirmCurrent) {
+      app.el.flavorConfirmCurrent.innerHTML = '目前口味：<strong>' + escapeHtml(currentFlavor.name || "") + '</strong>';
+    }
+    if (app.el.flavorConfirmOptions) {
+      var selectedFlavorId = payload.flavorId || currentFlavor.id || "";
+      app.el.flavorConfirmOptions.innerHTML = app.state.flavors.map(function (flavor) {
+        var selectedClass = selectedFlavorId === flavor.id ? " flavor-confirm__choice--selected" : "";
+        return '<button type="button" class="option-pill flavor-confirm__choice' + selectedClass + '" data-flavor-confirm="' + escapeHtml(flavor.id) + '">' + escapeHtml(flavor.name) + '</button>';
+      }).join("");
+      Array.prototype.slice.call(app.el.flavorConfirmOptions.querySelectorAll("[data-flavor-confirm]")).forEach(function (button) {
+        button.addEventListener("click", function () {
+          var flavorId = button.getAttribute("data-flavor-confirm") || "";
+          app.state.pendingFlavorChoice = flavorId;
+          Array.prototype.slice.call(app.el.flavorConfirmOptions.querySelectorAll("[data-flavor-confirm]")).forEach(function (choice) {
+            choice.classList.toggle("flavor-confirm__choice--selected", choice.getAttribute("data-flavor-confirm") === flavorId);
+          });
+        });
+      });
+      app.state.pendingFlavorChoice = selectedFlavorId;
+    }
+  }
+
+  function closeFlavorConfirmModal(app) {
+    if (!app.el.flavorConfirmModal) return;
+    app.el.flavorConfirmModal.classList.add("hidden");
+    app.el.flavorConfirmModal.setAttribute("aria-hidden", "true");
+    if (app.state.activeModal === "flavor-confirm") app.state.activeModal = null;
+    app.state.pendingFlavorChoice = null;
+    if (app.el.flavorConfirmOptions) app.el.flavorConfirmOptions.innerHTML = "";
+  }
+
   function closeQuantityModal(app) {
     if (!app.el.quantityModal) return;
     app.el.quantityModal.classList.add("hidden");
@@ -504,7 +609,12 @@
     if (app.state.activeModal === "quantity-select") app.state.activeModal = null;
     app.state.pendingCartSelection = null;
     app.el.quantityModalOptions.innerHTML = "";
+    if (app.el.quantityModalActions) app.el.quantityModalActions.classList.add("hidden");
     if (app.el.quantityModalDetail) app.el.quantityModalDetail.style.display = "none";
+    if (app.el.quantityModalItemMeta) {
+      app.el.quantityModalItemMeta.textContent = "";
+      app.el.quantityModalItemMeta.classList.add("hidden");
+    }
     if (app.el.quantityModalPortion) { app.el.quantityModalPortion.classList.add("hidden"); app.el.quantityModalPortion.innerHTML = ""; }
     if (app.el.quantityModalFlavor) app.el.quantityModalFlavor.onchange = null;
     if (app.el.quantityModalStaple) app.el.quantityModalStaple.onchange = null;
@@ -574,17 +684,36 @@
   }
 
   function renderFlavorOptions(app) {
-    if (!app.el.flavorOptions) return;
-    app.el.flavorOptions.innerHTML = app.state.flavors.map(function (flavor) {
-      var selectedClass = app.state.selectedFlavor === flavor.id ? " choice-card--selected" : "";
-      return '<button class="choice-card' + selectedClass + '" type="button" data-flavor-id="' + flavor.id + '"><strong>' + escapeHtml(flavor.name) + '</strong><span>' + escapeHtml(flavor.description || "") + '</span><small>' + escapeHtml(flavor.spicyLabel || "") + "</small></button>";
+    if (!app.el.flavorOptions && !app.el.productFlavorTabs && !app.el.stickyFlavorTabs) return;
+    if (!app.state.selectedFlavor && app.state.flavors.length) {
+      app.state.selectedFlavor = app.state.flavors[0].id;
+    }
+    var tabsHtml = app.state.flavors.map(function (flavor) {
+      var selectedClass = app.state.selectedFlavor === flavor.id ? " flavor-tab--selected" : "";
+      var label = app.state.selectedFlavor === flavor.id ? "✓ " + flavor.name : flavor.name;
+      return '<button class="option-pill flavor-tab' + selectedClass + '" type="button" data-flavor-id="' + flavor.id + '">' + escapeHtml(label) + "</button>";
     }).join("");
+    var productTabsHtml = app.state.flavors.map(function (flavor) {
+      var selectedClass = app.state.selectedFlavor === flavor.id ? " flavor-switch-bar__tab--selected" : "";
+      var label = app.state.selectedFlavor === flavor.id ? "✓ " + flavor.name : flavor.name;
+      return '<button class="flavor-switch-bar__tab' + selectedClass + '" type="button" data-product-flavor-id="' + flavor.id + '">' + escapeHtml(label) + "</button>";
+    }).join("");
+    var stickyTabsHtml = app.state.flavors.map(function (flavor) {
+      var selectedClass = app.state.selectedFlavor === flavor.id ? " flavor-switch-bar__tab--selected" : "";
+      var label = app.state.selectedFlavor === flavor.id ? "✓ " + flavor.name : flavor.name;
+      return '<button class="flavor-switch-bar__tab' + selectedClass + '" type="button" data-sticky-flavor-id="' + flavor.id + '">' + escapeHtml(label) + "</button>";
+    }).join("");
+    if (app.el.flavorOptions) app.el.flavorOptions.innerHTML = tabsHtml;
+    if (app.el.productFlavorTabs) app.el.productFlavorTabs.innerHTML = productTabsHtml;
+    if (app.el.stickyFlavorTabs) app.el.stickyFlavorTabs.innerHTML = stickyTabsHtml;
 
-    Array.prototype.slice.call(app.el.flavorOptions.querySelectorAll("[data-flavor-id]")).forEach(function (button) {
+    function bindFlavorSwitch(button) {
       button.addEventListener("click", function () {
-        app.state.selectedFlavor = button.getAttribute("data-flavor-id");
+        app.state.selectedFlavor = button.getAttribute("data-flavor-id") || button.getAttribute("data-product-flavor-id");
+        if (!app.state.selectedFlavor) app.state.selectedFlavor = button.getAttribute("data-sticky-flavor-id");
         renderFlavorOptions(app);
-        renderOrderTypes(app);
+        renderComboItems(app);
+        renderSingleItems(app);
         setMessage(app, "");
         setTimeout(function () {
           var step3 = document.getElementById("step3-section");
@@ -601,40 +730,98 @@
           }
         }, 150);
       });
+    }
+
+    Array.prototype.slice.call((app.el.flavorOptions || document.createElement("div")).querySelectorAll("[data-flavor-id]")).forEach(function (button) {
+      bindFlavorSwitch(button);
+    });
+    Array.prototype.slice.call((app.el.productFlavorTabs || document.createElement("div")).querySelectorAll("[data-product-flavor-id]")).forEach(function (button) {
+      bindFlavorSwitch(button);
+    });
+    Array.prototype.slice.call((app.el.stickyFlavorTabs || document.createElement("div")).querySelectorAll("[data-sticky-flavor-id]")).forEach(function (button) {
+      bindFlavorSwitch(button);
     });
   }
 
-  function renderOrderTypes(app) {
-    if (!app.el.orderTypeOptions) return;
-    var types = [
-      { id: "combo", name: "🔥 套餐（最划算）", desc: "可選主食，適合一次搭配完成。" },
-      { id: "single", name: "自由單點", desc: "自由加點喜歡的單品。" }
-    ];
-    app.el.orderTypeOptions.innerHTML = types.map(function (type) {
-      var disabled = !app.state.selectedFlavor;
-      var disabledClass = disabled ? " choice-card--disabled" : "";
-      var selectedClass = app.state.selectedOrderType === type.id ? " choice-card--selected" : "";
-      return '<button class="choice-card' + disabledClass + selectedClass + '" type="button" data-order-type="' + type.id + '" ' + (disabled ? "disabled" : "") + '><strong>' + type.name + '</strong><span>' + type.desc + '</span></button>';
-    }).join("");
+  function setStickyFlavorBarVisible(app, visible) {
+    if (!app.el.stickyFlavorBar) return;
+    app.el.stickyFlavorBar.classList.toggle("hidden", !visible);
+    app.el.stickyFlavorBar.classList.toggle("sticky-active", !!visible);
+    app.el.stickyFlavorBar.setAttribute("aria-hidden", visible ? "false" : "true");
+  }
 
-    Array.prototype.slice.call(app.el.orderTypeOptions.querySelectorAll("[data-order-type]")).forEach(function (button) {
-      button.addEventListener("click", function () {
-        app.state.selectedOrderType = button.getAttribute("data-order-type");
-        if (app.el.comboSection) app.el.comboSection.classList.toggle("hidden", app.state.selectedOrderType !== "combo");
-        if (app.el.singleSection) app.el.singleSection.classList.toggle("hidden", app.state.selectedOrderType !== "single");
-        renderOrderTypes(app);
-        syncControls(app);
+  function setupStickyFlavorBar(app) {
+    if (!app.el.stickyFlavorBar || !app.el.flavorStepCard) return;
+    setStickyFlavorBarVisible(app, false);
+    if (typeof IntersectionObserver === "function") {
+      var observer = new IntersectionObserver(function (entries) {
+        var entry = entries[0];
+        setStickyFlavorBarVisible(app, !(entry && entry.isIntersecting));
+      }, {
+        root: null,
+        threshold: 0.01
       });
+      observer.observe(app.el.flavorStepCard);
+      app._stickyFlavorObserver = observer;
+      return;
+    }
+    function syncSticky() {
+      if (!app.el.flavorStepCard) return;
+      var rect = app.el.flavorStepCard.getBoundingClientRect();
+      setStickyFlavorBarVisible(app, rect.bottom < 0 || rect.top < 0);
+    }
+    window.addEventListener("scroll", syncSticky, { passive: true });
+    syncSticky();
+  }
+
+  function updateSingleSectionUI(app) {
+    if (!app.el.singleSection || !app.el.singleSectionToggle || !app.el.singleSectionContent) return;
+    var hasItems = !!(app.state.singleCategories && app.state.singleCategories.length);
+    app.el.singleSection.classList.toggle("hidden", !hasItems);
+    if (!hasItems) return;
+    var expanded = app.state.singleSectionExpanded === true;
+    var totalSingles = 0;
+    app.state.singleCategories.forEach(function (category) {
+      totalSingles += Array.isArray(category.items) ? category.items.length : 0;
     });
+    var defaultVisible = 6;
+    var remaining = Math.max(0, totalSingles - defaultVisible);
+    var canExpand = remaining > 0;
+    app.el.singleSectionToggle.classList.toggle("hidden", !canExpand);
+    if (canExpand) {
+      if (expanded) {
+        app.el.singleSectionToggle.innerHTML =
+          '<span class="single-section-toggle__copy"><span class="single-section-toggle__title">已顯示全部單點商品</span>' +
+          '<span class="single-section-toggle__desc">單點商品都在這裡</span></span>';
+      } else {
+        app.el.singleSectionToggle.innerHTML =
+          '<span class="single-section-toggle__copy"><span class="single-section-toggle__title">還有更多單點商品</span>' +
+          '<span class="single-section-toggle__desc">點這裡展開全部單點（還有 ' + remaining + ' 項）</span></span>' +
+          '<span class="single-section-toggle__arrow" aria-hidden="true">›</span>';
+      }
+    }
+    app.el.singleSectionToggle.classList.toggle("single-section-toggle--expanded", canExpand && expanded);
+    app.el.singleSectionToggle.classList.toggle("single-section-toggle--breathing", canExpand && !expanded);
+    app.el.singleSectionToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    app.el.singleSectionContent.classList.remove("hidden");
   }
 
   function renderComboItems(app) {
     if (!app.el.comboRoot) return;
-    app.el.comboRoot.innerHTML = app.state.comboItems.map(function (item) {
+    if (app.el.comboSection) app.el.comboSection.classList.toggle("hidden", !app.state.comboItems.length);
+    var selectedFlavor = app.state.flavors.find(function (item) {
+      return item.id === app.state.selectedFlavor;
+    }) || app.state.flavors[0] || { name: "" };
+    var comboChip = document.getElementById("combo-flavor-chip");
+    if (comboChip) comboChip.textContent = selectedFlavor.name ? ("口味：" + selectedFlavor.name) : "";
+    app.el.comboRoot.innerHTML = app.state.comboItems.map(function (item, idx) {
       var options = app.modules.cart.getComboOptions(item).map(function (option) {
         return '<option value="' + option.id + '">' + escapeHtml(option.name) + (option.price ? " +NT$" + option.price : "") + "</option>";
       }).join("");
-      return '<article class="item-card item-card--combo"><div class="item-card__body"><h3>' + escapeHtml(item.name) + '</h3><p class="item-card__meta">' + escapeHtml(item.description || "") + '</p></div><div class="item-card__footer"><strong class="item-card__price">NT$ ' + Number(item.price || 0) + '</strong><label class="option-group"><span>主食</span><select id="staple-' + item.id + '">' + options + '</select></label><button class="secondary-btn secondary-btn--full" type="button" data-add-combo="' + item.id + '">加入🔥 套餐（最划算）</button></div></article>';
+      var flavorLine = item.requiresFlavor === true ? '<p class="item-card__flavor">套用：' + escapeHtml(selectedFlavor.name || "") + '</p>' : '';
+      var numBadge = '<span class="combo-num">' + (idx + 1) + '</span>';
+      var itemBadge = item.badge ? '<span class="item-badge">' + escapeHtml(item.badge) + '</span>' : '';
+      return '<article class="item-card item-card--combo">' + numBadge + itemBadge + '<div class="item-card__body"><h3>' + escapeHtml(item.name) + '</h3>' + flavorLine + '<p class="item-card__meta">' + escapeHtml(item.description || "") + '</p></div><div class="item-card__footer"><strong class="item-card__price">NT$ ' + Number(item.price || 0) + '</strong><label class="option-group"><span>主食</span><select id="staple-' + item.id + '">' + options + '</select></label><button class="secondary-btn secondary-btn--full" type="button" data-add-combo="' + item.id + '">加入🔥 套餐（最划算）</button></div></article>';
     }).join("");
 
     Array.prototype.slice.call(app.el.comboRoot.querySelectorAll("[data-add-combo]")).forEach(function (button) {
@@ -644,9 +831,63 @@
     });
   }
 
-  function renderSingleTile(item, theme) {
+  function renderSingleTile(item, theme, flavorName) {
     var priceText = 'NT$ ' + Number(item.price || 0) + (item.unit ? ' / ' + escapeHtml(item.unit) : '');
-    return '<article class="menu-tile"><div class="menu-tile__body"><strong>' + escapeHtml(item.name) + '</strong>' + (item.unit ? '<span>' + escapeHtml(item.unit) + '</span>' : '') + '</div><div class="menu-tile__footer"><strong>' + priceText + '</strong><button class="mini-btn menu-tile__add-btn" type="button" data-add-single="' + item.id + '" data-category-theme="' + escapeHtml(theme.value) + '" data-button-color="' + escapeHtml(theme.buttonColor) + '" data-button-text-color="' + escapeHtml(theme.buttonTextColor) + '">加入</button></div></article>';
+    // Show flavor indicator for all items when a flavor is selected (applies to whole order).
+    var flavorLine = flavorName ? '<small class="menu-tile__flavor">套用：' + escapeHtml(flavorName) + '</small>' : '';
+    return '<article class="menu-tile"><div class="menu-tile__body"><strong>' + escapeHtml(item.name) + '</strong>' + flavorLine + (item.unit ? '<span>' + escapeHtml(item.unit) + '</span>' : '') + '</div><div class="menu-tile__footer"><strong>' + priceText + '</strong><button class="mini-btn menu-tile__add-btn" type="button" data-add-single="' + item.id + '" data-category-theme="' + escapeHtml(theme.value) + '" data-button-color="' + escapeHtml(theme.buttonColor) + '" data-button-text-color="' + escapeHtml(theme.buttonTextColor) + '">加入</button></div></article>';
+  }
+
+  function findComboUpsellEntries(app) {
+    var names = ["毛肚", "玉米筍", "經典豬肉片", "王子麵"];
+    var flat = [];
+    app.state.singleCategories.forEach(function (category) {
+      var theme = resolveCategoryTheme(category.colorTheme || category.bgColor || category.themeColor);
+      category.items.forEach(function (item) {
+        flat.push({ item: item, theme: theme });
+      });
+    });
+    return names.map(function (name) {
+      return flat.find(function (entry) {
+        return entry.item && (entry.item.name === name || String(entry.item.name || "").indexOf(name) >= 0);
+      }) || null;
+    }).filter(Boolean);
+  }
+
+  function renderComboUpsell(app) {
+    if (!app.el.comboUpsellRoot) return;
+    if (!app.state.comboUpsellVisible) {
+      app.el.comboUpsellRoot.classList.add("hidden");
+      app.el.comboUpsellRoot.innerHTML = "";
+      return;
+    }
+
+    var entries = findComboUpsellEntries(app);
+    if (!entries.length) {
+      app.el.comboUpsellRoot.classList.add("hidden");
+      app.el.comboUpsellRoot.innerHTML = "";
+      return;
+    }
+
+    app.el.comboUpsellRoot.classList.remove("hidden");
+    app.el.comboUpsellRoot.innerHTML = '<section class="combo-upsell"><div class="combo-upsell__head"><h3>再加一點，更滿足</h3><p>熱門加點，直接加入</p></div><div class="combo-upsell__list">' + entries.map(function (entry) {
+      return '<article class="combo-upsell__item"><div class="combo-upsell__body"><strong>' + escapeHtml(entry.item.name) + '</strong><span>NT$ ' + Number(entry.item.price || 0) + '</span></div><button class="mini-btn combo-upsell__btn" type="button" data-upsell-add-single="' + entry.item.id + '">+ 加入</button></article>';
+    }).join("") + '</div></section>';
+
+    Array.prototype.slice.call(app.el.comboUpsellRoot.querySelectorAll("[data-upsell-add-single]")).forEach(function (button) {
+      var itemId = button.getAttribute("data-upsell-add-single");
+      button.addEventListener("click", function () {
+        var match = null;
+        app.state.singleCategories.forEach(function (category) {
+          category.items.forEach(function (item) {
+            if (item.id === itemId) match = item;
+          });
+        });
+        if (!match) return;
+        if (match.quickAdd === true) app.modules.cart.quickAddSingle(itemId);
+        else app.modules.cart.requestAddSingle(itemId);
+      });
+    });
   }
 
   function singlePriorityRank(name) {
@@ -664,6 +905,24 @@
       if (leftRank !== rightRank) return leftRank - rightRank;
       return String(left && left.name || "").localeCompare(String(right && right.name || ""), "zh-Hant");
     });
+  }
+
+  function visibleSingleCategories(app) {
+    var expanded = app.state.singleSectionExpanded === true;
+    var remaining = expanded ? Infinity : 6;
+    return app.state.singleCategories.map(function (category) {
+      var sortedItems = sortSingleItemsForDisplay(category.items);
+      var visibleItems = expanded ? sortedItems : sortedItems.slice(0, remaining);
+      if (!expanded) remaining = Math.max(0, remaining - visibleItems.length);
+      return {
+        id: category.id,
+        title: category.title,
+        colorTheme: category.colorTheme,
+        bgColor: category.bgColor,
+        themeColor: category.themeColor,
+        items: visibleItems
+      };
+    }).filter(function (category) { return category.items.length; });
   }
 
   function findPopularAddOns(app) {
@@ -684,15 +943,21 @@
 
   function renderSingleItems(app) {
     if (!app.el.singleRoot) return;
+    var selectedFlavor = app.state.flavors.find(function (item) {
+      return item.id === app.state.selectedFlavor;
+    }) || app.state.flavors[0] || { name: "" };
+    var singleChip = document.getElementById("single-flavor-chip");
+    if (singleChip) singleChip.textContent = selectedFlavor.name ? ("口味：" + selectedFlavor.name) : "";
     var popular = findPopularAddOns(app);
-    var popularHtml = popular.length
-      ? '<section class="category-card category-card--tinted recommend-strip-section"><div class="category-card__head"><h3>大家都會加 👍</h3></div><div class="recommend-strip">' + popular.map(function (entry) { return renderSingleTile(entry.item, entry.theme); }).join("") + '</div></section>'
+    var expanded = app.state.singleSectionExpanded === true;
+    var visibleCategories = visibleSingleCategories(app);
+    var popularHtml = expanded && popular.length
+      ? '<section class="category-card category-card--tinted recommend-strip-section"><div class="category-card__head"><h3>大家都會加 👍</h3></div><div class="recommend-strip">' + popular.map(function (entry) { return renderSingleTile(entry.item, entry.theme, selectedFlavor.name); }).join("") + '</div></section>'
       : "";
-    app.el.singleRoot.innerHTML = popularHtml + app.state.singleCategories.map(function (category) {
+    app.el.singleRoot.innerHTML = popularHtml + visibleCategories.map(function (category) {
       var theme = resolveCategoryTheme(category.colorTheme || category.bgColor || category.themeColor);
-      var sortedItems = sortSingleItemsForDisplay(category.items);
-      return '<section class="category-card category-card--tinted" data-category-theme="' + escapeHtml(theme.value) + '" style="background:' + theme.bgColor + ";color:" + theme.textColor + '"><div class="category-card__head"><h3>' + escapeHtml(category.title) + '</h3><span class="option-pill">' + sortedItems.length + ' 項</span></div><div class="menu-tile-grid">' + sortedItems.map(function (item) {
-        return renderSingleTile(item, theme);
+      return '<section class="category-card category-card--tinted" data-category-theme="' + escapeHtml(theme.value) + '" style="background:' + theme.bgColor + ";color:" + theme.textColor + '"><div class="category-card__head"><h3>' + escapeHtml(category.title) + '</h3><span class="option-pill">' + category.items.length + ' 項</span></div><div class="menu-tile-grid">' + category.items.map(function (item) {
+        return renderSingleTile(item, theme, selectedFlavor.name);
       }).join("") + "</div></section>";
     }).join("");
 
@@ -713,6 +978,8 @@
         }
       });
     });
+    renderComboUpsell(app);
+    updateSingleSectionUI(app);
   }
 
   function showToast(message, actions, timeoutMs) {
@@ -774,9 +1041,10 @@
   function renderAll(app) {
     renderProfile(app);
     renderFlavorOptions(app);
-    renderOrderTypes(app);
     renderComboItems(app);
     renderSingleItems(app);
+    renderComboUpsell(app);
+    updateSingleSectionUI(app);
     renderPickupDateOptions(app);
     renderPickupTimeOptions(app);
     app.modules.cart.renderCart();
@@ -826,9 +1094,9 @@
     var flavors = docs(snaps[0]).filter(function (item) { return item.enabled !== false; }).sort(bySort);
     var categories = docs(snaps[1]).filter(function (item) { return item.enabled !== false; }).sort(bySort);
     var menuItemsNew = docs(snaps[2]).map(normalizeMenuItemDoc).filter(function (item) { return item.enabled !== false; }).sort(bySort);
-    var menuItemsLegacy = docs(snaps[3]).filter(function (item) { return item.enabled !== false; }).sort(bySort);
+    var menuItemsLegacy = docs(snaps[3]).map(normalizeMenuItemDoc).filter(function (item) { return item.enabled !== false; }).sort(bySort);
     var menuItems = mergeMenuItems(menuItemsNew, menuItemsLegacy).sort(bySort);
-    var combos = docs(snaps[4]).filter(function (item) { return item.enabled !== false; }).sort(bySort);
+    var combos = docs(snaps[4]).map(normalizeComboItemDoc).filter(function (item) { return item.enabled !== false; }).sort(bySort);
     app.state.promotions = docs(snaps[5]).filter(function (item) { return item.enabled !== false; });
     app.state.settings = snaps[6].exists ? snaps[6].data() : null;
 
@@ -838,10 +1106,29 @@
 
     if (usingFirestoreFlavors) app.state.flavors = flavors;
     if (usingFirestoreCombos) app.state.comboItems = combos;
+    var settingsGlobalOptions = app.state.settings && app.state.settings.globalOptions ? app.state.settings.globalOptions : null;
+    app.state.globalOptions = {
+      flavors: Array.isArray(settingsGlobalOptions && settingsGlobalOptions.flavors) ? settingsGlobalOptions.flavors.slice() : app.state.flavors.map(function (item) { return item.name; }),
+      staples: Array.isArray(settingsGlobalOptions && settingsGlobalOptions.staples) ? settingsGlobalOptions.staples.slice() : app.state.stapleOptions.map(function (item) { return item.name; })
+    };
+    if (Array.isArray(settingsGlobalOptions && settingsGlobalOptions.staples) && settingsGlobalOptions.staples.length) {
+      app.state.stapleOptions = settingsGlobalOptions.staples.map(function (name) {
+        return { id: name, name: name, price: 0 };
+      });
+    }
+    if (app.state.flavors.length) {
+      var preferredFlavor = app.state.flavors.find(function (item) {
+        return item.id === app.state.selectedFlavor;
+      });
+      app.state.selectedFlavor = (preferredFlavor || app.state.flavors[0]).id;
+    } else {
+      app.state.selectedFlavor = null;
+    }
     app.state.singleCategories = buildSingleCategories(
       usingFirestoreCategories ? categories : app.defaults.categories || [],
       usingFirestoreCategories ? menuItems : app.defaults.menuItems || []
     );
+    app.state.singleSectionExpanded = false;
 
     app.state.dataSourceSummary = {
       storeId: storeId,
@@ -1185,9 +1472,43 @@
         var catId = (item.category || item.categoryId || "").toLowerCase();
         return catId === "staples" || catId === "staple" || catId.indexOf("staple") !== -1;
       })(),
-      requiresFlavor: item.requiresFlavor !== false, // 預設 true；只有 false 才隱藏口味
+      requiresFlavor: item.requiresFlavor === true,
+      requiresStaple: item.requiresStaple === true,
+      flavorOptions: Array.isArray(item.flavorOptions) ? item.flavorOptions : [],
+      stapleOptions: Array.isArray(item.stapleOptions) ? item.stapleOptions : [],
+      posHidden: item.posHidden === true || item.posVisible === false,
+      posDisabledFlavorOptions: Array.isArray(item.posDisabledFlavorOptions) ? item.posDisabledFlavorOptions : [],
+      posDisabledStapleOptions: Array.isArray(item.posDisabledStapleOptions) ? item.posDisabledStapleOptions : [],
       quickAdd: item.quickAdd === true
     };
+  }
+
+  function normalizeComboItemDoc(item) {
+    return {
+      id: item.id,
+      name: item.name || "",
+      price: Number(item.price || 0),
+      sort: Number(item.sort != null ? item.sort : 999),
+      description: item.description || "",
+      enabled: item.enabled !== false,
+      optionGroups: Array.isArray(item.optionGroups) ? item.optionGroups : [],
+      requiresFlavor: item.requiresFlavor === true,
+      requiresStaple: item.requiresStaple === true,
+      flavorOptions: Array.isArray(item.flavorOptions) ? item.flavorOptions : [],
+      stapleOptions: Array.isArray(item.stapleOptions) ? item.stapleOptions : [],
+      posHidden: item.posHidden === true || item.posVisible === false,
+      posDisabledFlavorOptions: Array.isArray(item.posDisabledFlavorOptions) ? item.posDisabledFlavorOptions : [],
+      posDisabledStapleOptions: Array.isArray(item.posDisabledStapleOptions) ? item.posDisabledStapleOptions : []
+    };
+  }
+
+  function bindSingleSectionToggle(app) {
+    if (!app.el.singleSectionToggle) return;
+    app.el.singleSectionToggle.addEventListener("click", function () {
+      if (app.state.singleSectionExpanded) return;
+      app.state.singleSectionExpanded = true;
+      renderSingleItems(app);
+    });
   }
 
   function mergeMenuItems(primaryItems, fallbackItems) {
@@ -1218,15 +1539,17 @@
     openLoginRequiredModal: openLoginRequiredModal,
     closeLoginRequiredModal: closeLoginRequiredModal,
     openQuantityModal: openQuantityModal,
+    openFlavorConfirmModal: openFlavorConfirmModal,
     showQuantityAddedSuccess: showQuantityAddedSuccess,
     showOrderSuccess: showOrderSuccess,
     closeQuantityModal: closeQuantityModal,
+    closeFlavorConfirmModal: closeFlavorConfirmModal,
     scrollToCartList: scrollToCartList,
     syncControls: syncControls,
     updatePromoBanner: updatePromoBanner,
     renderFlavorOptions: renderFlavorOptions,
-    renderOrderTypes: renderOrderTypes,
     renderComboItems: renderComboItems,
+    renderComboUpsell: renderComboUpsell,
     renderSingleItems: renderSingleItems,
     renderPickupDateOptions: renderPickupDateOptions,
     renderPickupTimeOptions: renderPickupTimeOptions,

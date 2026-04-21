@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<!-- UTF-8 required: 禁止使用未指定編碼工具覆蓋本檔 -->
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS 後台管理中心</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pos-admin.css?v=20260418-2">
+</head>
+<body class="pa-body">
+  <div id="pa-gate" class="pa-gate">驗證後台權限...</div>
+
+  <div id="pa-shell" class="pa-shell pa-hidden">
+    <aside class="pa-sidebar">
+      <div class="pa-brand">
+        <div class="pa-brand__title">LELESHAN POS</div>
+        <div class="pa-brand__subtitle">現場作業控制台</div>
+      </div>
+
+      <div class="pa-nav-group">
+        <div class="pa-nav-group__title">現場管理</div>
+        <nav class="pa-nav" aria-label="現場管理選單">
+          <button type="button" class="pa-nav__item pa-active" data-view="dashboard">
+            <span>儀表板</span>
+          </button>
+          <button type="button" class="pa-nav__item" data-view="orders">
+            <span>訂單管理</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="pa-nav-group pa-nav-group--secondary">
+        <div class="pa-nav-group__title">系統設定</div>
+        <nav class="pa-nav" aria-label="系統設定選單">
+          <button type="button" class="pa-nav__item" data-view="products">
+            <span>商品管理</span>
+          </button>
+          <button type="button" class="pa-nav__item pa-nav__item--stub" data-view="staff">
+            <span>員工管理</span><small>暫未開放</small>
+          </button>
+          <button type="button" class="pa-nav__item pa-nav__item--stub" data-view="settings">
+            <span>營業設定</span><small>暫未開放</small>
+          </button>
+        </nav>
+      </div>
+    </aside>
+
+    <main class="pa-main">
+      <header class="pa-header">
+        <div class="pa-header__title-wrap">
+          <h1 id="pa-page-title" class="pa-header__title">POS 後台管理中心</h1>
+          <div id="pa-user-meta" class="pa-header__meta">--</div>
+        </div>
+        <div class="pa-header__actions">
+          <div class="pa-header__store">
+            <label for="pa-store-select">店鋪</label>
+            <select id="pa-store-select" class="pa-store-select" aria-label="選擇店鋪"></select>
+          </div>
+          <button id="pa-logout-btn" class="pa-logout-btn" type="button">登出</button>
+        </div>
+      </header>
+
+      <section id="pa-view-dashboard" class="pa-view">
+        <div class="pa-cards">
+          <article class="pa-card">
+            <div class="pa-card__label">今日訂單數</div>
+            <div id="pa-metric-orders" class="pa-card__value">0</div>
+          </article>
+          <article class="pa-card">
+            <div class="pa-card__label">今日營業額</div>
+            <div id="pa-metric-revenue" class="pa-card__value">NT$ 0</div>
+          </article>
+          <article class="pa-card">
+            <div class="pa-card__label">平均客單價</div>
+            <div id="pa-metric-average" class="pa-card__value">NT$ 0</div>
+          </article>
+          <article class="pa-card">
+            <div class="pa-card__label">待處理訂單數</div>
+            <div id="pa-metric-pending" class="pa-card__value">0</div>
+          </article>
+        </div>
+
+        <section class="pa-substats" aria-label="各項補充資料">
+          <div class="pa-substats__item">
+            <div class="pa-substats__label">最後一筆時間</div>
+            <div id="pa-sub-last-time" class="pa-substats__value">--:--</div>
+          </div>
+          <div class="pa-substats__item">
+            <div class="pa-substats__label">現場訂單數</div>
+            <div id="pa-sub-onsite" class="pa-substats__value">0</div>
+          </div>
+          <div class="pa-substats__item">
+            <div class="pa-substats__label">線上訂單數</div>
+            <div id="pa-sub-online" class="pa-substats__value">0</div>
+          </div>
+          <div class="pa-substats__item">
+            <div class="pa-substats__label">已完成訂單數</div>
+            <div id="pa-sub-completed" class="pa-substats__value">0</div>
+          </div>
+        </section>
+
+        <section class="pa-panel">
+          <div class="pa-panel__head">
+            <h2>今日訂單</h2>
+            <button id="pa-refresh-dashboard-btn" class="pa-mini-btn" type="button">刷新資料</button>
+          </div>
+          <div class="pa-table-wrap">
+            <table class="pa-table">
+              <thead>
+                <tr>
+                  <th>時間</th>
+                  <th>訂單編號</th>
+                  <th>顧客名稱</th>
+                  <th>訂單來源</th>
+                  <th>訂單狀態</th>
+                  <th>訂單金額</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="pa-dashboard-orders-body"></tbody>
+            </table>
+            <div id="pa-dashboard-empty" class="pa-empty-state pa-hidden">
+              <div class="pa-empty-state__icon">📋</div>
+              <div class="pa-empty-state__title">今日尚無訂單</div>
+              <div class="pa-empty-state__hint">訂單進來後將顯示在此</div>
+            </div>
+          </div>
+        </section>
+        <section class="pa-panel" style="margin-top:14px;border-color:rgba(255,200,0,0.2);background:rgba(255,180,0,0.04)">
+          <div class="pa-panel__head">
+            <h2 style="color:#f5d060">測試工具</h2>
+          </div>
+          <div style="font-size:.84rem;color:var(--pa-text-dim);margin-bottom:10px">
+            建立 5 筆涵蓋各情境的測試訂單（含餐口味主食、單點、混搭、多份量），都含 isTest:true，用來測試整個流程。          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button id="pa-seed-btn" class="pa-mini-btn" type="button" style="border-color:rgba(245,208,96,0.4);color:#f5d060">建立 5 筆測試單</button>
+            <button id="pa-clear-test-btn" class="pa-mini-btn" type="button" style="border-color:rgba(255,120,120,0.45);color:#ff9f9f">清除測試訂單</button>
+            <span id="pa-seed-status" style="font-size:.83rem;color:var(--pa-text-soft);display:none"></span>
+          </div>
+        </section>
+      </section>
+
+      <section id="pa-view-orders" class="pa-view pa-hidden">
+        <section class="pa-panel">
+          <div class="pa-panel__head">
+            <h2>訂單管理</h2>
+            <button id="pa-refresh-orders-btn" class="pa-mini-btn" type="button">刷新資料</button>
+          </div>
+
+          <div class="pa-filter-row" id="pa-orders-filter-row">
+            <button type="button" class="pa-filter-btn is-active" data-order-filter="all">全部</button>
+            <button type="button" class="pa-filter-btn" data-order-filter="making">製作中</button>
+            <button type="button" class="pa-filter-btn" data-order-filter="ready">可取餐</button>
+            <button type="button" class="pa-filter-btn" data-order-filter="done">已完成</button>
+            <button type="button" class="pa-filter-btn" data-order-filter="cancelled">已取消</button>
+          </div>
+
+          <div class="pa-table-wrap">
+            <table class="pa-table">
+              <thead>
+                <tr>
+                  <th>時間</th>
+                  <th>訂單編號</th>
+                  <th>顧客名稱</th>
+                  <th>訂單來源</th>
+                  <th>訂單狀態</th>
+                  <th>訂單金額</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="pa-orders-body"></tbody>
+            </table>
+            <div id="pa-orders-empty" class="pa-empty-state pa-hidden">
+              <div class="pa-empty-state__icon">📭</div>
+              <div class="pa-empty-state__title">目前沒有顯示的訂單</div>
+              <div class="pa-empty-state__hint">請調整篩選條件或刷新資料</div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="pa-view-products" class="pa-view pa-hidden">
+        <section class="pa-panel pa-mb">
+          <div class="pa-panel__head">
+            <h2>POS 規則設定</h2>
+            <button id="pa-pos-rules-save" class="pa-mini-btn" type="button">儲存 POS 規則</button>
+          </div>
+          <div class="pa-text-sm pa-text-dim pa-mb-sm">設定每種品項類別在 POS 點餐時的主食功能。儲存後即時生效</div>
+
+          <div id="pa-pos-type-rules-cards" class="pa-rules-cards-grid"></div>
+
+          <div class="pa-rules-global-box">
+            <div class="pa-rules-global-box__title">◆ 品項行為設定</div>
+            <div class="pa-rules-global-box__grid">
+              <label class="pa-rule-check-item">
+                <input id="pa-rule-enable-assign-people" type="checkbox">
+                <span><strong>👥 啟用指定給客人</strong><br><small>允許多部份數指定不同的顧客</small></span>
+              </label>
+              <label class="pa-rule-check-item">
+                <input id="pa-rule-single-flavor-per-part" type="checkbox">
+                <span><strong>🔒 一份只允許一種口味</strong><br><small>每份料理只能有一種口味</small></span>
+              </label>
+              <label class="pa-rule-check-item">
+                <input id="pa-rule-set-updates-part-flavor" type="checkbox">
+                <span><strong>🔄 套餐建立後更新預設口味</strong><br><small>加入套餐後自動更新份量口味選項</small></span>
+              </label>
+              <label class="pa-rule-check-item">
+                <input id="pa-rule-noodle-requires-flavor" type="checkbox">
+                <span><strong>⚠️ 麵類一份若無口味要求時必選口味</strong><br><small>防止麵類漏選直接加入</small></span>
+              </label>
+            </div>
+          </div>
+
+          <div id="pa-pos-rules-status" class="pa-status-line" style="display:none"></div>
+        </section>
+
+        <section class="pa-panel pa-mb">
+          <div class="pa-panel__head">
+            <h2>品項口味 / 主食設定</h2>
+            <button id="pa-global-opts-save" class="pa-mini-btn" type="button">儲存品項設定</button>
+          </div>
+          <div class="pa-text-sm pa-text-dim pa-mb-sm">套餐若未獨立設定口味，主食選項將自動使用此全域口味清單</div>
+          <div class="pa-opts-grid">
+            <label class="pa-field">
+              <span class="pa-field__label">口味選項（每行一種）</span>
+              <textarea id="pa-global-flavors" class="pa-textarea" rows="7" placeholder="紅油香辣&#10;清湯鮮辣&#10;骨湯麻辣&#10;鮮湯清淡&#10;麻辣乾拌"></textarea>
+            </label>
+            <label class="pa-field">
+              <span class="pa-field__label">主食選項（每行一種，可含備註+15）</span>
+              <textarea id="pa-global-staples" class="pa-textarea" rows="7" placeholder="白飯&#10;泡麵&#10;寬麵&#10;冬粉+15&#10;水麵+25&#10;滷油麵+20"></textarea>
+            </label>
+          </div>
+          <div id="pa-global-opts-status" class="pa-status-line" style="display:none"></div>
+        </section>
+
+        <section class="pa-panel">
+          <div class="pa-panel__head">
+            <h2>商品列表</h2>
+            <button id="pa-products-refresh" class="pa-mini-btn" type="button">刷新資料</button>
+          </div>
+          <div class="pa-filter-row">
+            <button type="button" class="pa-filter-btn is-active" data-product-tab="combos">套餐</button>
+            <button type="button" class="pa-filter-btn" data-product-tab="items">一般品項</button>
+          </div>
+          <div id="pa-products-loading" class="pa-empty-state pa-hidden">
+            <div class="pa-empty-state__title">載入資料...</div>
+          </div>
+          <div id="pa-products-empty" class="pa-empty-state pa-hidden">
+            <div class="pa-empty-state__icon">📭</div>
+            <div class="pa-empty-state__title">此類別目前尚空</div>
+            <div class="pa-empty-state__hint">請前往 Firestore 新增資料，或切換到另一類別</div>
+          </div>
+          <div id="pa-products-list"></div>
+        </section>
+      </section>
+
+      <section id="pa-view-staff" class="pa-view pa-hidden">
+        <section class="pa-panel">
+          <h2>員工管理</h2>
+          <p class="pa-placeholder">此區保留作為後續入口，本次期程未開深度功能開發</p>
+        </section>
+      </section>
+
+      <section id="pa-view-settings" class="pa-view pa-hidden">
+        <section class="pa-panel">
+          <h2>營業設定</h2>
+          <p class="pa-placeholder">此區保留作為後續入口，本次期程未開深度功能開發</p>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="/config.public.js?v=20260413-1"></script>
+  <script src="/order-status-labels.js?v=20260418-2"></script>
+  <script src="/admin-auth-helper.js?v=20260406-1"></script>
+  <script src="/pos-admin.js?v=20260418-2"></script>
+</body>
+</html>

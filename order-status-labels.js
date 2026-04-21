@@ -8,12 +8,12 @@
   };
 
   var STATUS_LABEL_MAP = {
-    new: "待製作",
-    pending_confirmation: "待確認",
-    accepted: "待製作",
+    new: "製作中",
+    accepted: "製作中",
     preparing: "製作中",
     ready: "可取餐",
     completed: "已完成",
+    picked_up: "已取餐",
     cancelled: "已取消",
     unknown: "未知"
   };

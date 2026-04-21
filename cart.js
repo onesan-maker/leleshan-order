@@ -7,6 +7,9 @@
     return {
       requestAddCombo: function (id) { requestAddCombo(app, id); },
       requestAddSingle: function (id) { requestAddSingle(app, id); },
+      confirmFlavorSelection: function () { confirmFlavorSelection(app); },
+      cancelFlavorSelection: function () { cancelFlavorSelection(app); },
+      confirmPendingSelection: function () { confirmPendingSelection(app); },
       applyPendingQuantity: function (quantity) { applyPendingQuantity(app, quantity); },
       renderCart: function () { renderCart(app); },
       totalPrice: function () { return totalPrice(app); },
@@ -42,13 +45,16 @@
 
   function ensureFlavor(app) {
     if (app.state.selectedFlavor) return true;
-    app.modules.ui.setMessage(app, "請先選擇口味。", "error");
-    return false;
+    if (app.state.flavors && app.state.flavors.length) {
+      app.state.selectedFlavor = app.state.flavors[0].id;
+    }
+    return true;
   }
 
   function currentFlavor(app) {
+    var selectedId = app.state.selectedFlavor || (app.state.flavors[0] && app.state.flavors[0].id) || "";
     return app.state.flavors.find(function (item) {
-      return item.id === app.state.selectedFlavor;
+      return item.id === selectedId;
     }) || { id: "", name: "" };
   }
 
@@ -114,16 +120,64 @@
   }
 
   function getComboOptions(app, combo) {
+    var disabledStaples = new Set(Array.isArray(combo.posDisabledStapleOptions) ? combo.posDisabledStapleOptions.map(function (name) {
+      return String(name || "").trim();
+    }) : []);
+    if (Array.isArray(combo.stapleOptions) && combo.stapleOptions.length) {
+      return combo.stapleOptions.map(function (option) {
+        if (typeof option === "string") {
+          return { id: option, name: option, price: 0 };
+        }
+        return {
+          id: option && (option.id || option.name) || "",
+          name: option && (option.name || option.id) || "",
+          price: Number(option && option.price || 0)
+        };
+      }).filter(function (option) { return option.id && !disabledStaples.has(String(option.name || option.id || "").trim()); });
+    }
     var group = (combo.optionGroups || []).find(function (item) {
       return item.id === "staple" || item.name === "主食";
     });
-    return group && group.options && group.options.length ? group.options : app.state.stapleOptions;
+    var base = group && group.options && group.options.length ? group.options : app.state.stapleOptions;
+    return (base || []).filter(function (option) {
+      var name = String(option && (option.name || option.id) || "").trim();
+      return name && !disabledStaples.has(name);
+    });
   }
 
   function getFlavorById(app, flavorId) {
     return app.state.flavors.find(function (item) {
       return item.id === flavorId;
     }) || null;
+  }
+
+  function resolveFlavorOptionsForItem(app, item) {
+    var disabledFlavors = new Set(Array.isArray(item && item.posDisabledFlavorOptions) ? item.posDisabledFlavorOptions.map(function (name) {
+      return String(name || "").trim();
+    }) : []);
+    var allowedNames = Array.isArray(item && item.flavorOptions) ? item.flavorOptions.map(function (name) {
+      return String(name || "").trim();
+    }).filter(Boolean) : [];
+    var allFlavors = Array.isArray(app.state.flavors) ? app.state.flavors : [];
+    if (!allowedNames.length) {
+      return allFlavors.filter(function (flavor) {
+        return !disabledFlavors.has(String(flavor && flavor.name || "").trim());
+      });
+    }
+    var nameSet = new Set(allowedNames);
+    var matched = allFlavors.filter(function (flavor) {
+      return nameSet.has(String(flavor && flavor.name || "").trim());
+    });
+    matched = matched.filter(function (flavor) {
+      return !disabledFlavors.has(String(flavor && flavor.name || "").trim());
+    });
+    if (matched.length) return matched;
+    return allowedNames.map(function (name) {
+      return {
+        id: name,
+        name: name
+      };
+    }).filter(function (flavor) { return !disabledFlavors.has(String(flavor.name || "").trim()); });
   }
 
   function normalizeGiftPoolOption(item, prefix) {
@@ -355,6 +409,7 @@
 
   function buildComboPendingSelection(app, combo) {
     var stapleOptions = getComboOptions(app, combo);
+    var flavorOptions = resolveFlavorOptionsForItem(app, combo);
     var cardSelect = document.getElementById("staple-" + combo.id);
     var stapleId = cardSelect && cardSelect.value
       ? cardSelect.value
@@ -362,7 +417,10 @@
     var staple = stapleOptions.find(function (option) {
       return option.id === stapleId;
     }) || stapleOptions[0] || { id: "", name: "", price: 0 };
-    var flavor = getFlavorById(app, app.state.selectedFlavor) || { id: "", name: "" };
+    var defaultFlavorId = app.state.selectedFlavor || (flavorOptions[0] && flavorOptions[0].id) || "";
+    var flavor = flavorOptions.find(function (option) {
+      return option.id === defaultFlavorId;
+    }) || flavorOptions[0] || { id: "", name: "" };
 
     return {
       type: "combo",
@@ -370,24 +428,37 @@
       name: combo.name,
       displayType: "🔥 套餐（最划算）",
       basePrice: Number(combo.price || 0),
+      requiresFlavor: combo.requiresFlavor === true,
+      requiresStaple: combo.requiresStaple === true,
       flavorId: flavor.id || "",
       flavorName: flavor.name || "",
       stapleId: staple.id || "",
       stapleName: staple.name || "",
       staplePriceAdjustment: Number(staple.price || 0),
+      detailDisplay: combo.unit || combo.description || "",
       stapleOptions: stapleOptions.map(function (option) {
         return {
           id: option.id,
           name: option.name,
           price: Number(option.price || 0)
         };
+      }),
+      flavorOptions: flavorOptions.map(function (option) {
+        return {
+          id: option.id,
+          name: option.name
+        };
       })
     };
   }
 
   function buildSinglePendingSelection(app, item, categoryTitle) {
-    var requiresFlavor = item.requiresFlavor !== false;
-    var flavor = requiresFlavor ? (getFlavorById(app, app.state.selectedFlavor) || { id: "", name: "" }) : { id: "", name: "" };
+    var requiresFlavor = item.requiresFlavor === true;
+    var flavorOptions = resolveFlavorOptionsForItem(app, item);
+    var defaultFlavorId = app.state.selectedFlavor || (flavorOptions[0] && flavorOptions[0].id) || "";
+    // Always inherit the currently selected global flavor for all single items.
+    // requiresFlavor only controls whether a flavor-change dropdown is shown in the modal.
+    var flavor = flavorOptions.find(function (entry) { return entry.id === defaultFlavorId; }) || flavorOptions[0] || { id: "", name: "" };
     return {
       type: "single",
       id: item.id,
@@ -396,12 +467,17 @@
       basePrice: Number(item.price || 0),
       categoryName: categoryTitle || "",
       requiresFlavor: requiresFlavor,
+      requiresStaple: false,
       flavorId: flavor.id || "",
       flavorName: flavor.name || "",
+      detailDisplay: item.unit || item.description || "",
       stapleId: "",
       stapleName: "",
       staplePriceAdjustment: 0,
-      stapleOptions: []
+      stapleOptions: [],
+      flavorOptions: flavorOptions.map(function (option) {
+        return { id: option.id, name: option.name };
+      })
     };
   }
 
@@ -410,7 +486,11 @@
     if (!pending) return null;
 
     if (app.el.quantityModalFlavor && app.el.quantityModalFlavor.value) {
-      var flavor = getFlavorById(app, app.el.quantityModalFlavor.value);
+      var flavor = getFlavorById(app, app.el.quantityModalFlavor.value)
+        || (pending.flavorOptions || []).find(function (option) {
+          return option.id === app.el.quantityModalFlavor.value;
+        })
+        || null;
       pending.flavorId = flavor ? flavor.id : pending.flavorId;
       pending.flavorName = flavor ? flavor.name : pending.flavorName;
     }
@@ -427,12 +507,55 @@
     return pending;
   }
 
+  function syncPendingSelectionFromFlavorConfirm(app) {
+    var pending = app.state.pendingCartSelection;
+    if (!pending) return null;
+    var flavorId = app.state.pendingFlavorChoice || pending.flavorId || app.state.selectedFlavor || "";
+    var flavor = getFlavorById(app, flavorId)
+      || (pending.flavorOptions || []).find(function (option) { return option.id === flavorId; })
+      || getFlavorById(app, app.state.selectedFlavor)
+      || (pending.flavorOptions || [])[0]
+      || app.state.flavors[0]
+      || null;
+    pending.flavorId = flavor ? flavor.id : "";
+    pending.flavorName = flavor ? flavor.name : "";
+    return pending;
+  }
+
+  function confirmFlavorSelection(app) {
+    var pending = syncPendingSelectionFromFlavorConfirm(app);
+    app.modules.ui.closeFlavorConfirmModal(app);
+    if (!pending) return;
+    app.modules.ui.openQuantityModal(app, pending);
+  }
+
+  function cancelFlavorSelection(app) {
+    app.modules.ui.closeFlavorConfirmModal(app);
+    app.state.pendingCartSelection = null;
+  }
+
+  function confirmPendingSelection(app) {
+    if (!app.state.pendingCartSelection) return;
+    var pending = syncPendingSelectionFromModal(app) || app.state.pendingCartSelection;
+    if (pending.requiresFlavor === true && !pending.flavorId) {
+      app.modules.ui.setMessage(app, "請先選擇口味", "error");
+      return;
+    }
+    if (pending.requiresStaple === true && !pending.stapleId) {
+      app.modules.ui.setMessage(app, "請先選擇主食", "error");
+      return;
+    }
+    var quantity = Number(app.state.pendingCartSelection.selectedQuantity || 1);
+    applyPendingQuantity(app, quantity);
+  }
+
   function requestAddCombo(app, id) {
-    if (!allowOrder(app) || !ensureFlavor(app)) return;
+    if (!allowOrder(app)) return;
     var combo = app.state.comboItems.find(function (item) {
       return item.id === id;
     });
     if (!combo) return;
+    if (combo.requiresFlavor === true && !ensureFlavor(app)) return;
 
     app.state.pendingCartSelection = buildComboPendingSelection(app, combo);
     app.modules.ui.openQuantityModal(app, app.state.pendingCartSelection);
@@ -449,6 +572,8 @@
       });
     });
     if (!match) return;
+    ensureFlavor(app);
+    var flavor = currentFlavor(app);
 
     var groupId = app.state.activeGroupId
       || (app.state.cartGroups && app.state.cartGroups[0] && app.state.cartGroups[0].id)
@@ -460,10 +585,12 @@
       type: "single",
       name: match.name,
       groupId: groupId,
-      flavorId: "",
-      flavorName: "",
+      flavorId: flavor.id || "",
+      flavorName: flavor.name || "",
+      selectedFlavor: flavor.name || "",
       stapleId: "",
       stapleName: "",
+      selectedStaple: "",
       comboLabel: "",
       priceAdjustment: 0,
       categoryName: "",
@@ -484,7 +611,7 @@
 
     // Find actual quantity after upsert (may have been merged)
     var cartItem = app.state.cart.find(function (i) {
-      return i.itemId === match.id && i.type === "single" && !i.flavorId;
+      return i.itemId === match.id && i.type === "single" && String(i.flavorId || "") === String(flavor.id || "");
     });
     var qty = cartItem ? cartItem.quantity : 1;
     window.LeLeShanUI.showToast("✔ 已加入 " + match.name + " ×" + qty);
@@ -507,7 +634,7 @@
     if (!match) return;
 
     // Only require flavor selection for items that need it
-    if (match.requiresFlavor !== false && !ensureFlavor(app)) return;
+    if (match.requiresFlavor === true && !ensureFlavor(app)) return;
 
     app.state.pendingCartSelection = buildSinglePendingSelection(app, match, match.__categoryTitle || "");
     app.modules.ui.openQuantityModal(app, app.state.pendingCartSelection);
@@ -516,8 +643,16 @@
   function applyPendingQuantity(app, quantity) {
     if (!app.state.pendingCartSelection || !quantity || app.state.pendingCartSelection.committed) return;
 
-    app.state.pendingCartSelection.committed = true;
     var selection = syncPendingSelectionFromModal(app) || app.state.pendingCartSelection;
+    if (selection.requiresFlavor === true && !selection.flavorId) {
+      app.modules.ui.setMessage(app, "請先選擇口味", "error");
+      return;
+    }
+    if (selection.requiresStaple === true && !selection.stapleId) {
+      app.modules.ui.setMessage(app, "請先選擇主食", "error");
+      return;
+    }
+    app.state.pendingCartSelection.committed = true;
 
     if (selection.type === "combo") {
       addCombo(app, selection, quantity);
@@ -548,11 +683,13 @@
       itemId: combo.id,
       type: "combo",
       name: combo.name,
-      groupId: app.state.activeGroupId || (app.state.cartGroups && app.state.cartGroups[0] && app.state.cartGroups[0].id) || "g-a",
+      groupId: selection.targetGroupId || app.state.activeGroupId || (app.state.cartGroups && app.state.cartGroups[0] && app.state.cartGroups[0].id) || "g-a",
       flavorId: selection.flavorId || "",
       flavorName: selection.flavorName || "",
+      selectedFlavor: selection.flavorName || "",
       stapleId: staple.id || selection.stapleId || "",
       stapleName: staple.name || "",
+      selectedStaple: staple.name || "",
       comboLabel: selection.displayType || "🔥 套餐（最划算）",
       priceAdjustment: Number(staple.price || 0),
       categoryName: "",
@@ -564,7 +701,11 @@
       options: staple.name ? [{ name: "主食", value: staple.name, price: staple.price || 0 }] : []
     });
 
+    app.state.comboUpsellVisible = true;
     renderCart(app);
+    if (app.modules.ui && typeof app.modules.ui.renderComboUpsell === "function") {
+      app.modules.ui.renderComboUpsell(app);
+    }
     app.modules.checkout.saveCheckoutDraftState();
     maybeShowFirstAddNudge(app, hadItemsBefore);
   }
@@ -572,7 +713,7 @@
   function addSingle(app, selection, quantity) {
     quantity = Number(quantity || 1);
     if (!allowOrder(app)) return;
-    if (selection.requiresFlavor !== false && !ensureFlavor(app)) return;
+    if (selection.requiresFlavor === true && !ensureFlavor(app)) return;
     var hadItemsBefore = !!app.state.cart.length;
 
     var match = null;
@@ -600,10 +741,12 @@
       type: "single",
       name: match.name,
       groupId: chosenGroupId,
-      flavorId: selection.requiresFlavor !== false ? (selection.flavorId || "") : "",
-      flavorName: selection.requiresFlavor !== false ? (selection.flavorName || "") : "",
+      flavorId: selection.flavorId || "",
+      flavorName: selection.flavorName || "",
+      selectedFlavor: selection.flavorName || "",
       stapleId: "",
       stapleName: "",
+      selectedStaple: "",
       comboLabel: "",
       priceAdjustment: 0,
       categoryName: selection.categoryName || "",
@@ -680,8 +823,10 @@
       name: item && item.name || "",
       flavorId: item && item.flavorId || "",
       flavorName: item && item.flavorName || "",
+      selectedFlavor: item && (item.selectedFlavor || item.flavor || item.flavorName) || "",
       stapleId: item && item.stapleId || "",
       stapleName: item && item.stapleName || "",
+      selectedStaple: item && (item.selectedStaple || item.staple || item.stapleName) || "",
       isGift: !!(item && item.isGift),
       giftType: item && item.giftType || "",
       giftSlot: item && item.giftSlot || "",
@@ -1085,6 +1230,11 @@
     var stapleWarnHtml = singleAmount >= 150 && hasPendingStapleSelection(app)
       ? '<div class="cart-boost-hint__line">👉 主食還沒選 ⚠️</div>'
       : '';
+    if (app.el.comboThresholdHint) {
+      app.el.comboThresholdHint.innerHTML = singleAmount >= 150
+        ? '已達門檻！可選免費主食 🎉'
+        : '還差 <strong>NT$ ' + gap + '</strong> 即可送主食 🎯';
+    }
     if (app.el.upsellProgressBottom) app.el.upsellProgressBottom.innerHTML = upsellMainHtml + stapleWarnHtml;
     if (app.el.upsellProgressInline) app.el.upsellProgressInline.innerHTML = upsellMainHtml + boostLineHtml + stapleWarnHtml;
     if (app.el.viewCartBtnSticky) app.el.viewCartBtnSticky.classList.toggle("hidden", !app.state.cart.length);

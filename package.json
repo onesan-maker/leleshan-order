@@ -1,0 +1,7 @@
+{
+  "name": "liff-ordering",
+  "private": true,
+  "scripts": {
+    "check:encoding": "node scripts/check-encoding.js"
+  }
+}

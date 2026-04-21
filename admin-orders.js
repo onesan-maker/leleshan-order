@@ -93,7 +93,7 @@
 
     el.totalAll.textContent = String(visible.length);
     el.totalOpen.textContent = String(visible.filter(function (order) {
-      return ["new", "cooking", "packing"].indexOf(order.status) >= 0;
+      return ["new", "accepted", "cooking", "packing", "preparing"].indexOf(order.status) >= 0;
     }).length);
     el.totalReady.textContent = String(visible.filter(function (order) { return order.status === "ready"; }).length);
     el.totalDone.textContent = String(visible.filter(function (order) { return order.status === "picked_up"; }).length);
@@ -109,6 +109,12 @@
 
     el.list.innerHTML = filtered.map(function (order) {
       var meta = window.LeLeShanOrders.statusMeta(order.status);
+      if (window.LeLeShanOrderStatus && typeof window.LeLeShanOrderStatus.getLabel === "function") {
+        meta = {
+          tone: meta.tone,
+          label: window.LeLeShanOrderStatus.getLabel(order.status)
+        };
+      }
       return '<article class="order-card order-card--' + esc(meta.tone) + '">' +
         '<div class="order-card__head"><div><h2>' + esc(window.LeLeShanOrders.safeName(order)) + '</h2><div class="order-card__meta">訂單編號：' + esc(order.id) + ' / ' + esc(order.label) + ' / ' + esc(order.source) + '</div></div>' +
         '<span class="status-pill status-pill--' + esc(meta.tone) + '">' + esc(meta.label) + '</span></div>' +
@@ -125,14 +131,18 @@
     var actions = [];
     if (order.status === "new")       actions.push(button(order.id, "確認接單", "accepted",  "secondary-btn"));
     if (order.status === "new")       actions.push(button(order.id, "直接製作", "preparing",  "primary-btn"));
-    if (order.status === "accepted")  actions.push(button(order.id, "開始製作", "preparing",  "primary-btn"));
+    if (order.status === "accepted")  actions.push(button(order.id, "餐點完成", "ready",      "primary-btn"));
     if (order.status === "preparing") actions.push(button(order.id, "餐點完成", "ready",      "primary-btn"));
     if (order.status === "ready")     actions.push(button(order.id, "完成取餐", "completed",  "secondary-btn"));
-    // legacy fallbacks
     if (order.status === "cooking")   actions.push(button(order.id, "餐點完成", "ready",      "primary-btn"));
     if (order.status === "packing")   actions.push(button(order.id, "標記完成", "ready",      "primary-btn"));
     if (["new","accepted","preparing","cooking","packing","ready"].indexOf(order.status) >= 0) {
       actions.push(button(order.id, "取消訂單", "cancelled", "danger-btn"));
+    }
+    if (order.status === "cancelled") {
+      var reasonLabels = { busy: "爆單/忙碌中", out_of_stock: "食材售完", closing: "即將打烊", abnormal_order: "訂單異常" };
+      var reason = order.cancel_reason ? (reasonLabels[order.cancel_reason] || order.cancel_reason) : "";
+      if (reason) actions.push('<span class="cancel-reason-tag">原因：' + esc(reason) + '</span>');
     }
     return actions.join("");
   }

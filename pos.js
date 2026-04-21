@@ -109,12 +109,12 @@
     ubereats: "UberEats", foodpanda: "Foodpanda"
   };
   var STATUS_LABEL_MAP = {
-    new: "待製作",
-    pending_confirmation: "待確認",
-    accepted: "待製作",
+    new: "製作中",
+    accepted: "製作中",
     preparing: "製作中",
     ready: "可取餐",
     completed: "已完成",
+    picked_up: "已取餐",
     cancelled: "已取消",
     unknown: "未知"
   };
@@ -174,6 +174,16 @@
     el.userMeta          = document.getElementById("ops-user-meta");
     el.offlineHint       = document.getElementById("pos-offline-hint");
     el.logoutBtn         = document.getElementById("pos-logout-btn");
+    el.switchBtn         = document.getElementById("pos-switch-btn");
+    el.switchModal       = document.getElementById("pos-switch-modal");
+    el.switchClose       = document.getElementById("pos-switch-close");
+    el.switchCancel      = document.getElementById("pos-switch-cancel");
+    el.switchConfirm     = document.getElementById("pos-switch-confirm");
+    el.switchEmpId       = document.getElementById("pos-switch-empid");
+    el.switchPin         = document.getElementById("pos-switch-pin");
+    el.switchError       = document.getElementById("pos-switch-error");
+    el.dutyBadge         = document.getElementById("pos-duty-badge");
+    el.dutyText          = document.getElementById("pos-duty-text");
     el.menuLoading       = document.getElementById("pos-menu-loading");
     el.menuRoot          = document.getElementById("pos-menu-root");
     el.partList          = document.getElementById("pos-part-list");
@@ -478,21 +488,204 @@
     if (el.logoutBtn) {
       el.logoutBtn.addEventListener("click", handleLogout);
     }
+    bindSwitchEmployee();
+    updateDutyBadge(state.session);
+    // 只在首次使用此 sessionToken 時寫 login shift log，避免頁面重整重複紀錄
+    var LOGIN_LOG_KEY = "leleshan_pos_login_log_for_token";
+    var loggedToken = null;
+    try { loggedToken = localStorage.getItem(LOGIN_LOG_KEY); } catch(_) {}
+    var shouldLogLogin = state.session && state.session.sessionToken && loggedToken !== state.session.sessionToken;
+    publishCurrentSession(shouldLogLogin ? "login" : "resume")
+      .catch(function (e) { console.warn("[POS] publish session failed", e); });
+    if (shouldLogLogin) {
+      writeShiftLog("login", state.session, null);
+      try { localStorage.setItem(LOGIN_LOG_KEY, state.session.sessionToken); } catch(_) {}
+    }
+  }
+
+  // ── 當班 session 同步到 store_runtime（KDS 讀取同份資料）────
+  async function publishCurrentSession(lastAction) {
+    if (!state.session || !window.LeLeShanOpsSession) return;
+    var db = firebase.firestore();
+    try {
+      await window.LeLeShanOpsSession.writeSession(db, state.session.storeId, {
+        employeeId: state.session.employeeId,
+        employeeName: state.session.employeeName,
+        role: "staff"
+      }, { source: "pos", lastAction: lastAction || "login" });
+    } catch (e) {
+      console.warn("[POS] writeSession failed", e);
+    }
+  }
+
+  function writeShiftLog(type, current, previous) {
+    if (!window.LeLeShanOpsSession) return;
+    var db = firebase.firestore();
+    window.LeLeShanOpsSession.writeShiftLog(db, {
+      type: type,
+      employeeId: (current && current.employeeId) || "",
+      employeeName: (current && current.employeeName) || "",
+      previousEmployeeId: (previous && previous.employeeId) || null,
+      previousEmployeeName: (previous && previous.employeeName) || null,
+      storeId: (current && current.storeId) || (previous && previous.storeId) || state.storeId,
+      triggeredBy: "pos"
+    });
+  }
+
+  function updateDutyBadge(session) {
+    if (!el.dutyBadge || !el.dutyText) return;
+    if (session && session.employeeName) {
+      el.dutyBadge.style.display = "";
+      el.dutyText.textContent = "目前值班：" + session.employeeName + " (" + session.employeeId + ")";
+    } else {
+      el.dutyBadge.style.display = "none";
+    }
+  }
+
+  function bindSwitchEmployee() {
+    if (!el.switchBtn) return;
+    el.switchBtn.addEventListener("click", openSwitchModal);
+    if (el.switchClose)  el.switchClose.addEventListener("click", closeSwitchModal);
+    if (el.switchCancel) el.switchCancel.addEventListener("click", closeSwitchModal);
+    if (el.switchConfirm) el.switchConfirm.addEventListener("click", submitSwitchEmployee);
+    if (el.switchModal) {
+      el.switchModal.addEventListener("click", function (ev) {
+        if (ev.target === el.switchModal) closeSwitchModal();
+      });
+    }
+  }
+
+  function openSwitchModal() {
+    if (!el.switchModal) return;
+    el.switchModal.hidden = false;
+    el.switchModal.style.display = "flex";
+    if (el.switchEmpId) el.switchEmpId.value = "";
+    if (el.switchPin)   el.switchPin.value = "";
+    if (el.switchError) { el.switchError.textContent = ""; el.switchError.classList.add("hidden"); }
+    setTimeout(function () { if (el.switchEmpId) el.switchEmpId.focus(); }, 50);
+  }
+
+  function closeSwitchModal() {
+    if (!el.switchModal) return;
+    el.switchModal.hidden = true;
+    el.switchModal.style.display = "none";
+  }
+
+  function setSwitchError(msg) {
+    if (!el.switchError) return;
+    if (!msg) { el.switchError.textContent = ""; el.switchError.classList.add("hidden"); return; }
+    el.switchError.textContent = msg;
+    el.switchError.classList.remove("hidden");
+  }
+
+  async function submitSwitchEmployee() {
+    setSwitchError("");
+    var empId = String((el.switchEmpId && el.switchEmpId.value) || "").trim();
+    var pin   = String((el.switchPin && el.switchPin.value) || "").trim();
+    if (!/^\d{3}$/.test(empId)) { setSwitchError("員工編號需為3位數字"); return; }
+    if (!/^\d{4}$/.test(pin))   { setSwitchError("PIN 需為4位數字"); return; }
+    if (!navigator.onLine)       { setSwitchError("目前離線，無法切換員工"); return; }
+    if (state.session && state.session.employeeId === empId) {
+      setSwitchError("已經是目前值班員工");
+      return;
+    }
+    if (el.switchConfirm) { el.switchConfirm.disabled = true; el.switchConfirm.textContent = "驗證中..."; }
+    try {
+      var login = firebase.app().functions("us-central1").httpsCallable("posEmployeeLogin");
+      var result = await login({ employeeId: empId, pin: pin, sessionHours: 16 });
+      var payload = (result && result.data) || {};
+      if (!payload || !payload.sessionToken) throw new Error("SWITCH_FAILED");
+
+      var previous = state.session ? {
+        employeeId: state.session.employeeId,
+        employeeName: state.session.employeeName,
+        storeId: state.session.storeId
+      } : null;
+
+      // 先請舊的 session 在後端失效（best-effort）
+      if (previous && previous.employeeId) {
+        try {
+          var oldToken = state.session && state.session.sessionToken;
+          if (oldToken) {
+            var logoutCall = firebase.app().functions("us-central1").httpsCallable("logoutPosSession");
+            await logoutCall({ sessionToken: oldToken });
+          }
+        } catch (e) { console.warn("[POS] old session logout on switch failed", e); }
+      }
+
+      var newSession = {
+        employeeId: String(payload.employeeId || empId),
+        employeeName: payload.employeeName,
+        storeId: payload.storeId,
+        sessionToken: payload.sessionToken,
+        loginAt: payload.loginAt || new Date().toISOString(),
+        expiresAt: payload.expiresAt || null
+      };
+      window.LeLeShanPosSession.save(newSession);
+      state.session = newSession;
+
+      // 更新 UI
+      if (el.userMeta) {
+        el.userMeta.textContent = "員工：" + newSession.employeeName + " (" + newSession.employeeId + ")";
+      }
+      updateDutyBadge(newSession);
+
+      await publishCurrentSession("switch");
+      writeShiftLog("switch", newSession, previous);
+
+      closeSwitchModal();
+    } catch (error) {
+      console.error("[POS] switch failed", error);
+      var code = (error && error.code) || "";
+      if (code === "failed-precondition" || code === "functions/failed-precondition") {
+        setSwitchError("員工已停用");
+      } else if (code === "unavailable" || code === "functions/unavailable") {
+        setSwitchError("目前離線，無法切換員工");
+      } else {
+        setSwitchError("員工編號或 PIN 錯誤");
+      }
+    } finally {
+      if (el.switchConfirm) { el.switchConfirm.disabled = false; el.switchConfirm.textContent = "確認切換"; }
+    }
   }
 
   async function handleLogout() {
+    var tStart = performance.now();
     var session = window.LeLeShanPosSession && window.LeLeShanPosSession.get();
     if (session && navigator.onLine && firebase.apps.length) {
       try {
         var callable = firebase.app().functions("us-central1").httpsCallable("logoutPosSession");
+        var t1 = performance.now();
         await callable({ sessionToken: session.sessionToken });
+        console.log("[POS_DIAG] logout.callable logoutPosSession", (performance.now() - t1).toFixed(2) + "ms");
       } catch (error) {
         console.warn("[POS] logout session sync failed.", error);
       }
     }
+    // 清除全店主 session，寫 shift log；KDS 會即時收到 sessionActive=false
+    // 重要：此動作不能受前一步失敗影響，且必須在清 localStorage 之前完成，
+    //       否則下次頁面若沒登入就不會再觸發這段。
+    if (window.LeLeShanOpsSession && firebase.apps.length && session && session.storeId) {
+      try {
+        var t2 = performance.now();
+        await window.LeLeShanOpsSession.clearSession(firebase.firestore(), session.storeId, "logout");
+        console.log("[POS_DIAG] logout.clearSession", (performance.now() - t2).toFixed(2) + "ms");
+        console.log("[POS] current_session cleared for store", session.storeId);
+      } catch (e) {
+        console.error("[POS] clearSession FAILED — 請確認 Firestore rules 已部署 store_runtime 規則", e);
+        alert("登出時無法同步 KDS 值班狀態（可能 Firestore 規則未部署）。仍會登出本機。");
+      }
+      try {
+        var t3 = performance.now();
+        writeShiftLog("logout", session, null);
+        console.log("[POS_DIAG] logout.writeShiftLog", (performance.now() - t3).toFixed(2) + "ms");
+      } catch (e) { console.warn("[POS] logout shift log failed", e); }
+    }
+    try { localStorage.removeItem("leleshan_pos_login_log_for_token"); } catch(_) {}
     if (window.LeLeShanPosSession) {
       window.LeLeShanPosSession.clear();
     }
+    console.log("[POS_DIAG] logout.total (click→redirect)", (performance.now() - tStart).toFixed(2) + "ms");
     redirectToPosLogin();
   }
 
@@ -1722,6 +1915,15 @@
 
       upsertCustomer(db, { storeId: storeId, lineUserId: lineUserId, customerName: customerName, orderId: ref.id });
 
+      console.log("[POS] submitOrder success.", {
+        orderId:      ref.id,
+        storeId:      payload.storeId,
+        status:       payload.status,
+        source:       payload.source,
+        pickupNumber: pickupNumber,
+        total:        payload.total,
+        itemCount:    (payload.items || []).length
+      });
       showStatus("✅ 已收款，取餐號碼：" + pickupNumber, "ok");
       clearCart();
 
@@ -2017,7 +2219,8 @@
       var srcKey    = o.source || "pos";
       var srcLbl    = SOURCE_LABEL_MAP[srcKey] || srcKey;
       var canAppend = !completedSet.has(status);
-      var canConfirm = status === "pending_confirmation";
+      var cancelReasonLabels = { busy: "爆單/忙碌中", out_of_stock: "食材售完", closing: "即將打烊", abnormal_order: "訂單異常" };
+      var cancelReasonText = o.cancel_reason ? (cancelReasonLabels[o.cancel_reason] || o.cancel_reason) : "";
       var createdAt = tsToTime(o.createdAt);
       var total     = Number(o.total || o.totalAmount || o.subtotal || 0);
       var no        = o.pickupNumber ? "#" + o.pickupNumber : o.id.slice(-6);
@@ -2028,12 +2231,12 @@
         '<td>' + name + '</td>' +
         '<td><span class="pos-source-badge pos-source-badge--' + esc(srcKey) + '">' + esc(srcLbl) + '</span></td>' +
         '<td>NT$' + total + '</td>' +
-        '<td><span class="pos-status-pill pos-status-pill--' + esc(status) + '">' + esc(statusLbl) + '</span></td>' +
+        '<td><span class="pos-status-pill pos-status-pill--' + esc(status) + '">' + esc(statusLbl) + '</span>' +
+          (cancelReasonText ? '<span class="pos-cancel-reason"> (' + esc(cancelReasonText) + ')</span>' : '') + '</td>' +
         '<td>' + esc(createdAt) + '</td>' +
         '<td>' +
           '<div class="pos-orders-actions">' +
             '<button class="pos-orders-btn pos-orders-btn--view" data-view-order="' + esc(o.id) + '">查看</button>' +
-            (canConfirm ? '<button class="pos-orders-btn pos-orders-btn--append" data-confirm-order="' + esc(o.id) + '">確認製作</button>' : '') +
             (canAppend ? '<button class="pos-orders-btn pos-orders-btn--append" data-append-order="' + esc(o.id) + '">追加</button>' : '') +
           '</div>' +
         '</td>' +
@@ -2051,7 +2254,6 @@
 
   function onOrdersListClick(event) {
     var viewBtn   = event.target.closest("[data-view-order]");
-    var confirmBtn = event.target.closest("[data-confirm-order]");
     var appendBtn = event.target.closest("[data-append-order]");
     if (viewBtn) {
       var orderId = viewBtn.getAttribute("data-view-order");
@@ -2059,68 +2261,10 @@
       if (order) openDetailOverlay(order);
       return;
     }
-    if (confirmBtn) {
-      var orderId = confirmBtn.getAttribute("data-confirm-order");
-      if (!orderId) return;
-      confirmBtn.disabled = true;
-      confirmPendingConfirmationOrder(orderId).finally(function () {
-        confirmBtn.disabled = false;
-      });
-      return;
-    }
     if (appendBtn) {
       var orderId = appendBtn.getAttribute("data-append-order");
       var order   = state.todaysOrders.find(function (o) { return o.id === orderId; });
       if (order) startAppendMode(order);
-    }
-  }
-
-  async function confirmPendingConfirmationOrder(orderId) {
-    if (!state.context || !state.context.db) {
-      showStatus("尚未完成初始化，請稍後再試。", "err");
-      return;
-    }
-
-    var db = state.context.db;
-    var orderRef = db.collection("orders").doc(orderId);
-    var ts = firebase.firestore.FieldValue.serverTimestamp();
-    var didUpdate = false;
-
-    try {
-      showStatus("確認製作中…");
-      await db.runTransaction(function (tx) {
-        return tx.get(orderRef).then(function (snap) {
-          if (!snap.exists) throw new Error("訂單不存在");
-          var data = snap.data() || {};
-          var currentStatus = statusDisplayMeta(data.status || "new").key;
-          if (currentStatus !== "pending_confirmation") {
-            return;
-          }
-
-          var updates = {
-            status: "accepted",
-            accepted_at: ts
-          };
-          if (Object.prototype.hasOwnProperty.call(data, "requires_confirmation")) {
-            updates.requires_confirmation = false;
-          }
-          tx.update(orderRef, updates);
-          didUpdate = true;
-        });
-      });
-
-      if (didUpdate) {
-        showStatus("✅ 已確認製作", "ok");
-      } else {
-        showStatus("此訂單狀態已更新，無需再次確認。", "ok");
-      }
-      await loadTodaysOrders();
-    } catch (err) {
-      console.error("[POS] confirmPendingConfirmationOrder failed.", {
-        orderId: orderId,
-        message: err && err.message || String(err)
-      });
-      showStatus("確認製作失敗：" + (err && err.message || String(err)), "err");
     }
   }
 

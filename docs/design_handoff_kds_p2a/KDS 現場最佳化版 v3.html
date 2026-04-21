@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>KDS 現場最佳化版 v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0d14;
+    --panel: #121620;
+    --panel-2: #1a2030;
+    --line: #242c40;
+    --text: #ffffff;
+    --text-dim: #c8cedc;
+    --muted: #6b7489;
+
+    --pending: #ef4444;
+    --pending-2: #dc2626;
+    --accepted: #f97316;
+    --preparing: #3b82f6;
+    --ready: #10b981;
+    --ready-2: #059669;
+
+    --line-brand: #06c755;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--text);
+    font-family: "Noto Sans TC","PingFang TC",sans-serif;
+    height: 100vh; overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -webkit-user-select: none; user-select: none;
+  }
+
+  /* ─── 頂部警報條（PENDING 全寬紅條）─── */
+  .alert-strip {
+    height: 0;
+    background: var(--pending);
+    overflow: hidden;
+    transition: height 0.3s;
+    display: flex; align-items: center;
+    font-weight: 900; color: #fff;
+    font-size: 16px; letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  body.pending-mode .alert-strip {
+    height: 40px;
+    animation: stripPulse 1.4s infinite;
+  }
+  @keyframes stripPulse {
+    0%, 100% { background: var(--pending); }
+    50%      { background: #dc2626; }
+  }
+  .alert-strip__content {
+    display: flex; width: 100%; padding: 0 16px;
+    align-items: center; gap: 14px;
+  }
+  .alert-strip__count {
+    background: rgba(0,0,0,0.3); border-radius: 999px;
+    padding: 2px 12px; font-size: 14px;
+  }
+  .alert-strip__oldest {
+    margin-left: auto;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .alert-strip__marquee {
+    flex: 1; overflow: hidden; position: relative;
+    font-size: 14px;
+  }
+  .alert-strip__marquee span {
+    display: inline-block;
+    animation: marquee 15s linear infinite;
+    padding-left: 100%;
+  }
+  @keyframes marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
+
+  /* ─── 頂部極簡 bar ─── */
+  .bar {
+    height: 48px; background: var(--panel);
+    border-bottom: 2px solid var(--line);
+    display: flex; align-items: center; padding: 0 16px; gap: 14px;
+  }
+  .bar__brand {
+    font-weight: 900; font-size: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .bar__logo {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    display: flex; align-items: center; justify-content: center; font-weight: 900;
+    font-size: 14px;
+  }
+  .bar__live {
+    display: flex; gap: 6px; font-size: 12px; color: var(--text-dim);
+    margin-left: 6px;
+  }
+  .bar__dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ready); margin-top: 5px;
+    animation: livePulse 1.2s infinite;
+  }
+  @keyframes livePulse { 50% { opacity: 0.3; } }
+  .bar__stats {
+    margin-left: 20px; display: flex; gap: 16px;
+    font-size: 13px; color: var(--text-dim);
+  }
+  .bar__stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .bar__clock {
+    margin-left: auto;
+    font-size: 20px; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  .bar__sound {
+    background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--text-dim); padding: 6px 12px; border-radius: 6px;
+    font-size: 12px; cursor: pointer; white-space: nowrap; font-family: inherit;
+  }
+  .bar__sound.active { color: var(--ready); border-color: var(--ready); }
+
+  /* ─── 三欄 ─── */
+  .board {
+    display: grid;
+    grid-template-columns: 420px 1.1fr 1fr;
+    height: calc(100vh - 48px);
+    gap: 2px; background: var(--line);
+  }
+  .col { background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .col__head {
+    padding: 12px 18px;
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0; position: relative;
+    border-bottom: 2px solid var(--line);
+  }
+  .col__title {
+    font-weight: 900; font-size: 18px;
+  }
+  .col__count {
+    margin-left: auto;
+    font-size: 13px; padding: 3px 10px; border-radius: 999px;
+    background: var(--line); color: var(--text-dim);
+    font-weight: 800; min-width: 40px; text-align: center;
+  }
+
+  /* 待確認欄 —— 最強視覺 */
+  .col--pending { background: #1a0a0a; }
+  .col--pending .col__head {
+    background: linear-gradient(180deg, rgba(239,68,68,0.25), transparent);
+    border-bottom-color: var(--pending);
+  }
+  .col--pending .col__title {
+    color: var(--pending);
+    text-shadow: 0 0 16px rgba(239,68,68,0.4);
+  }
+  .col--pending.active {
+    animation: colAlert 1s infinite;
+  }
+  @keyframes colAlert {
+    0%, 100% { box-shadow: inset 0 0 0 0 rgba(239,68,68,0.6); }
+    50%      { box-shadow: inset 0 0 60px 0 rgba(239,68,68,0.3); }
+  }
+  .col--pending .col__count { background: var(--pending); color: #fff; }
+
+  /* 製作中欄 */
+  .col--work .col__head { border-bottom-color: var(--preparing); }
+  .col--work .col__title { color: var(--preparing); }
+
+  /* 可取餐欄 */
+  .col--ready .col__head {
+    background: linear-gradient(180deg, rgba(16,185,129,0.18), transparent);
+    border-bottom-color: var(--ready);
+  }
+  .col--ready .col__title { color: var(--ready); }
+
+  .col__body {
+    flex: 1; overflow-y: auto; padding: 10px 10px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .col__body::-webkit-scrollbar { width: 8px; }
+  .col__body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+  .empty {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted); font-size: 13px;
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     卡片視覺層級（從最強到最弱）：
+     1. 取餐號 —— 最大、最粗、色彩對比最強 (48px)
+     2. 主 CTA 按鈕 —— 第二大，固定底部，綠色 (60px 高)
+     3. 品項清單 —— 第三，黑底白字 18px
+     4. 姓名 + 來源 badge —— 第四，14px
+     5. 等待時間 —— 第五，小且在角落
+     6. 備註 —— 黃色區塊，無法忽略
+     7. 預約時間等次要資訊 —— 最小，灰色
+     ───────────────────────────────────────────────────────── */
+
+  .card {
+    background: var(--panel-2);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .card__body { flex: 1; min-height: 0; }
+  .card__cta { flex-shrink: 0; }
+
+  /* ── 1. 取餐號區（頭） ── */
+  .card__hero {
+    padding: 8px 14px 4px;
+    text-align: center;
+    position: relative;
+    border-bottom: 1px solid var(--line);
+  }
+  .card__number {
+    font-size: 64px; font-weight: 900;
+    line-height: 1; letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .card__wait-bar {
+    position: absolute; top: 10px; right: 12px;
+    font-size: 12px; font-weight: 700;
+    padding: 3px 8px; border-radius: 4px;
+    font-variant-numeric: tabular-nums;
+    background: rgba(0,0,0,0.4);
+    color: var(--text-dim);
+  }
+  .card__wait-bar.warn { background: #b45309; color: #fff; }
+  .card__wait-bar.crit {
+    background: var(--pending); color: #fff;
+    animation: blink 0.8s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.4; } }
+
+  /* pending 卡片的取餐號額外強調 */
+  .card--pending .card__number {
+    color: var(--pending);
+    text-shadow: 0 0 20px rgba(239,68,68,0.5);
+  }
+  .card--ready .card__number {
+    color: var(--ready);
+    text-shadow: 0 0 20px rgba(16,185,129,0.5);
+  }
+  .card--ready.new-ready .card__number {
+    animation: readyBoom 0.8s ease-out;
+  }
+  @keyframes readyBoom {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.3); }
+    100% { transform: scale(1); }
+  }
+
+  /* ── 2. 顧客資訊列（name + badge） ── */
+  .card__meta {
+    padding: 6px 14px;
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(0,0,0,0.2);
+    flex-wrap: wrap;
+  }
+  .card__name {
+    font-size: 14px; font-weight: 700;
+    white-space: nowrap;
+    color: var(--text-dim);
+  }
+  .src {
+    font-size: 10px; font-weight: 900;
+    padding: 2px 6px; border-radius: 3px;
+    letter-spacing: 0.05em; white-space: nowrap;
+  }
+  .src--line { background: var(--line-brand); color: #fff; }
+  .src--pos { background: #475569; color: #fff; }
+  .src--phone { background: #a855f7; color: #fff; }
+  .src--reserve {
+    background: transparent; border: 1px solid #fbbf24;
+    color: #fbbf24; font-weight: 800;
+  }
+  .pickup-time {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+
+  /* ── 3. 品項區（主體） ── */
+  .card__body {
+    padding: 10px 14px;
+  }
+  .group {
+    margin-bottom: 10px;
+    border-left: 4px solid var(--accepted);
+    padding-left: 10px;
+  }
+  .group:last-child { margin-bottom: 0; }
+  .group {
+    margin-bottom: 10px;
+    border-left: 6px solid var(--accepted);
+    padding-left: 12px;
+    background: linear-gradient(90deg, rgba(249,115,22,0.12), transparent 40%);
+    border-radius: 0 6px 6px 0;
+    padding-top: 6px; padding-bottom: 6px;
+  }
+  .group__head {
+    font-size: 15px; font-weight: 900;
+    color: #fff; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .group__badge {
+    background: var(--accepted); color: #fff;
+    width: 30px; height: 30px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 900;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(249,115,22,0.4);
+  }
+  .group__flavor {
+    font-weight: 900; color: #fff;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+  }
+  .group__count {
+    margin-left: auto;
+    font-size: 11px; color: var(--muted);
+    font-weight: 700;
+  }
+  .items {
+    list-style: none;
+  }
+  .items li {
+    font-size: 18px; font-weight: 700;
+    line-height: 1.35; padding: 4px 0;
+    display: flex; align-items: baseline; gap: 6px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.1s;
+  }
+  .items li:hover { background: rgba(255,255,255,0.03); }
+  .items li::before {
+    content: "";
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 2px solid var(--muted);
+    border-radius: 4px;
+    margin-right: 4px; flex-shrink: 0;
+    align-self: center;
+    transition: all 0.15s;
+  }
+  .items li.done::before {
+    background: var(--ready); border-color: var(--ready);
+    content: "✓"; color: #fff; font-weight: 900; font-size: 14px;
+    text-align: center; line-height: 16px;
+  }
+  .items li.done {
+    color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px;
+  }
+  .items li .qty {
+    color: var(--accepted); font-weight: 900;
+    min-width: 28px; text-align: right;
+  }
+  .items li .sub {
+    font-size: 13px; color: var(--muted); font-weight: 500;
+  }
+
+  /* 備註區 —— 黃色無法忽略 */
+  .note {
+    margin: 6px 14px 0;
+    padding: 8px 12px;
+    background: #fbbf24; color: #78350f;
+    border-radius: 6px; font-weight: 800; font-size: 14px;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .note::before { content: "📝"; font-size: 16px; }
+
+  /* ── 4. 底部固定操作區 —— 最大按鈕 ── */
+  .card__cta {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px;
+    margin-top: 8px;
+  }
+  .btn {
+    border: none;
+    font-family: inherit;
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform 0.06s, filter 0.1s;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn--main {
+    height: 72px;
+    font-size: 24px;
+    color: #fff;
+    border-radius: 0 0 0 12px;
+  }
+  .btn--main.accept { background: var(--accepted); box-shadow: inset 0 -4px 0 #c2410c; }
+  .btn--main.start { background: var(--preparing); box-shadow: inset 0 -4px 0 #1d4ed8; }
+  .btn--main.ready { background: var(--ready); box-shadow: inset 0 -4px 0 var(--ready-2); }
+  .btn--main.ready.armed { animation: ctaReady 1s infinite; }
+  @keyframes ctaReady {
+    0%, 100% { background: var(--ready); }
+    50%      { background: #34d399; }
+  }
+  .btn--main.pickup { background: #0ea5e9; box-shadow: inset 0 -4px 0 #0369a1; }
+
+  .btn--sub {
+    height: 72px; width: 72px;
+    background: transparent; color: var(--muted);
+    border-left: 1px solid var(--line);
+    font-size: 20px; font-weight: 700;
+    border-radius: 0 0 12px 0;
+    position: relative;
+  }
+  .btn--sub:hover { background: rgba(239,68,68,0.1); color: var(--pending); }
+  .btn--sub::after {
+    content: "長按";
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px; color: var(--muted);
+    font-weight: 600; letter-spacing: 0.05em;
+  }
+  .btn--sub.pressing {
+    background: var(--pending); color: #fff;
+  }
+  .btn--sub.pressing::before {
+    content: "";
+    position: absolute; left: 0; top: 0; height: 100%;
+    background: rgba(0,0,0,0.3);
+    width: var(--progress, 0%);
+    transition: width 0.05s linear;
+  }
+
+  /* 卡片狀態特殊樣式 */
+  .card--pending {
+    background: #2a1010;
+    border: 3px solid var(--pending);
+    animation: cardPulseRed 1.4s infinite;
+  }
+  @keyframes cardPulseRed {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.55), 0 4px 24px rgba(239,68,68,0.25); }
+    50%      { box-shadow: 0 0 0 10px rgba(239,68,68,0), 0 4px 24px rgba(239,68,68,0.45); }
+  }
+  .card--pending .card__hero::before {
+    content: "⚠ 請確認";
+    position: absolute; top: -10px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--pending); color: #fff;
+    padding: 3px 16px; border-radius: 0 0 10px 10px;
+    font-size: 12px; font-weight: 900;
+    letter-spacing: 0.1em;
+  }
+
+  .card--ready {
+    background: #0a2820;
+    border: 2px solid var(--ready);
+  }
+  .card--pending.critical {
+    animation: cardCritical 0.5s infinite;
+    border-color: #fca5a5;
+    border-width: 4px;
+  }
+  @keyframes cardCritical {
+    0%, 100% { background: #2a1010; transform: scale(1); }
+    50%      { background: #601818; transform: scale(1.01); }
+  }
+
+  /* ─── 工作負載燈（中欄標題邊指示）─── */
+  .col--work.overload .col__title::after {
+    content: "• 忽";
+    color: var(--pending); font-weight: 900;
+    margin-left: 8px; animation: blink 0.8s infinite;
+  }
+  .col--work.busy .col__title::after {
+    content: "• 忙";
+    color: #fbbf24; font-weight: 900;
+    margin-left: 8px;
+  }
+
+  /* ─── 可取餐滿滿警報 ─── */
+  .col--ready.full .col__title::after {
+    content: "• 與頭滱";
+    color: #fbbf24; font-weight: 900;
+    margin-left: 8px; animation: blink 1s infinite;
+  }
+
+  /* ─── 批量動作確認標籤 ─── */
+  .batch-undo {
+    position: fixed; bottom: 56px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-2); color: var(--text);
+    border: 2px solid var(--ready);
+    border-radius: 10px; padding: 10px 18px;
+    display: none; align-items: center; gap: 12px;
+    font-size: 14px; font-weight: 800; z-index: 110;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .batch-undo.show { display: flex; animation: cardEnter 0.4s; }
+  .batch-undo button {
+    background: var(--panel); color: #fff;
+    border: 1px solid var(--muted); border-radius: 6px;
+    padding: 6px 14px; font-family: inherit; font-weight: 900;
+    cursor: pointer; font-size: 13px;
+  }
+  .batch-undo__countdown {
+    color: var(--muted); font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+
+
+  /* 全勾選 ready 提示 */
+  .card--preparing.all-checked {
+    border: 2px solid var(--ready);
+    box-shadow: 0 0 20px rgba(16,185,129,0.3);
+  }
+  .card--preparing.all-checked .btn--main {
+    background: var(--ready) !important;
+    animation: ctaReady 0.9s infinite;
+  }
+  .card--preparing.all-checked .card__hero::after {
+    content: "✓ 已備齊，可出餐";
+    display: block;
+    font-size: 14px; color: var(--ready);
+    font-weight: 800; margin-top: 2px;
+  }
+
+  /* ─── 跨欄動畫 ─── */
+  .card.flying {
+    position: fixed; z-index: 200;
+    pointer-events: none;
+    transition: transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.55s;
+  }
+  .card.enter {
+    animation: cardEnter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes cardEnter {
+    0%   { opacity: 0; transform: translateY(-30px) scale(0.9); filter: blur(4px); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+  /* 完成出餐後「飛到右邊」動畫 */
+  .card.fly-out {
+    animation: flyOut 0.6s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+    pointer-events: none;
+  }
+  @keyframes flyOut {
+    0%   { opacity: 1; transform: translateX(0) scale(1); }
+    40%  { opacity: 1; transform: translateX(0) scale(1.05); }
+    100% { opacity: 0; transform: translateX(150%) scale(0.9); }
+  }
+  .card.celebrate {
+    animation: celebrate 0.7s ease-out;
+  }
+  @keyframes celebrate {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.06) rotate(-1deg); box-shadow: 0 0 40px rgba(16,185,129,0.8); }
+    60%  { transform: scale(1.03) rotate(1deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+
+  /* 待確認存在時 → 其他欄 dim（強制專注） */
+  body.pending-mode .col--work,
+  body.pending-mode .col--ready {
+    opacity: 0.55;
+    filter: saturate(0.5);
+    transition: opacity 0.4s, filter 0.4s;
+  }
+  body.pending-mode .col--work:hover,
+  body.pending-mode .col--ready:hover {
+    opacity: 1; filter: saturate(1);
+  }
+
+  /* ─── 全畫面新單 Alert ─── */
+  .new-order-alert {
+    position: fixed; inset: 0;
+    background: rgba(239,68,68,0.15);
+    backdrop-filter: blur(2px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 300;
+    pointer-events: none;
+    animation: newOrderAlert 0.6s;
+  }
+  .new-order-alert.show { display: flex; }
+  @keyframes newOrderAlert {
+    0%   { background: rgba(239,68,68,0.5); }
+    100% { background: rgba(239,68,68,0); }
+  }
+
+  /* ─── 底部統計條 ─── */
+  .stats-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 36px; background: rgba(18,22,32,0.96);
+    border-top: 1px solid var(--line);
+    display: flex; align-items: center; padding: 0 16px; gap: 20px;
+    font-size: 12px; z-index: 30;
+  }
+  .stats-bar__item { display: flex; align-items: center; gap: 6px; }
+  .stats-bar__label { color: var(--muted); }
+  .stats-bar__val {
+    font-weight: 900; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-bar__gauge {
+    display: flex; height: 6px; width: 160px;
+    background: var(--line); border-radius: 3px; overflow: hidden;
+  }
+  .stats-bar__gauge span { display: block; height: 100%; }
+  .stats-bar__gauge .sg-p { background: var(--pending); }
+  .stats-bar__gauge .sg-w { background: var(--preparing); }
+  .stats-bar__gauge .sg-r { background: var(--ready); }
+  body { padding-bottom: 36px; box-sizing: border-box; }
+  .board { height: calc(100vh - 48px - 36px); }
+
+  /* ─── 批量欄（尖峰时出現）─── */
+  .batch-bar {
+    position: fixed; top: 56px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--pending); color: #fff;
+    padding: 10px 20px; border-radius: 0 0 14px 14px;
+    font-size: 14px; font-weight: 900;
+    display: none; z-index: 120;
+    box-shadow: 0 8px 24px rgba(239,68,68,0.6);
+    animation: batchDown 0.4s;
+  }
+  @keyframes batchDown {
+    from { transform: translate(-50%, -100%); }
+    to   { transform: translate(-50%, 0); }
+  }
+  .batch-bar.show { display: flex; align-items: center; gap: 12px; }
+  .batch-bar button {
+    background: rgba(0,0,0,0.35); color: #fff;
+    border: 1px solid rgba(255,255,255,0.4);
+    padding: 6px 14px; border-radius: 6px;
+    font-family: inherit; font-weight: 900; font-size: 13px;
+    cursor: pointer;
+  }
+  .batch-bar button:hover { background: rgba(0,0,0,0.55); }
+
+  /* 取消 modal */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+    display: none; align-items: center; justify-content: center; z-index: 250;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 2px solid var(--line);
+    border-radius: 14px; width: 500px; padding: 28px;
+  }
+  .modal h3 { font-size: 22px; font-weight: 900; margin-bottom: 8px; }
+  .modal p { color: var(--text-dim); font-size: 14px; margin-bottom: 16px; }
+  .modal__grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin-bottom: 14px;
+  }
+  .reason-btn {
+    padding: 16px; background: var(--panel-2);
+    border: 2px solid var(--line);
+    color: var(--text); border-radius: 10px;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    white-space: nowrap;
+  }
+  .reason-btn.active {
+    border-color: var(--pending); background: rgba(239,68,68,0.15);
+  }
+  .modal__actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-ghost {
+    padding: 12px 20px; background: transparent;
+    color: var(--text-dim); border: 1px solid var(--line);
+    border-radius: 8px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .btn-danger {
+    padding: 12px 24px; background: var(--pending);
+    color: #fff; border: none; border-radius: 8px;
+    font-weight: 900; font-size: 15px; cursor: pointer; font-family: inherit;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-2); border: 2px solid var(--line);
+    padding: 12px 24px; border-radius: 12px;
+    font-size: 15px; font-weight: 700; z-index: 280;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+  .toast.success { border-color: var(--ready); color: #6ee7b7; }
+  .toast.warn { border-color: var(--pending); color: #fca5a5; }
+  .toast.info { border-color: var(--preparing); color: #93c5fd; }
+
+  /* Tweaks */
+  .tweak-btn {
+    position: fixed; bottom: 12px; right: 12px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--text); padding: 6px 12px; border-radius: 6px;
+    font-size: 11px; cursor: pointer; z-index: 49;
+    font-family: inherit; white-space: nowrap;
+  }
+  .tweaks {
+    position: fixed; bottom: 12px; right: 12px;
+    background: rgba(18,22,32,0.98); backdrop-filter: blur(10px);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; width: 280px; z-index: 50; display: none;
+  }
+  .tweaks.show { display: block; }
+  .tweaks h4 {
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .tweak-grp { margin-bottom: 10px; }
+  .tweak-grp label { font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 3px; }
+  .tweak-grp button, .tweak-grp select {
+    width: 100%;
+    background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--text); padding: 7px 10px; border-radius: 6px;
+    font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar__brand">
+    <div class="bar__logo">樂</div>
+    KDS
+  </div>
+  <div class="bar__live">
+    <span class="bar__dot"></span>
+    <span>LIVE</span>
+  </div>
+  <div class="bar__stats">
+    <span>今日 <b id="st-total">47</b></span>
+    <span>完成 <b id="st-done">38</b></span>
+    <span>平均 <b id="st-avg">11</b>分</span>
+  </div>
+  <div class="bar__clock" id="clock">17:42</div>
+  <button class="bar__sound active" id="sound-btn" onclick="toggleSound()">🔔 音效</button>
+</div>
+
+<!-- 全寬警報條（有待確認時出現） -->
+<div class="alert-strip">
+  <div class="alert-strip__content">
+    <span>⚠ 待確認</span>
+    <span class="alert-strip__count" id="as-count">0 筆</span>
+    <div class="alert-strip__marquee">
+      <span id="as-marquee"></span>
+    </div>
+    <span class="alert-strip__oldest" id="as-oldest">最老 0 分</span>
+  </div>
+</div>
+
+<div class="board">
+  <section class="col col--pending" id="col-pending">
+    <div class="col__head">
+      <span class="col__title">⚠ 待確認</span>
+      <span class="col__count" id="ct-pending">0</span>
+    </div>
+    <div class="col__body" id="body-pending"></div>
+  </section>
+
+  <section class="col col--work">
+    <div class="col__head">
+      <span class="col__title">製作中</span>
+      <span class="col__count" id="ct-work">0</span>
+    </div>
+    <div class="col__body" id="body-work"></div>
+  </section>
+
+  <section class="col col--ready">
+    <div class="col__head">
+      <span class="col__title">可取餐</span>
+      <span class="col__count" id="ct-ready">0</span>
+    </div>
+    <div class="col__body" id="body-ready"></div>
+  </section>
+</div>
+
+<div class="new-order-alert" id="new-alert"></div>
+
+<!-- 取消 modal -->
+<div class="modal-bg" id="cancel-modal">
+  <div class="modal">
+    <h3>取消訂單</h3>
+    <p id="cancel-desc">取餐號 A-000 ｜ 請選擇原因（點選按鈕即可，無需填寫）</p>
+    <div class="modal__grid">
+      <button class="reason-btn" data-r="sold_out">食材售完</button>
+      <button class="reason-btn" data-r="kitchen_busy">廚房太忙</button>
+      <button class="reason-btn" data-r="customer_request">顧客要求</button>
+      <button class="reason-btn" data-r="wrong_order">訂單有誤</button>
+    </div>
+    <div class="modal__actions">
+      <button class="btn-ghost" onclick="closeCancel()">返回</button>
+      <button class="btn-danger" id="cancel-confirm" disabled style="opacity:0.4">確認取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="batch-undo" id="batch-undo">
+  <span id="undo-msg">✓ 已批量接單 5 筆</span>
+  <button onclick="undoBatch()">⭯ 還原</button>
+  <span class="batch-undo__countdown" id="undo-countdown">5s</span>
+</div>
+
+<div class="batch-bar" id="batch-bar">
+  <span>⚠ 有 <b id="batch-count">0</b> 筆待確認</span>
+  <button onclick="acceptAllPending()">一鍵全部接單</button>
+</div>
+
+<div class="stats-bar">
+  <div class="stats-bar__item">
+    <span class="stats-bar__label">今日進度</span>
+    <div class="stats-bar__gauge">
+      <span class="sg-p" style="width:15%"></span>
+      <span class="sg-w" style="width:25%"></span>
+      <span class="sg-r" style="width:10%"></span>
+    </div>
+  </div>
+  <div class="stats-bar__item">
+    <span class="stats-bar__label">待確認</span>
+    <span class="stats-bar__val" id="sb-p" style="color:var(--pending)">0</span>
+  </div>
+  <div class="stats-bar__item">
+    <span class="stats-bar__label">製作中</span>
+    <span class="stats-bar__val" id="sb-w" style="color:var(--preparing)">0</span>
+  </div>
+  <div class="stats-bar__item">
+    <span class="stats-bar__label">可取餐</span>
+    <span class="stats-bar__val" id="sb-r" style="color:var(--ready)">0</span>
+  </div>
+  <div class="stats-bar__item" style="margin-left:auto">
+    <span class="stats-bar__label">最老待確認</span>
+    <span class="stats-bar__val" id="sb-oldest">—</span>
+  </div>
+  <div class="stats-bar__item">
+    <span class="stats-bar__label">今日通過率</span>
+    <span class="stats-bar__val">81%</span>
+  </div>
+</div>
+
+<button class="tweak-btn" id="tweak-btn" onclick="toggleTweaks()">⚙ Demo Tweaks</button>
+<div class="tweaks" id="tweaks">
+  <h4>Demo Tweaks</h4>
+  <div class="tweak-grp">
+    <label>模擬新 LINE 訂單</label>
+    <button onclick="simulateNew('line')">➕ 新增 LINE 待確認</button>
+  </div>
+  <div class="tweak-grp">
+    <label>模擬 POS 現場</label>
+    <button onclick="simulateNew('pos')">➕ 新增 POS 已接單</button>
+  </div>
+  <div class="tweak-grp">
+    <label>使最舊待確認變超時</label>
+    <button onclick="makeCrit()">⚠ 超時 6 分</button>
+  </div>
+  <div class="tweak-grp">
+    <label>一口氣建 5 張</label>
+    <button onclick="rush()">🔥 尖峰壓測 (5 張)</button>
+  </div>
+  <div class="tweak-grp">
+    <label>超忙壓測 (8 張)</label>
+    <button onclick="rushHard()">🔥🔥 午餐尖峰</button>
+  </div>
+  <div class="tweak-grp">
+    <label>字體大小</label>
+    <select onchange="setFontScale(this.value)">
+      <option value="1">標準</option>
+      <option value="1.1">放大 110%</option>
+      <option value="1.2">放大 120%</option>
+      <option value="0.95">縮小 95%</option>
+    </select>
+  </div>
+</div>
+
+<!-- 音效 -->
+<audio id="snd-new" preload="auto">
+  <source src="data:audio/wav;base64,UklGRnQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVADAAD///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8=" type="audio/wav">
+</audio>
+
+<script>
+// ============ state ============
+const now = Date.now();
+let seq = 124;
+let soundOn = true;
+
+let orders = [
+  {
+    id:"o1", number:"A-125", name:"王小姐", source:"line",
+    status:"pending_confirmation",
+    created_at: now - 25*1000,
+    pickup_at: now + 18*60*1000,
+    note:"不辣，少油",
+    groups:[
+      { label:"第一組", flavor:"麻辣", items:[
+        { id:"i1", name:"牛肉套餐", qty:1, staple:"白飯" },
+        { id:"i2", name:"滷蛋", qty:2 }
+      ]},
+      { label:"第二組", flavor:"蒜香", items:[
+        { id:"i3", name:"豬肉套餐", qty:1, staple:"麵" }
+      ]}
+    ]
+  },
+  {
+    id:"o2", number:"A-124", name:"陳先生", source:"line",
+    status:"pending_confirmation",
+    created_at: now - 4*60*1000,  // 警告
+    pickup_at: now + 25*60*1000,
+    note:"",
+    groups:[{
+      label:"第一組", flavor:"經典原味", items:[
+        { id:"i1", name:"雞肉套餐", qty:2, staple:"白飯" }
+      ]
+    }]
+  },
+  {
+    id:"o3", number:"A-123", name:"林太太", source:"pos",
+    status:"preparing",
+    created_at: now - 6*60*1000,
+    started_at: now - 4*60*1000,
+    pickup_at: now + 8*60*1000,
+    note:"",
+    groups:[
+      { label:"第一組", flavor:"麻辣", items:[
+        { id:"i1", name:"牛肉套餐", qty:1, staple:"麵" }
+      ]},
+      { label:"第二組", flavor:"蒜香", items:[
+        { id:"i2", name:"豬肉套餐", qty:1, staple:"白飯" },
+        { id:"i3", name:"加購滷味", qty:1 }
+      ]}
+    ]
+  },
+  {
+    id:"o4", number:"A-122", name:"黃先生", source:"phone",
+    status:"preparing",
+    created_at: now - 9*60*1000,
+    started_at: now - 6*60*1000,
+    pickup_at: now + 3*60*1000,
+    note:"請分兩包裝",
+    groups:[
+      { label:"第一組", flavor:"原味", items:[
+        { id:"i1", name:"綜合套餐", qty:1, staple:"白飯" },
+        { id:"i2", name:"紅茶", qty:1 }
+      ]}
+    ]
+  },
+  {
+    id:"o5", number:"A-120", name:"周先生", source:"pos",
+    status:"ready",
+    created_at: now - 15*60*1000,
+    ready_at: now - 40*1000,
+    pickup_at: now - 40*1000,
+    note:"",
+    groups:[{
+      label:"第一組", flavor:"麻辣", items:[{ id:"i1", name:"牛肉套餐", qty:1, staple:"麵" }]
+    }]
+  },
+  {
+    id:"o6", number:"A-119", name:"許太太", source:"line",
+    status:"ready",
+    created_at: now - 18*60*1000,
+    ready_at: now - 2*60*1000,
+    pickup_at: now - 1*60*1000,
+    note:"",
+    groups:[{
+      label:"第一組", flavor:"原味", items:[
+        { id:"i1", name:"雞肉套餐", qty:1, staple:"白飯" },
+        { id:"i2", name:"滷蛋", qty:1 }
+      ]
+    }]
+  }
+];
+
+// ============ helpers ============
+function waitInfo(o) {
+  const secs = Math.floor((Date.now() - o.created_at) / 1000);
+  const mins = Math.floor(secs / 60);
+  let cls = "";
+  let text = mins < 1 ? `${secs}秒` : `${mins}:${String(secs%60).padStart(2,"0")}`;
+  if (o.status === "pending_confirmation") {
+    if (mins >= 5) cls = "crit";
+    else if (mins >= 3) cls = "warn";
+  } else if (o.status === "preparing") {
+    if (mins >= 20) cls = "crit";
+    else if (mins >= 12) cls = "warn";
+  }
+  return { cls, text };
+}
+
+function srcBadge(s, reserved) {
+  const m = { line:"LINE", pos:"現場", phone:"電話" };
+  return `<span class="src src--${s}">${m[s]}</span>` +
+    (reserved ? '<span class="src src--reserve">預約</span>' : '');
+}
+
+function cardTpl(o) {
+  const w = waitInfo(o);
+  const pickup = new Date(o.pickup_at);
+  const pickupStr = `${String(pickup.getHours()).padStart(2,"0")}:${String(pickup.getMinutes()).padStart(2,"0")} 取`;
+  const checked = o.checked || {};
+  const allItems = o.groups.flatMap(g => g.items.map(i => i.id));
+  const allChecked = allItems.every(id => checked[id]);
+
+  let cls = "card card--" + (o.status === "pending_confirmation" ? "pending"
+    : o.status === "ready" ? "ready"
+    : o.status === "preparing" ? "preparing" : "accepted");
+  if (o.status === "preparing" && allChecked) cls += " all-checked";
+  if (o.justMoved === "ready") cls += " new-ready";
+  if (w.cls === "crit" && o.status === "pending_confirmation" && Math.floor((Date.now()-o.created_at)/60000) >= 8) {
+    cls += " critical";
+  }
+
+  let ctaText = "", ctaCls = "", ctaAction = "";
+  if (o.status === "pending_confirmation") { ctaText = "✓ 接單"; ctaCls = "accept"; ctaAction = "accepted"; }
+  else if (o.status === "accepted") { ctaText = "▶ 開始製作"; ctaCls = "start"; ctaAction = "preparing"; }
+  else if (o.status === "preparing") { ctaText = allChecked ? "🔔 完成出餐" : "🔔 完成出餐"; ctaCls = "ready" + (allChecked ? " armed" : ""); ctaAction = "ready"; }
+  else if (o.status === "ready") { ctaText = "✓ 完成取餐"; ctaCls = "pickup"; ctaAction = "completed"; }
+
+  return `
+    <article class="${cls}" data-id="${o.id}">
+      <div class="card__hero">
+        <div class="card__wait-bar ${w.cls}">${w.text}</div>
+        <div class="card__number">${o.number}</div>
+      </div>
+      <div class="card__meta">
+        <span class="card__name">${o.name}</span>
+        ${srcBadge(o.source, o.reserved)}
+        <span class="pickup-time">${pickupStr}</span>
+      </div>
+      <div class="card__body">
+        ${o.groups.map((g,gi) => `
+          <div class="group">
+            <div class="group__head">
+              <span class="group__badge">${["A","B","C","D"][gi]}</span>
+              <span class="group__flavor">${g.flavor}</span>
+              <span class="group__count">${g.items.reduce((n,i)=>n+i.qty,0)} 項</span>
+            </div>
+            <ul class="items">
+              ${g.items.map(i => `
+                <li data-oid="${o.id}" data-iid="${i.id}" class="${checked[i.id]?"done":""}">
+                  <span>${i.name}</span>
+                  <span class="qty">×${i.qty}</span>
+                  ${i.staple ? `<span class="sub">${i.staple}</span>` : ""}
+                </li>
+              `).join("")}
+            </ul>
+          </div>
+        `).join("")}
+      </div>
+      ${o.note ? `<div class="note">${o.note}</div>` : ""}
+      <div class="card__cta">
+        <button class="btn btn--main ${ctaCls}" data-act="${ctaAction}" data-oid="${o.id}">${ctaText}</button>
+        <button class="btn btn--sub" data-oid="${o.id}" data-longpress="cancel">✕</button>
+      </div>
+    </article>
+  `;
+}
+
+// ============ render ============
+function render() {
+  const cols = { pending: [], work: [], ready: [] };
+  orders.forEach(o => {
+    if (o.status === "completed" || o.status === "cancelled") return;
+    if (o.status === "pending_confirmation") cols.pending.push(o);
+    else if (o.status === "ready") cols.ready.push(o);
+    else cols.work.push(o);
+  });
+  cols.pending.sort((a,b) => a.created_at - b.created_at);
+  cols.work.sort((a,b) => (a.started_at||a.created_at) - (b.started_at||b.created_at));
+  cols.ready.sort((a,b) => (a.ready_at||0) - (b.ready_at||0));
+
+  ["pending","work","ready"].forEach(k => {
+    const body = document.getElementById("body-"+k);
+    if (cols[k].length === 0) {
+      body.innerHTML = `<div class="empty">${
+        k === "pending" ? "無待確認" : k === "work" ? "無製作中" : "無可取餐"
+      }</div>`;
+    } else {
+      body.innerHTML = cols[k].map(cardTpl).join("");
+    }
+    document.getElementById("ct-"+k).textContent = cols[k].length;
+  });
+
+  document.getElementById("col-pending").classList.toggle("active", cols.pending.length > 0);
+  document.body.classList.toggle("pending-mode", cols.pending.length > 0);
+
+  // 底部統計條
+  document.getElementById("sb-p").textContent = cols.pending.length;
+  document.getElementById("sb-w").textContent = cols.work.length;
+  document.getElementById("sb-r").textContent = cols.ready.length;
+  if (cols.pending.length > 0) {
+    const mins = Math.floor((Date.now() - cols.pending[0].created_at) / 60000);
+    const el = document.getElementById("sb-oldest");
+    el.textContent = mins + " 分";
+    el.style.color = mins >= 5 ? "var(--pending)" : mins >= 3 ? "#f59e0b" : "var(--text)";
+  } else {
+    document.getElementById("sb-oldest").textContent = "—";
+    document.getElementById("sb-oldest").style.color = "var(--muted)";
+  }
+  const bb = document.getElementById("batch-bar");
+  document.getElementById("batch-count").textContent = cols.pending.length;
+  bb.classList.toggle("show", cols.pending.length >= 3);
+
+  // ─── 頂部警報條 marquee ───
+  document.getElementById("as-count").textContent = cols.pending.length + " 筆";
+  if (cols.pending.length > 0) {
+    const mins = Math.floor((Date.now() - cols.pending[0].created_at) / 60000);
+    document.getElementById("as-oldest").textContent = "最老 " + mins + " 分";
+    document.getElementById("as-marquee").textContent =
+      cols.pending.map(o => `${o.number} ${o.name}`).join("  ·  ") + "    ····   ";
+  }
+
+  // ─── 中欄負載感知 ───
+  const workCol = document.querySelector(".col--work");
+  workCol.classList.remove("overload", "busy");
+  if (cols.work.length >= 6) workCol.classList.add("overload");
+  else if (cols.work.length >= 4) workCol.classList.add("busy");
+
+  // ─── 可取餐堆積 ───
+  const readyCol = document.querySelector(".col--ready");
+  readyCol.classList.toggle("full", cols.ready.length >= 4);
+
+  // 呼吸燈音效：有 pending 就啟動，無 pending 就停
+  if (cols.pending.length > 0) startBreathing();
+  else stopBreathing();
+
+  orders.forEach(o => { delete o.justMoved; });
+  attachHandlers();
+}
+
+function attachHandlers() {
+  document.querySelectorAll(".items li").forEach(li => {
+    li.addEventListener("click", () => {
+      const o = orders.find(x => x.id === li.dataset.oid);
+      if (!o || o.status !== "preparing") return;
+      if (!o.checked) o.checked = {};
+      o.checked[li.dataset.iid] = !o.checked[li.dataset.iid];
+      render();
+    });
+  });
+  document.querySelectorAll(".btn--main").forEach(b => {
+    b.addEventListener("click", () => advance(b.dataset.oid, b.dataset.act));
+  });
+  document.querySelectorAll(".btn--sub[data-longpress='cancel']").forEach(b => {
+    attachLongPress(b, () => openCancel(b.dataset.oid), 600);
+  });
+}
+
+// 長按 600ms 才觸發取消
+function attachLongPress(el, cb, duration) {
+  let t = null, start = 0, raf = null;
+  const onDown = (e) => {
+    e.preventDefault();
+    start = Date.now();
+    el.classList.add("pressing");
+    const tick = () => {
+      const pct = Math.min(100, (Date.now() - start) / duration * 100);
+      el.style.setProperty("--progress", pct + "%");
+      if (pct < 100) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    t = setTimeout(() => { cb(); onUp(); }, duration);
+  };
+  const onUp = () => {
+    clearTimeout(t);
+    cancelAnimationFrame(raf);
+    el.classList.remove("pressing");
+    el.style.setProperty("--progress", "0%");
+  };
+  el.addEventListener("mousedown", onDown);
+  el.addEventListener("touchstart", onDown, { passive: false });
+  el.addEventListener("mouseup", onUp);
+  el.addEventListener("mouseleave", onUp);
+  el.addEventListener("touchend", onUp);
+  el.addEventListener("touchcancel", onUp);
+}
+
+// ============ 狀態轉移 + 動畫 ============
+// Critical 標記（超過 8 分的 pending）
+setInterval(() => {
+  document.querySelectorAll(".card--pending").forEach(c => {
+    const id = c.dataset.id;
+    const o = orders.find(x => x.id === id);
+    if (!o) return;
+    const mins = (Date.now() - o.created_at) / 60000;
+    c.classList.toggle("critical", mins >= 8);
+  });
+}, 3000);
+
+// ─── 批量 Undo ───
+let batchSnapshot = null, undoCountdownTimer = null;
+function acceptAllPending() {
+  const p = orders.filter(o => o.status === "pending_confirmation");
+  if (!p.length) return;
+  batchSnapshot = p.map(o => ({ id: o.id, prevStatus: o.status }));
+  p.forEach(o => { o.status = "accepted"; o.accepted_at = Date.now(); });
+  const n = p.length;
+  document.getElementById("undo-msg").textContent = `✓ 已批量接單 ${n} 筆，LINE 順序通知`;
+  const undoEl = document.getElementById("batch-undo");
+  undoEl.classList.add("show");
+  let left = 5;
+  document.getElementById("undo-countdown").textContent = left + "s";
+  clearInterval(undoCountdownTimer);
+  undoCountdownTimer = setInterval(() => {
+    left--;
+    document.getElementById("undo-countdown").textContent = left + "s";
+    if (left <= 0) {
+      clearInterval(undoCountdownTimer);
+      undoEl.classList.remove("show");
+      batchSnapshot = null;
+    }
+  }, 1000);
+  render();
+}
+function undoBatch() {
+  if (!batchSnapshot) return;
+  batchSnapshot.forEach(({ id, prevStatus }) => {
+    const o = orders.find(x => x.id === id);
+    if (o) { o.status = prevStatus; delete o.accepted_at; }
+  });
+  toast("⭯ 已還原 " + batchSnapshot.length + " 筆", "info");
+  batchSnapshot = null;
+  clearInterval(undoCountdownTimer);
+  document.getElementById("batch-undo").classList.remove("show");
+  render();
+}
+
+function advance(id, to) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const t = Date.now();
+  o.status = to;
+  if (to === "accepted") o.accepted_at = t;
+  if (to === "preparing") o.started_at = t;
+  if (to === "ready") { o.ready_at = t; o.justMoved = "ready"; playSound("ready"); }
+  if (to === "completed") o.completed_at = t;
+
+  const msgs = {
+    accepted: `✓ ${o.number} 已接單，LINE 已通知`,
+    preparing: `▶ ${o.number} 開始製作`,
+    ready: `🔔 ${o.number} 完成！已叫號 + 通知顧客`,
+    completed: `✓ ${o.number} 完成取餐`
+  };
+  toast(msgs[to] || "", to === "ready" ? "success" : "info");
+  render();
+}
+
+// ============ 取消 ============
+let cancelId = null, selReason = null;
+function openCancel(id) {
+  cancelId = id;
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  document.getElementById("cancel-desc").textContent =
+    `取餐號 ${o.number} ｜ 顧客將收到取消通知`;
+  document.querySelectorAll(".reason-btn").forEach(b => b.classList.remove("active"));
+  selReason = null;
+  document.getElementById("cancel-confirm").disabled = true;
+  document.getElementById("cancel-confirm").style.opacity = 0.4;
+  document.getElementById("cancel-modal").classList.add("show");
+}
+function closeCancel() {
+  document.getElementById("cancel-modal").classList.remove("show");
+  cancelId = null; selReason = null;
+}
+document.querySelectorAll(".reason-btn").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".reason-btn").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    selReason = b.dataset.r;
+    document.getElementById("cancel-confirm").disabled = false;
+    document.getElementById("cancel-confirm").style.opacity = 1;
+  });
+});
+document.getElementById("cancel-confirm").addEventListener("click", () => {
+  if (!selReason) return;
+  const o = orders.find(x => x.id === cancelId);
+  if (o) {
+    o.status = "cancelled";
+    toast(`✕ ${o.number} 已取消，顧客已通知`, "warn");
+  }
+  closeCancel();
+  render();
+});
+
+// ============ Toast ============
+function toast(msg, type) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast show " + (type||"info");
+  setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+// ============ 聲音 ============
+function playSound(kind) {
+  if (!soundOn) return;
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const freq = kind === "new" ? [880, 1108] : [1175, 1568, 1975];
+    const now = ctx.currentTime;
+    freq.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = f;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0, now + i*0.15);
+      gain.gain.linearRampToValueAtTime(0.15, now + i*0.15 + 0.02);
+      gain.gain.linearRampToValueAtTime(0, now + i*0.15 + 0.14);
+      osc.start(now + i*0.15);
+      osc.stop(now + i*0.15 + 0.15);
+    });
+  } catch(e) {}
+}
+function toggleSound() {
+  soundOn = !soundOn;
+  const b = document.getElementById("sound-btn");
+  b.classList.toggle("active", soundOn);
+  b.textContent = soundOn ? "🔔 音效" : "🔕 靜音";
+}
+
+// ─── 呼吸燈節奏音效（最核心） ───
+// pending 存在時，依據最老那筆的等待時間，以遞減間隔提醒
+// <1 分：5 秒一次（輕）
+// 1–3 分：3 秒一次（中）
+// 3–5 分：2 秒一次（強）
+// >5 分：1 秒一次（急促）
+let breathingTimer = null;
+function startBreathing() {
+  if (breathingTimer) return;
+  const tick = () => {
+    const p = orders.filter(o => o.status === "pending_confirmation");
+    if (p.length === 0) { stopBreathing(); return; }
+    const oldest = p.reduce((a,b) => a.created_at < b.created_at ? a : b);
+    const mins = (Date.now() - oldest.created_at) / 60000;
+    let interval;
+    if (mins < 1) interval = 5000;
+    else if (mins < 3) interval = 3000;
+    else if (mins < 5) interval = 2000;
+    else interval = 1000;
+    // 音量依嚴重度
+    const vol = mins < 1 ? 0.06 : mins < 3 ? 0.10 : mins < 5 ? 0.14 : 0.18;
+    if (soundOn) playTone(mins >= 5 ? [880, 1046] : [880], 0.08, vol);
+    breathingTimer = setTimeout(tick, interval);
+  };
+  tick();
+}
+function stopBreathing() {
+  if (breathingTimer) { clearTimeout(breathingTimer); breathingTimer = null; }
+}
+function playTone(freqs, dur, vol) {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    freqs.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = f;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0, now + i*dur);
+      gain.gain.linearRampToValueAtTime(vol, now + i*dur + 0.02);
+      gain.gain.linearRampToValueAtTime(0, now + i*dur + dur*0.9);
+      osc.start(now + i*dur);
+      osc.stop(now + i*dur + dur);
+    });
+  } catch(e) {}
+}
+
+// ============ 模擬 ============
+const NAMES = ["吳先生","李小姐","張太太","鄭先生","謝小姐","曾先生","劉太太","洪先生"];
+const FLAVORS = ["麻辣","蒜香","經典原味","泰式酸辣"];
+const DISH = [
+  { n:"牛肉套餐", s:true }, { n:"豬肉套餐", s:true },
+  { n:"雞肉套餐", s:true }, { n:"滷蛋", s:false },
+  { n:"加購小菜", s:false }, { n:"紅茶", s:false }
+];
+function simulateNew(src) {
+  const name = NAMES[Math.floor(Math.random()*NAMES.length)];
+  const num = "A-" + String(++seq).padStart(3,"0");
+  const gc = Math.random() < 0.4 ? 2 : 1;
+  const groups = [];
+  for (let i = 0; i < gc; i++) {
+    const n = 1 + Math.floor(Math.random()*2);
+    const items = [];
+    for (let j = 0; j < n; j++) {
+      const d = DISH[Math.floor(Math.random()*DISH.length)];
+      items.push({
+        id:"i"+Date.now()+i+j, name:d.n, qty:1+Math.floor(Math.random()*2),
+        staple: d.s ? (Math.random()<0.5?"白飯":"麵") : ""
+      });
+    }
+    groups.push({
+      label: `第${["一","二"][i]}組`,
+      flavor: FLAVORS[Math.floor(Math.random()*FLAVORS.length)],
+      items
+    });
+  }
+  orders.unshift({
+    id:"o_"+Date.now(),
+    number: num, name, source: src,
+    status: src === "line" ? "pending_confirmation" : "accepted",
+    created_at: Date.now(),
+    pickup_at: Date.now() + (15+Math.floor(Math.random()*10))*60*1000,
+    note: Math.random() < 0.3 ? "不辣" : "",
+    groups
+  });
+
+  if (src === "line") {
+    playSound("new");
+    const alert = document.getElementById("new-alert");
+    alert.classList.add("show");
+    setTimeout(() => alert.classList.remove("show"), 600);
+  }
+  toast(`🔔 新單 ${num}（${src === "line" ? "LINE 待確認" : "POS 已接單"}）`, "success");
+  render();
+}
+
+function makeCrit() {
+  const p = orders.filter(o => o.status === "pending_confirmation");
+  if (!p.length) { toast("沒有待確認訂單", "warn"); return; }
+  p[0].created_at = Date.now() - 6*60*1000;
+  toast(`⚠ ${p[0].number} 已變成超時 6 分`, "warn");
+  render();
+}
+function rush() {
+  ["line","line","pos","line","line"].forEach((s,i) => setTimeout(() => simulateNew(s), i*400));
+}
+function rushHard() {
+  // 模擬尖峰：8 單在 3 秒內湧入
+  const pattern = ["line","line","line","pos","line","line","line","line"];
+  pattern.forEach((s,i) => setTimeout(() => simulateNew(s), i*350));
+}
+function setFontScale(v) {
+  document.documentElement.style.fontSize = (16 * parseFloat(v)) + "px";
+}
+
+// Tweaks panel
+function toggleTweaks() {
+  const t = document.getElementById("tweaks");
+  const b = document.getElementById("tweak-btn");
+  t.classList.toggle("show");
+  b.style.display = t.classList.contains("show") ? "none" : "block";
+}
+window.addEventListener("message", e => {
+  if (e.data?.type === "__activate_edit_mode") {
+    document.getElementById("tweaks").classList.add("show");
+    document.getElementById("tweak-btn").style.display = "none";
+  }
+  if (e.data?.type === "__deactivate_edit_mode") {
+    document.getElementById("tweaks").classList.remove("show");
+    document.getElementById("tweak-btn").style.display = "block";
+  }
+});
+window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+
+// 時鐘
+function tick() {
+  const d = new Date();
+  document.getElementById("clock").textContent =
+    `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+setInterval(tick, 1000);
+tick();
+
+// re-render 每 10 秒更新等待
+setInterval(render, 10*1000);
+
+render();
+</script>
+</body>
+</html>

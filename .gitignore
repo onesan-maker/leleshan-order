@@ -85,4 +85,6 @@ functions/.runtimeconfig.json
 .secrets.baseline
 Lib/
 Scripts/
+!scripts/
+!scripts/check-encoding.js
 pyvenv.cfg
