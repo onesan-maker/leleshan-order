@@ -1,7 +1,7 @@
 # 樂樂山點餐系統 — 系統說明文件
 
 > 本文件為本專案唯一系統說明文件，描述現況架構，不含未來規劃。
-> 最後更新：2026-04-09
+> 最後更新：2026-04-22
 
 ---
 
@@ -9,7 +9,7 @@
 
 **用途：** 樂樂山湯滷川味的 LINE LIFF 網頁點餐系統。顧客透過 LINE 開啟 LIFF 網頁選餐、送出訂單；店家透過後台管理菜單、處理訂單、追蹤會員。
 
-**部署位置：** Firebase Hosting — `https://leleshan-order.web.app`
+**部署位置：** Firebase Hosting — `https://leleshan-system.web.app`
 
 **技術棧：**
 - Frontend: 純 Vanilla JavaScript（無框架）+ HTML5 + CSS3
@@ -108,7 +108,7 @@ new → cooking → packing → ready → picked_up
 |------|------|
 | `firestore.rules` | Firestore 安全規則（完整實作） |
 | `firebase.json` | Firebase Hosting 設定、URL rewrites |
-| `.firebaserc` | Firebase 專案 ID：`leleshan-order` |
+| `.firebaserc` | Firebase 專案 ID：`leleshan-system` |
 | `firestore.indexes.json` | Firestore composite index（orders、transactions、logs） |
 
 ### 文件

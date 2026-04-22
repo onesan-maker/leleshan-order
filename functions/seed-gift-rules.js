@@ -6,7 +6,7 @@ const admin = require("firebase-admin");
 
 if (!admin.apps.length) {
   admin.initializeApp({
-    projectId: "leleshan-order",
+    projectId: "leleshan-system",
     credential: admin.credential.applicationDefault()
   });
 }

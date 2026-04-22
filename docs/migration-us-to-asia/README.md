@@ -1,3 +1,6 @@
+> ## ✅ 遷移已於 2026-04-22 完成並驗收
+> 以下內容為歷史紀錄，現行唯一部署目標為 `leleshan-system`（asia-east1）。
+
 # Firebase US → Asia 遷移
 
 從 `leleshan-order` (us-central1) 搬到新的 `leleshan-system` (asia-east1)。

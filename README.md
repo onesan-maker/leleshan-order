@@ -47,7 +47,7 @@ firebase deploy
 
 至少要確認 LIFF Endpoint URL 與實際部署網址一致：
 
-- `https://leleshan-order.web.app`
+- `https://leleshan-system.web.app`
 
 如果你要，我下一步可以直接幫你再補：
 
