@@ -1760,3 +1760,148 @@ exports.posEmployeeLogin = functions
       expiresAt: expiresAt.toISOString()
     };
   });
+
+// ── POS 追加品項到現有訂單 ────────────────────────────────────────────
+// Firestore rules 的 orders allow update 要求 Firebase Auth (canReadOrders)，
+// 但 POS 不使用 Firebase Auth。本 callable 透過 admin SDK 繞過 rules，
+// 並以 sessionToken 驗證員工身分，避免未授權操作。
+exports.posAppendToOrder = functions
+  .region(REGION)
+  .https.onCall(async (data) => {
+    const db = admin.firestore();
+    const employeeId = normalizeEmployeeId(data && data.employeeId);
+    const sessionToken = String(data && data.sessionToken || "").trim();
+    const orderId = String(data && data.orderId || "").trim();
+    const appendItems = Array.isArray(data && data.items) ? data.items : [];
+
+    if (!employeeId || !sessionToken) {
+      throw new functions.https.HttpsError("invalid-argument", "缺少 session");
+    }
+    if (!orderId) {
+      throw new functions.https.HttpsError("invalid-argument", "缺少訂單 ID");
+    }
+    if (!appendItems.length) {
+      throw new functions.https.HttpsError("invalid-argument", "請先選取要追加的品項");
+    }
+
+    // 驗證 session
+    const tokenHash = sessionTokenHash(sessionToken);
+    const sessionSnap = await db.collection("posSessions").doc(tokenHash).get();
+    if (!sessionSnap.exists) {
+      throw new functions.https.HttpsError("unauthenticated", "session 無效");
+    }
+    const session = sessionSnap.data() || {};
+    if (session.employeeId !== employeeId) {
+      throw new functions.https.HttpsError("permission-denied", "session 無效");
+    }
+    if (session.revokedAt) {
+      throw new functions.https.HttpsError("unauthenticated", "session 已登出");
+    }
+    const sessionExpiresAt = session.expiresAt && session.expiresAt.toDate ? session.expiresAt.toDate() : null;
+    if (!sessionExpiresAt || sessionExpiresAt.getTime() <= Date.now()) {
+      throw new functions.https.HttpsError("unauthenticated", "session 已過期");
+    }
+
+    const storeId = String(session.storeId || "").trim();
+    const actorName = String(session.employeeName || "").trim();
+
+    const appendTotal = appendItems.reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
+    const orderRef = db.collection("orders").doc(orderId);
+    const ts = admin.firestore.FieldValue.serverTimestamp();
+    const inc = admin.firestore.FieldValue.increment;
+
+    let wasReady = false;
+    let prevStatus = "";
+
+    await db.runTransaction(async (tx) => {
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "訂單不存在");
+      }
+      const orderData = orderSnap.data() || {};
+      if (orderData.storeId !== storeId) {
+        throw new functions.https.HttpsError("permission-denied", "無法操作其他門市的訂單");
+      }
+      prevStatus = String(orderData.status || "new");
+      wasReady = prevStatus === "ready";
+
+      const currentItems = Array.isArray(orderData.items) ? orderData.items : [];
+      const updateData = {
+        items: [...currentItems, ...appendItems],
+        subtotal: inc(appendTotal),
+        total: inc(appendTotal),
+        itemCount: inc(appendItems.length),
+        updatedAt: ts,
+      };
+      if (wasReady) updateData.status = "preparing";
+      tx.update(orderRef, updateData);
+
+      // order_appended event
+      const eventRef = db.collection("order_events").doc();
+      tx.set(eventRef, {
+        orderId,
+        storeId,
+        type: "order_appended",
+        actorType: "staff",
+        actorId: employeeId,
+        actorName,
+        fromStatus: prevStatus,
+        toStatus: wasReady ? "preparing" : prevStatus,
+        appendedItems: appendItems.map((i) => ({ name: i.name, qty: i.qty, subtotal: i.subtotal })),
+        amountDelta: appendTotal,
+        appendedAt: ts,
+        createdAt: ts,
+      });
+
+      // status_changed event if order was ready
+      if (wasReady) {
+        const scRef = db.collection("order_events").doc();
+        tx.set(scRef, {
+          orderId,
+          storeId,
+          type: "status_changed",
+          actorType: "staff",
+          actorId: employeeId,
+          actorName,
+          fromStatus: "ready",
+          toStatus: "preparing",
+          message: "追加品項，自動回退製作中",
+          createdAt: ts,
+        });
+      }
+    });
+
+    // order_items batch — best effort, non-fatal
+    try {
+      const batch = db.batch();
+      appendItems.forEach((item) => {
+        const ref = db.collection("order_items").doc();
+        batch.set(ref, {
+          orderId,
+          storeId,
+          itemId: String(item.itemId || ""),
+          name: String(item.name || ""),
+          qty: Number(item.qty) || 1,
+          unit_price: Number(item.unit_price != null ? item.unit_price : (item.price || 0)),
+          price: Number(item.price != null ? item.price : (item.unit_price || 0)),
+          subtotal: Number(item.subtotal) || 0,
+          type: String(item.type || "addon"),
+          groupId: String(item.groupId || "part_1"),
+          groupLabel: String(item.groupLabel || "第1組"),
+          flavor: String(item.flavor || ""),
+          staple: String(item.staple || ""),
+          source: "pos",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.warn("[posAppendToOrder] order_items batch failed (non-fatal):", e && e.message || e);
+    }
+
+    console.log("[posAppendToOrder] success", {
+      orderId, storeId, employeeId, itemCount: appendItems.length, appendTotal, wasReady
+    });
+
+    return { ok: true, wasReady, prevStatus, appendTotal, itemCount: appendItems.length };
+  });

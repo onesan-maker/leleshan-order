@@ -1,13 +1,48 @@
-import {
-  doc, collection, runTransaction, writeBatch, serverTimestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+/**
+ * 追加品項到現有訂單。
+ *
+ * 根因說明：Firestore rules 的 `orders` allow update 要求 Firebase Auth
+ * (canReadOrders → sameStore → request.auth != null)，但 POS 不使用 Firebase Auth。
+ * 直接呼叫 db.runTransaction 會被 rules 拒絕 (PERMISSION_DENIED)。
+ *
+ * 修正做法：改透過 posAppendToOrder Cloud Function 執行，
+ * 由 admin SDK 繞過 rules，並以 sessionToken 驗證員工身分。
+ */
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase";
 import type { PosSession } from "@/lib/session";
 import type { CartLine } from "@/stores/cart.store";
 import type { AppendTarget } from "@/stores/cart.store";
 
 export interface AppendResult {
   wasReady: boolean;
+}
+
+interface AppendPayload {
+  employeeId: string;
+  sessionToken: string;
+  orderId: string;
+  items: {
+    itemId: string;
+    name: string;
+    qty: number;
+    unit_price: number;
+    price: number;
+    subtotal: number;
+    type: string;
+    groupId: string;
+    groupLabel: string;
+    flavor: string;
+    staple: string;
+  }[];
+}
+
+interface AppendResponse {
+  ok: boolean;
+  wasReady: boolean;
+  prevStatus: string;
+  appendTotal: number;
+  itemCount: number;
 }
 
 export async function appendToOrder(
@@ -17,7 +52,7 @@ export async function appendToOrder(
 ): Promise<AppendResult> {
   if (!lines.length) throw new Error("請先選取要追加的品項");
 
-  const appendItems = lines.map((l) => ({
+  const items = lines.map((l) => ({
     itemId: l.itemId,
     name: l.name,
     qty: l.qty,
@@ -31,81 +66,13 @@ export async function appendToOrder(
     staple: l.staple || "",
   }));
 
-  const appendTotal = appendItems.reduce((s, i) => s + i.subtotal, 0);
-  const orderRef = doc(db, "orders", order.id);
-  const ts = serverTimestamp();
-  let wasReady = false;
-  let prevStatus = "";
-
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(orderRef);
-    if (!snap.exists()) throw new Error("訂單不存在");
-    const data = snap.data();
-    prevStatus = (data.status as string) || "new";
-    wasReady = prevStatus === "ready";
-
-    const currentItems = Array.isArray(data.items) ? data.items : [];
-    const updateData: Record<string, unknown> = {
-      items: [...currentItems, ...appendItems],
-      subtotal: ((data.subtotal as number) || 0) + appendTotal,
-      total: ((data.total as number) || (data.totalAmount as number) || (data.subtotal as number) || 0) + appendTotal,
-      itemCount: ((data.itemCount as number) || 0) + appendItems.length,
-      updatedAt: ts,
-    };
-    if (wasReady) updateData.status = "preparing";
-    tx.update(orderRef, updateData);
-
-    const eventRef = doc(collection(db, "order_events"));
-    tx.set(eventRef, {
-      orderId: order.id,
-      storeId: session.storeId,
-      type: "order_appended",
-      actorType: "staff",
-      actorId: session.employeeId,
-      actorName: session.employeeName || "",
-      fromStatus: prevStatus,
-      toStatus: wasReady ? "preparing" : prevStatus,
-      appendedItems: appendItems.map((i) => ({ name: i.name, qty: i.qty, subtotal: i.subtotal })),
-      amountDelta: appendTotal,
-      appendedAt: ts,
-      createdAt: ts,
-    });
-
-    if (wasReady) {
-      const scRef = doc(collection(db, "order_events"));
-      tx.set(scRef, {
-        orderId: order.id,
-        storeId: session.storeId,
-        type: "status_changed",
-        actorType: "staff",
-        actorId: session.employeeId,
-        actorName: session.employeeName || "",
-        fromStatus: "ready",
-        toStatus: "preparing",
-        message: "追加品項，自動回退製作中",
-        createdAt: ts,
-      });
-    }
+  const fn = httpsCallable<AppendPayload, AppendResponse>(functions, "posAppendToOrder");
+  const result = await fn({
+    employeeId: session.employeeId,
+    sessionToken: session.sessionToken,
+    orderId: order.id,
+    items,
   });
 
-  // order_items batch — best effort
-  try {
-    const itemsPayload = window.LeLeShanOrders?.buildOrderItemsPayload?.({
-      orderId: order.id,
-      storeId: session.storeId,
-      source: "pos",
-      items: appendItems,
-    });
-    if (Array.isArray(itemsPayload) && itemsPayload.length) {
-      const batch = writeBatch(db);
-      itemsPayload.forEach((d: Record<string, unknown>) =>
-        batch.set(doc(collection(db, "order_items")), d),
-      );
-      await batch.commit();
-    }
-  } catch (e) {
-    console.warn("[POS v2] append order_items failed:", e);
-  }
-
-  return { wasReady };
+  return { wasReady: result.data.wasReady };
 }
