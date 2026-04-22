@@ -178,7 +178,7 @@ export default function App() {
           <h1 className="font-serif text-2xl font-black">尚未登入 POS</h1>
           <p className="text-muted text-sm">請先從員工登入頁驗證身分。</p>
           <a
-            href="/pos-login"
+            href="/pos-login.html"
             className="inline-block px-6 py-3 rounded-xl bg-gradient-to-b from-accent-2 to-accent text-[#1a0d00] font-black shadow"
           >
             前往登入頁 →

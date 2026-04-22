@@ -69,5 +69,5 @@ export function clearSession(): void {
 }
 
 export function redirectToLogin(): void {
-  window.location.assign("/pos-login");
+  window.location.assign("/pos-login.html");
 }
