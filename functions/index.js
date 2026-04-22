@@ -1008,15 +1008,15 @@ function safeShortId(id) {
 }
 
 // ── 營業時段（Asia/Taipei，UTC+8，不支援跨午夜）─────────────
-const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+// Source of truth：`settings/{storeId}` — 管理員介面寫入的結構為
+//   { isOpen: bool, openFrom: "HH:MM", openTo: "HH:MM" }
+// 單一每日時段（非 per-day-of-week）。isOpen=false 視為時段外（員工大概也沒在看 KDS）。
+// 先前舊版讀 `stores/{storeId}.businessHours`（不存在），永遠回 null →
+// 永遠判成時段外 → 營業中的顧客下單仍被推到員工 LINE。
 
 function getTaipeiParts(whenMs) {
   const d = new Date((typeof whenMs === "number" ? whenMs : Date.now()) + 8 * 60 * 60 * 1000);
-  return {
-    dayKey: DAY_KEYS[d.getUTCDay()],
-    hh: d.getUTCHours(),
-    mm: d.getUTCMinutes()
-  };
+  return { hh: d.getUTCHours(), mm: d.getUTCMinutes() };
 }
 
 function hhmmToMin(value) {
@@ -1028,17 +1028,16 @@ function hhmmToMin(value) {
   return h * 60 + m;
 }
 
-// true = 目前位於該日營業時段內，員工靠 KDS 查看，不推 LINE
-// false = 時段外 / 公休 / 未設定 / 格式錯誤 — 推 LINE
-function isInBusinessHours(businessHours, whenMs) {
-  if (!businessHours || typeof businessHours !== "object") return false;
-  const parts = getTaipeiParts(whenMs);
-  const day = businessHours[parts.dayKey];
-  if (!day || day.closed) return false;
-  const openMin = hhmmToMin(day.open);
-  const closeMin = hhmmToMin(day.close);
+// true = 目前位於營業時段內，員工靠 KDS 查看，不推 LINE
+// false = 時段外 / 手動關店 / 未設定 / 格式錯誤 — 推 LINE
+function isInBusinessHours(settings, whenMs) {
+  if (!settings || typeof settings !== "object") return false;
+  if (settings.isOpen === false) return false; // 手動關店 override
+  const openMin = hhmmToMin(settings.openFrom);
+  const closeMin = hhmmToMin(settings.openTo);
   if (openMin == null || closeMin == null) return false;
   if (closeMin <= openMin) return false; // 不支援跨午夜；無效配置視為時段外
+  const parts = getTaipeiParts(whenMs);
   const nowMin = parts.hh * 60 + parts.mm;
   return nowMin >= openMin && nowMin < closeMin;
 }
@@ -1046,12 +1045,16 @@ function isInBusinessHours(businessHours, whenMs) {
 async function loadStoreBusinessHours(db, storeId) {
   if (!storeId) return null;
   try {
-    const snap = await db.collection("stores").doc(String(storeId)).get();
+    const snap = await db.collection("settings").doc(String(storeId)).get();
     if (!snap.exists) return null;
     const data = snap.data() || {};
-    return data.businessHours || null;
+    return {
+      isOpen: data.isOpen,
+      openFrom: data.openFrom,
+      openTo: data.openTo
+    };
   } catch (e) {
-    console.warn("[Stores] Failed to load businessHours.", { storeId, error: e.message });
+    console.warn("[Settings] Failed to load open hours.", { storeId, error: e.message });
     return null;
   }
 }
