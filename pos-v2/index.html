@@ -6,8 +6,25 @@
   <title>樂樂山 POS v2</title>
   <link rel="icon" href="/favicon.ico" />
   <script src="/config.public.js"></script>
-  <script type="module" crossorigin src="/pos-v2/assets/index-DrGSKJaw.js"></script>
-  <link rel="stylesheet" crossorigin href="/pos-v2/assets/index-B83hKO62.css">
+  <!-- Firebase compat shim: order-helpers.js 是 vanilla compat SDK 寫的，
+       在 POS v2 (modular SDK) 環境需先 shim FieldValue.serverTimestamp。
+       實際 serverTimestamp function 由 src/lib/firebase.ts 在 React mount 前注入 __posv2_sts。 -->
+  <script>
+    window.firebase = window.firebase || {};
+    window.firebase.firestore = window.firebase.firestore || {};
+    window.firebase.firestore.FieldValue = {
+      serverTimestamp: function () {
+        if (typeof window.__posv2_sts !== "function") {
+          throw new Error("[POS v2] serverTimestamp shim not ready; firebase.ts must load before helpers are invoked");
+        }
+        return window.__posv2_sts();
+      }
+    };
+  </script>
+  <script src="/order-helpers.js"></script>
+  <script src="/order-status-labels.js"></script>
+  <script type="module" crossorigin src="/pos-v2/assets/index-BYbUwR4m.js"></script>
+  <link rel="stylesheet" crossorigin href="/pos-v2/assets/index-BbDkfVgr.css">
 </head>
 <body>
   <div id="root"></div>

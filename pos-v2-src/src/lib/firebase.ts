@@ -15,3 +15,8 @@ const app = getApps().length ? getApps()[0] : initializeApp(config.firebaseConfi
 export const db = getFirestore(app);
 export const functions = getFunctions(app, config.functionsRegion);
 export const appConfig = config;
+
+// Fix-2: patch the compat shim so vanilla order-helpers.js can call
+// firebase.firestore.FieldValue.serverTimestamp() via window.__posv2_sts
+import { serverTimestamp } from "firebase/firestore";
+(window as unknown as { __posv2_sts: typeof serverTimestamp }).__posv2_sts = serverTimestamp;

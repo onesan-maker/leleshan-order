@@ -16,5 +16,7 @@ declare global {
       store: { name: string; orderCollection: string; siteUrl: string; defaultStoreId: string };
       googlePlaces: { placeId: string; apiKey: string };
     };
+    /** Firebase compat shim — injected by src/lib/firebase.ts after modular SDK initializes */
+    __posv2_sts?: () => unknown;
   }
 }
