@@ -32,6 +32,7 @@
         <a href="/admin/inventory" data-view="inventory">庫存管理</a>
         <a href="/admin/platform-orders" data-view="platform-orders">平台訂單</a>
         <a href="/admin/users" data-view="users">會員管理</a>
+        <a href="/admin/employees" data-view="employees">員工管理</a>
         <a href="/admin/promotions" data-view="promotions">優惠管理</a>
         <a href="/admin/settings" data-view="settings">營業狀態設定</a>
         <a href="/admin/kds-timing" data-view="kds-timing">KDS 出餐時間規則</a>
@@ -216,6 +217,15 @@
             <button id="user-point-adjust-btn" type="button">執行點數調整</button>
           </div>
         </div>
+      </section>
+
+      <section id="view-employees" class="admin-view hidden">
+        <div class="admin-section-head">
+          <h2>員工管理</h2>
+          <button type="button" data-open-form="employee">新增員工</button>
+        </div>
+        <p class="admin-form-hint" style="margin:4px 0 12px;">員工於 POS 登入頁以「員工編號 + 4 位數 PIN」登入。PIN 儲存為 scrypt 雜湊，重設 PIN 需由 owner/admin 執行。LINE 綁定後可接收新訂單推播與按取消鈕。</p>
+        <div id="employees-list" class="admin-list"></div>
       </section>
 
       <section id="view-promotions" class="admin-view hidden">
@@ -462,6 +472,30 @@
             <label><span>逾時幾分鐘強警示</span><input id="kdst-overdue-alert" type="number" min="1" step="1" placeholder="3"></label>
 
             <button type="submit">儲存規則</button>
+          </form>
+        </section>
+
+        <section data-form-panel="employee" class="admin-form-panel hidden">
+          <form id="employee-form" class="admin-form">
+            <input type="hidden" id="employee-original-id">
+            <label><span>員工姓名</span><input id="employee-name" placeholder="例如：王小明" required></label>
+            <label><span>員工編號</span><input id="employee-id" placeholder="例如：E001" required></label>
+            <label><span>所屬門市</span><select id="employee-store-id"></select></label>
+            <label class="switch-field"><span>員工狀態</span><span class="switch-row"><input id="employee-active" type="checkbox" checked><span class="switch-ui"></span><span id="employee-active-label">啟用中</span></span></label>
+            <div id="employee-pin-wrap">
+              <label><span>4 位數 PIN 碼</span><input id="employee-pin" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="例如：1234" autocomplete="off"></label>
+              <p class="admin-form-hint" style="margin:-4px 0 0;">僅在「新增」時於此設定；編輯員工資料不會改動 PIN。如需重設，請至列表使用「重設 PIN」按鈕。</p>
+            </div>
+            <button type="submit">儲存員工</button>
+          </form>
+        </section>
+
+        <section data-form-panel="employee-pin" class="admin-form-panel hidden">
+          <form id="employee-pin-form" class="admin-form">
+            <input type="hidden" id="employee-pin-target-id">
+            <label><span>重設對象</span><input id="employee-pin-target-label" readonly></label>
+            <label><span>新 PIN 碼（4 位數）</span><input id="employee-pin-reset" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="例如：1234" autocomplete="off" required></label>
+            <button type="submit">重設 PIN</button>
           </form>
         </section>
 
