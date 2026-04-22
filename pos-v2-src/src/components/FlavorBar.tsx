@@ -1,38 +1,63 @@
-import type { FlavorPart } from "@/stores/cart.store";
+import { useMenuStore } from "@/stores/menu.store";
+import { useCartStore } from "@/stores/cart.store";
 
-interface Props {
-  parts: FlavorPart[];
-  activeId: string;
-  onSelect(id: string): void;
-  onAdd(): void;
-}
+export function FlavorBar() {
+  const flavors = useMenuStore((s) => s.flavors);
+  const { parts, activePartId, addPart, setActivePart, setPartFlavor, removePart } = useCartStore();
 
-export function FlavorBar({ parts, activeId, onSelect, onAdd }: Props) {
   return (
-    <div className="flex items-center gap-2 px-4 py-2 border-b border-line bg-panel-2 overflow-x-auto">
+    <div className="flex items-center gap-2 px-4 py-2 border-b border-line bg-panel-2 overflow-x-auto shrink-0">
       {parts.map((p) => (
-        <button
+        <div
           key={p.id}
-          onClick={() => onSelect(p.id)}
           className={[
-            "flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors",
-            p.id === activeId
-              ? "bg-accent text-[#1a0d00] border-accent shadow"
-              : "bg-panel border-line text-text-dim hover:bg-panel-3",
+            "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm shrink-0 transition-colors",
+            p.id === activePartId
+              ? "border-accent bg-accent/10 text-text"
+              : "border-line bg-panel text-text-dim",
           ].join(" ")}
         >
-          <span>{p.groupLabel}</span>
-          {p.flavor && (
-            <span className="ml-1.5 text-xs opacity-70">· {p.flavor}</span>
+          <button
+            onClick={() => setActivePart(p.id)}
+            className="font-semibold leading-none"
+          >
+            {p.label}
+          </button>
+
+          <select
+            value={p.flavorId ?? ""}
+            onChange={(e) => {
+              const f = flavors.find((fl) => fl.id === e.target.value);
+              setPartFlavor(p.id, f?.id ?? null, f?.name ?? "");
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs bg-transparent border-none outline-none cursor-pointer text-muted max-w-[80px]"
+          >
+            <option value="">未選口味</option>
+            {flavors.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+
+          {parts.length > 1 && (
+            <button
+              onClick={() => removePart(p.id)}
+              className="text-muted hover:text-red-400 text-xs leading-none ml-0.5 transition-colors"
+              title="移除此組"
+            >
+              ✕
+            </button>
           )}
-        </button>
+        </div>
       ))}
+
       <button
-        onClick={onAdd}
-        className="flex-shrink-0 w-8 h-8 rounded-full border border-dashed border-line text-muted hover:border-accent hover:text-accent text-lg leading-none transition-colors"
-        title="新增口味組"
+        onClick={addPart}
+        className="shrink-0 px-3 py-1.5 rounded-xl border border-dashed border-line text-muted hover:border-accent hover:text-accent text-sm transition-colors"
       >
-        +
+        ＋新增口味組
       </button>
     </div>
   );

@@ -29,8 +29,8 @@ export interface OrderGroupInput {
   id: string;               // group 唯一 key，對齊 item.groupId
   index: number;            // 1-based
   label: string;
-  flavor: string;
-  staple: string;
+  flavor?: string;
+  staple?: string;
   items: OrderItemInput[];
 }
 
@@ -81,10 +81,10 @@ export interface BuildOrderItemsPayloadArgs {
 
 declare global {
   interface Window {
-    LeLeShanOrders: {
-      buildCreatePayload(args: BuildCreatePayloadArgs): Record<string, unknown>;
-      buildOrderEventPayload(args: BuildOrderEventPayloadArgs): Record<string, unknown>;
-      buildOrderItemsPayload(args: BuildOrderItemsPayloadArgs): Record<string, unknown>[];
+    LeLeShanOrders?: {
+      buildCreatePayload: (args: BuildCreatePayloadArgs) => Record<string, unknown>;
+      buildOrderEventPayload: (args: BuildOrderEventPayloadArgs) => Record<string, unknown>;
+      buildOrderItemsPayload: (args: BuildOrderItemsPayloadArgs) => Record<string, unknown>[];
     };
   }
 }

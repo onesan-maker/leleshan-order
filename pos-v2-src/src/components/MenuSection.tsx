@@ -1,15 +1,13 @@
 import { useState } from "react";
-import type { MenuCategory, MenuItem } from "@/services/menu.service";
+import { useMenuStore } from "@/stores/menu.store";
+import { useCartStore } from "@/stores/cart.store";
 
-interface Props {
-  categories: MenuCategory[];
-  items: MenuItem[];
-  onItemClick(item: MenuItem): void;
-}
+export function MenuSection() {
+  const categories = useMenuStore((s) => s.categories);
+  const items = useMenuStore((s) => s.items);
+  const addItem = useCartStore((s) => s.addItem);
 
-export function MenuSection({ categories, items, onItemClick }: Props) {
   const [activeCatId, setActiveCatId] = useState<string | null>(null);
-
   const effectiveCatId = activeCatId ?? categories[0]?.id ?? null;
   const filtered = effectiveCatId
     ? items.filter((i) => i.categoryId === effectiveCatId)
@@ -18,13 +16,13 @@ export function MenuSection({ categories, items, onItemClick }: Props) {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Category tabs */}
-      <div className="flex gap-1.5 px-4 py-2.5 overflow-x-auto border-b border-line bg-panel/40">
+      <div className="flex gap-1.5 px-4 py-2 overflow-x-auto border-b border-line bg-panel/40 shrink-0">
         {categories.map((c) => (
           <button
             key={c.id}
             onClick={() => setActiveCatId(c.id)}
             className={[
-              "flex-shrink-0 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors",
+              "shrink-0 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors",
               c.id === effectiveCatId
                 ? "bg-accent text-[#1a0d00]"
                 : "text-text-dim hover:bg-panel-2",
@@ -41,21 +39,21 @@ export function MenuSection({ categories, items, onItemClick }: Props) {
           {filtered.map((item) => (
             <button
               key={item.id}
-              onClick={() => onItemClick(item)}
+              onClick={() => addItem(item)}
               className="group text-left bg-panel border border-line rounded-xl p-3 hover:border-accent/60 hover:bg-panel-2 transition-all active:scale-95"
             >
+              {typeof item.emoji === "string" && item.emoji && (
+                <div className="text-2xl mb-1">{item.emoji}</div>
+              )}
               <div className="font-semibold text-sm leading-snug line-clamp-2 mb-1">
                 {item.name}
               </div>
               {item.unit && (
-                <div className="text-[10px] text-muted mb-1">{item.unit}</div>
+                <div className="text-[10px] text-muted mb-1">{String(item.unit)}</div>
               )}
               <div className="font-mono font-black text-accent-2 text-base">
                 ${item.price}
               </div>
-              {item.isSoldOut && (
-                <div className="text-xs text-red-400 mt-1">售完</div>
-              )}
             </button>
           ))}
         </div>
