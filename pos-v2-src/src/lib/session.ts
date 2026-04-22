@@ -64,6 +64,10 @@ export function readSession(): PosSession | null {
   }
 }
 
+export function saveSession(s: PosSession): void {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+}
+
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
