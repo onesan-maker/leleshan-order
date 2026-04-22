@@ -1,0 +1,170 @@
+/* ──────────────────────────────────────────────────────────────
+   pickup-board.html 視覺升級覆蓋層
+   目標：10 公尺外可讀、可取餐時段能抓住目光
+   ────────────────────────────────────────────────────────────── */
+
+body.board-page {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+.board-shell {
+  max-width: 1920px; margin: 0 auto;
+  padding: 20px 28px 40px;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+
+.board-topbar {
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  padding: 22px 32px;
+  margin-bottom: 22px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: var(--shadow-md);
+}
+.board-brand__store {
+  font-family: var(--font-serif);
+  font-size: 1rem; font-weight: 700;
+  color: var(--accent-2);
+  letter-spacing: .08em;
+}
+.board-brand__title {
+  font-family: var(--font-serif);
+  font-size: 2.4rem; font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.5px;
+  margin: 4px 0;
+}
+.board-brand__sub {
+  color: var(--muted);
+  font-size: .92rem;
+}
+.board-header-right { text-align: right; }
+.board-clock {
+  font-family: var(--font-mono);
+  font-size: 2.6rem; font-weight: 900;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  line-height: 1;
+}
+.board-header-hint {
+  color: var(--muted);
+  font-size: .92rem;
+  margin-top: 6px;
+}
+
+.board-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+
+.board-column {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  padding: 22px 24px;
+  display: flex; flex-direction: column;
+  min-height: 500px;
+}
+.board-column--processing { border-top: 3px solid var(--accepted); }
+.board-column--ready      {
+  border-top: 3px solid var(--ready);
+  background: linear-gradient(180deg, rgba(16, 185, 129, .08), var(--panel) 30%);
+}
+
+.board-col-head {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 18px;
+}
+.board-col-head h2 {
+  font-family: var(--font-serif);
+  font-size: 1.8rem; font-weight: 900;
+  color: var(--text);
+  margin: 0;
+}
+.board-col-head__dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  box-shadow: 0 0 12px currentColor;
+}
+.board-column--processing .board-col-head__dot { background: var(--accepted); color: var(--accepted); }
+.board-column--ready      .board-col-head__dot {
+  background: var(--ready); color: var(--ready);
+  animation: pulse-ready 1.6s ease-in-out infinite;
+}
+@keyframes pulse-ready {
+  0%, 100% { box-shadow: 0 0 12px var(--ready-glow); }
+  50%      { box-shadow: 0 0 24px var(--ready); }
+}
+
+.board-column__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+/* 取餐號碼卡 — 依 pickup-board.js render 的 class 微調 */
+.board-card,
+.board-pickup-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px 14px;
+  text-align: center;
+  transition: all var(--t-med) var(--ease-out);
+}
+.board-column--ready .board-card,
+.board-column--ready .board-pickup-card {
+  background: linear-gradient(180deg, rgba(16, 185, 129, .18), var(--panel-2) 70%);
+  border-color: rgba(16, 185, 129, .4);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, .18);
+  animation: rise-ready .5s var(--ease-out);
+}
+@keyframes rise-ready {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+.board-card__number,
+.board-pickup-number {
+  font-family: var(--font-mono);
+  font-size: 3.6rem; font-weight: 900; line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+.board-column--ready .board-card__number,
+.board-column--ready .board-pickup-number {
+  color: var(--ready);
+  text-shadow: 0 0 24px var(--ready-glow);
+}
+.board-card__meta,
+.board-pickup-meta {
+  color: var(--muted);
+  font-size: .82rem;
+  margin-top: 8px;
+}
+
+.board-column__empty,
+.board-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 40px 20px;
+  font-size: 1rem;
+}
+
+@media (max-width: 900px) {
+  .board-grid { grid-template-columns: 1fr; }
+  .board-brand__title { font-size: 1.8rem; }
+  .board-clock { font-size: 2rem; }
+  .board-card__number, .board-pickup-number { font-size: 2.8rem; }
+}

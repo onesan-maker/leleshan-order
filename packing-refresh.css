@@ -1,0 +1,119 @@
+/* ──────────────────────────────────────────────────────────────
+   packing.html 視覺升級覆蓋層
+   載入順序：tokens.css → components.css → ops.css → 本檔
+   ────────────────────────────────────────────────────────────── */
+
+body.ops-page {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.ops-shell { background: transparent; }
+
+.ops-topbar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px 22px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.ops-title {
+  font-family: var(--font-serif);
+  font-size: 1.6rem; font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.5px;
+  display: flex; align-items: center; gap: 12px;
+}
+.ops-title::before {
+  content: ""; width: 4px; height: 24px;
+  background: var(--accent); border-radius: 2px;
+}
+.ops-subtitle, .ops-meta {
+  color: var(--muted);
+  font-size: .88rem;
+  margin-top: 4px;
+}
+
+.ops-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+
+.ops-stats {
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+.ops-stat {
+  flex: 1; min-width: 140px;
+  padding: 14px 18px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ops-stat span {
+  font-size: .76rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted);
+}
+.ops-stat strong {
+  font-family: var(--font-mono);
+  font-size: 2rem; font-weight: 900; line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ops-stat:nth-child(1) strong { color: var(--accent-2); }   /* 包裝中 */
+.ops-stat:nth-child(2) strong { color: var(--ready); }      /* 可取餐 */
+
+.ops-tabs {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.ops-tab {
+  padding: 9px 16px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: .88rem; font-weight: 700;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.ops-tab:hover { color: var(--text); border-color: var(--panel-3); }
+.ops-tab.is-active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+
+/* 包裝訂單卡片（若 packing.js 產生 .packing-card 或類似） */
+.packing-card,
+.ops-order-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  transition: border-color var(--t-fast) var(--ease-out);
+}
+.packing-card:hover,
+.ops-order-card:hover { border-color: var(--panel-3); }
+
+.ops-error {
+  background: rgba(239, 68, 68, .14);
+  border: 1px solid rgba(239, 68, 68, .3);
+  color: #fecaca;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+}
+
+.ops-login-guard {
+  background: var(--panel);
+  color: var(--text-dim);
+  padding: 20px;
+  text-align: center;
+  font-weight: 600;
+}

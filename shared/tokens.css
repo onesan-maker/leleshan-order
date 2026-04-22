@@ -1,0 +1,79 @@
+/* ──────────────────────────────────────────────────────────────
+   樂樂山共享設計令牌
+   對齊 KDS v4 + POS 新設計稿
+   所有頁面應先載入此檔，其他 CSS 才能引用這些變數
+   ────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ─── Surface / 表面層次 ─── */
+  --bg:         #0a0d14;
+  --panel:      #121620;
+  --panel-2:    #1a2030;
+  --panel-3:    #242c40;
+  --line:       #242c40;
+  --line-soft:  #1a2030;
+
+  /* ─── Text ─── */
+  --text:       #ffffff;
+  --text-dim:   #c8cedc;
+  --muted:      #6b7489;
+  --subtle:     #465066;
+
+  /* ─── Brand accent（暖琥珀橘）─── */
+  --accent:     #f97316;
+  --accent-2:   #fb923c;
+  --accent-3:   #ea580c;
+  --accent-dim: rgba(249, 115, 22, 0.12);
+  --accent-glow: rgba(249, 115, 22, 0.28);
+
+  /* ─── Status ─── */
+  --pending:    #ef4444;
+  --pending-2:  #dc2626;
+  --accepted:   #f97316;
+  --preparing:  #3b82f6;
+  --ready:      #10b981;
+  --ready-2:    #059669;
+  --ready-glow: rgba(16, 185, 129, 0.32);
+  --completed:  #6b7489;
+  --cancelled:  #ef4444;
+
+  /* ─── External brand ─── */
+  --line-brand: #06c755;
+
+  /* ─── Typography ─── */
+  --font-sans:  "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+  --font-serif: "Noto Serif TC", serif;
+  --font-mono:  "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ─── Radii ─── */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* ─── Shadow ─── */
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, .4);
+  --shadow-lg:  0 12px 32px rgba(0, 0, 0, .5);
+  --shadow-pop: 0 20px 50px -20px rgba(249, 115, 22, .4);
+
+  /* ─── Motion ─── */
+  --ease-out: cubic-bezier(.2, .8, .25, 1);
+  --t-fast:   120ms;
+  --t-med:    180ms;
+  --t-slow:   300ms;
+}
+
+/* 背景氛圍（可選，頁面透過 body class 啟用） */
+body.has-ambient-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 0%,  rgba(249, 115, 22, .08), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 100%, rgba(234, 88, 12, .06),  transparent 60%);
+}
