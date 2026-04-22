@@ -117,6 +117,44 @@ export function subscribeMenuItems(storeId: string, cb: (items: MenuItem[]) => v
   };
 }
 
+export interface Combo {
+  id: string;
+  storeId: string;
+  name: string;
+  price: number;
+  enabled: boolean;
+  sort: number;
+  posType?: string;
+  posVisible?: boolean;
+  posHidden?: boolean;
+  isSoldOut?: boolean;
+  flavorOptions?: string[];
+  stapleOptions?: string[];
+  optionGroups?: unknown;
+  description?: string;
+  requiresFlavor?: boolean;
+  requiresStaple?: boolean;
+  [key: string]: unknown;
+}
+
+// Align with vanilla: filter enabled !== false && posHidden !== true; keep isSoldOut items
+export function subscribeCombos(storeId: string, cb: (combos: Combo[]) => void): Unsubscribe {
+  const q = query(collection(db, "comboTemplates"), where("storeId", "==", storeId));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const rows: Combo[] = [];
+      snap.forEach((d) => rows.push({ id: d.id, ...(d.data() as Omit<Combo, "id">) } as Combo));
+      cb(
+        rows
+          .filter((r) => r.enabled !== false && r.posHidden !== true && r.posVisible !== false)
+          .sort(bySort),
+      );
+    },
+    (err) => console.error("[POS v2] subscribeCombos failed:", err),
+  );
+}
+
 export function subscribeFlavors(storeId: string, cb: (flavors: Flavor[]) => void): Unsubscribe {
   const q = query(collection(db, "flavors"), where("storeId", "==", storeId));
   return onSnapshot(

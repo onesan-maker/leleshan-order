@@ -1,23 +1,45 @@
 import { useState } from "react";
 import { useMenuStore } from "@/stores/menu.store";
 import { useCartStore } from "@/stores/cart.store";
+import type { MenuItem, Combo } from "@/services/menu.service";
+
+const COMBO_CAT_ID = "__combos__";
+
+function comboAsMenuItem(c: Combo): MenuItem {
+  return {
+    ...c,
+    categoryId: COMBO_CAT_ID,
+    // vanilla: when fallbackType==="combo", inferPosType returns "set"
+    posType: (c.posType as string) || "set",
+    enabled: c.enabled !== false,
+    sort: c.sort ?? 0,
+  } as MenuItem;
+}
 
 export function MenuSection() {
   const categories = useMenuStore((s) => s.categories);
   const items = useMenuStore((s) => s.items);
+  const combos = useMenuStore((s) => s.combos);
   const addItem = useCartStore((s) => s.addItem);
 
   const [activeCatId, setActiveCatId] = useState<string | null>(null);
-  const effectiveCatId = activeCatId ?? categories[0]?.id ?? null;
-  const filtered = effectiveCatId
-    ? items.filter((i) => i.categoryId === effectiveCatId)
-    : items;
+
+  // Virtual "套餐" category prepended when combos exist (做法 C, aligns with vanilla renderMenu)
+  const allCategories = combos.length > 0
+    ? [{ id: COMBO_CAT_ID, name: "套餐", storeId: "", enabled: true, sort: -1 }, ...categories]
+    : categories;
+
+  const effectiveCatId = activeCatId ?? allCategories[0]?.id ?? null;
+
+  const filtered: MenuItem[] = effectiveCatId === COMBO_CAT_ID
+    ? combos.map(comboAsMenuItem)
+    : items.filter((i) => i.categoryId === effectiveCatId);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Category tab bar — 44px, compact */}
+      {/* Category tab bar */}
       <div className="flex gap-0.5 px-3 overflow-x-auto shrink-0 bg-panel/40" style={{ minHeight: 44 }}>
-        {categories.map((c) => (
+        {allCategories.map((c) => (
           <button
             key={c.id}
             onClick={() => setActiveCatId(c.id)}

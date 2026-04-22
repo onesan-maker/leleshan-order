@@ -1,12 +1,18 @@
 import { useEffect } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { subscribeCategories, subscribeMenuItems, subscribeFlavors } from "@/services/menu.service";
+import {
+  subscribeCategories,
+  subscribeMenuItems,
+  subscribeCombos,
+  subscribeFlavors,
+} from "@/services/menu.service";
 import { useMenuStore } from "@/stores/menu.store";
 
 export function useMenuSubscription(storeId: string | null | undefined) {
   const setCategories = useMenuStore((s) => s.setCategories);
   const setItems = useMenuStore((s) => s.setItems);
+  const setCombos = useMenuStore((s) => s.setCombos);
   const setFlavors = useMenuStore((s) => s.setFlavors);
   const setStaples = useMenuStore((s) => s.setStaples);
 
@@ -27,11 +33,13 @@ export function useMenuSubscription(storeId: string | null | undefined) {
 
     const unsubCats = subscribeCategories(storeId, setCategories);
     const unsubItems = subscribeMenuItems(storeId, setItems);
+    const unsubCombos = subscribeCombos(storeId, setCombos);
     const unsubFlavors = subscribeFlavors(storeId, setFlavors);
     return () => {
       unsubCats();
       unsubItems();
+      unsubCombos();
       unsubFlavors();
     };
-  }, [storeId, setCategories, setItems, setFlavors, setStaples]);
+  }, [storeId, setCategories, setItems, setCombos, setFlavors, setStaples]);
 }
