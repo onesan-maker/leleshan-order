@@ -98,6 +98,14 @@
         "destination": "/admin.html"
       },
       {
+        "source": "pos-v2",
+        "destination": "/pos-v2/index.html"
+      },
+      {
+        "source": "pos-v2/**",
+        "destination": "/pos-v2/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
