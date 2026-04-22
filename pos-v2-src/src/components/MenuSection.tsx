@@ -15,17 +15,17 @@ export function MenuSection() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Category tabs */}
-      <div className="flex gap-1.5 px-4 py-2 overflow-x-auto border-b border-line bg-panel/40 shrink-0">
+      {/* Category tab bar — 44px, compact */}
+      <div className="flex gap-0.5 px-3 overflow-x-auto shrink-0 bg-panel/40" style={{ minHeight: 44 }}>
         {categories.map((c) => (
           <button
             key={c.id}
             onClick={() => setActiveCatId(c.id)}
             className={[
-              "shrink-0 px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors",
+              "shrink-0 px-3 self-stretch text-[0.9rem] font-semibold transition-colors whitespace-nowrap",
               c.id === effectiveCatId
                 ? "bg-accent text-[#1a0d00]"
-                : "text-text-dim hover:bg-panel-2",
+                : "text-text-dim hover:text-text",
             ].join(" ")}
           >
             {c.name}
@@ -34,28 +34,40 @@ export function MenuSection() {
       </div>
 
       {/* Item grid */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {filtered.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => addItem(item)}
-              className="group text-left bg-panel border border-line rounded-xl p-3 hover:border-accent/60 hover:bg-panel-2 transition-all active:scale-95"
-            >
-              {typeof item.emoji === "string" && item.emoji && (
-                <div className="text-2xl mb-1">{item.emoji}</div>
-              )}
-              <div className="font-semibold text-sm leading-snug line-clamp-2 mb-1">
-                {item.name}
-              </div>
-              {item.unit && (
-                <div className="text-[10px] text-muted mb-1">{String(item.unit)}</div>
-              )}
-              <div className="font-mono font-black text-accent-2 text-base">
-                ${item.price}
-              </div>
-            </button>
-          ))}
+      <div className="flex-1 overflow-y-auto p-3">
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))" }}>
+          {filtered.map((item) => {
+            const soldOut = item.isSoldOut === true;
+            return (
+              <button
+                key={item.id}
+                onClick={() => !soldOut && addItem(item)}
+                disabled={soldOut}
+                className={[
+                  "text-left rounded-xl border transition-all",
+                  soldOut
+                    ? "opacity-50 cursor-not-allowed border-line bg-panel"
+                    : "border-line bg-panel hover:border-accent/60 hover:bg-panel-2 active:scale-95",
+                ].join(" ")}
+                style={{ padding: "10px 12px" }}
+              >
+                <div className="flex items-start justify-between gap-1 mb-1">
+                  <div className="font-semibold leading-tight text-[0.92rem] line-clamp-2 flex-1">
+                    {item.name}
+                  </div>
+                  {soldOut && (
+                    <span className="text-[10px] bg-red-500/20 text-red-400 rounded px-1 shrink-0">售完</span>
+                  )}
+                </div>
+                {item.unit && (
+                  <div className="text-[11px] text-muted mb-1">{String(item.unit)}</div>
+                )}
+                <div className="font-mono font-bold text-accent-2 text-base mt-auto">
+                  ${item.price}
+                </div>
+              </button>
+            );
+          })}
         </div>
         {filtered.length === 0 && (
           <div className="text-center text-muted py-12 text-sm">此分類暫無商品</div>

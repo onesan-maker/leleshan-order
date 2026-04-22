@@ -22,6 +22,8 @@ export interface MenuItem {
   tags?: string[];
   unit?: string;
   posVisible?: boolean;
+  posHidden?: boolean;
+  isActive?: boolean;
   isSoldOut?: boolean;
   posType?: string;
   flavorMode?: string;
@@ -56,21 +58,63 @@ export function subscribeCategories(storeId: string, cb: (cats: MenuCategory[]) 
   );
 }
 
+/**
+ * 對齊 vanilla pos.js 行為：
+ * 1. 讀 menu_items + menuItems（legacy）兩個 collection，new 優先去重
+ * 2. filter 條件：enabled !== false && isActive !== false && posHidden !== true && posVisible !== false
+ *    — 不過濾 isSoldOut（vanilla 保留售完品項，僅視覺標示）
+ */
 export function subscribeMenuItems(storeId: string, cb: (items: MenuItem[]) => void): Unsubscribe {
-  const q = query(collection(db, "menu_items"), where("storeId", "==", storeId));
-  return onSnapshot(
-    q,
+  let itemsNew: MenuItem[] = [];
+  let itemsLegacy: MenuItem[] = [];
+
+  function publish() {
+    const seen = new Set<string>();
+    const merged: MenuItem[] = [];
+    for (const item of [...itemsNew, ...itemsLegacy]) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        merged.push(item);
+      }
+    }
+    cb(
+      merged
+        .filter(
+          (r) =>
+            r.enabled !== false &&
+            r.isActive !== false &&
+            r.posHidden !== true &&
+            r.posVisible !== false,
+        )
+        .sort(bySort),
+    );
+  }
+
+  const toRow = (d: { id: string; data(): Record<string, unknown> }): MenuItem =>
+    ({ id: d.id, ...(d.data() as Omit<MenuItem, "id">) } as MenuItem);
+
+  const unsubNew = onSnapshot(
+    query(collection(db, "menu_items"), where("storeId", "==", storeId)),
     (snap) => {
-      const rows: MenuItem[] = [];
-      snap.forEach((d) => rows.push({ id: d.id, ...(d.data() as Omit<MenuItem, "id">) } as MenuItem));
-      cb(
-        rows
-          .filter((r) => r.enabled !== false && r.posVisible !== false && r.isSoldOut !== true)
-          .sort(bySort),
-      );
+      itemsNew = snap.docs.map(toRow);
+      publish();
     },
-    (err) => console.error("[POS v2] subscribeMenuItems failed:", err),
+    (err) => console.error("[POS v2] subscribeMenuItems(menu_items) failed:", err),
   );
+
+  const unsubLegacy = onSnapshot(
+    query(collection(db, "menuItems"), where("storeId", "==", storeId)),
+    (snap) => {
+      itemsLegacy = snap.docs.map(toRow);
+      publish();
+    },
+    (err) => console.error("[POS v2] subscribeMenuItems(menuItems) failed:", err),
+  );
+
+  return () => {
+    unsubNew();
+    unsubLegacy();
+  };
 }
 
 export function subscribeFlavors(storeId: string, cb: (flavors: Flavor[]) => void): Unsubscribe {

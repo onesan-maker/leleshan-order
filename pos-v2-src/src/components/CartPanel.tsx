@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useCartStore, type FlavorPart, type CartLine } from "@/stores/cart.store";
 
 export interface CheckoutPayload {
@@ -23,6 +24,8 @@ export function CartPanel({ onCheckout }: Props) {
     getSubtotal, getItemCount,
   } = useCartStore();
 
+  const [moreOpen, setMoreOpen] = useState(false);
+
   const subtotal = getSubtotal();
   const count = getItemCount();
   const canCheckout = lines.length > 0 && paymentMethod !== "";
@@ -30,86 +33,90 @@ export function CartPanel({ onCheckout }: Props) {
   const handleCheckout = () => {
     if (!canCheckout) return;
     void onCheckout({
-      parts,
-      lines,
-      customerName,
-      note,
+      parts, lines, customerName, note,
       paymentMethod: paymentMethod as "cash" | "linepay",
-      source,
-      pickupTime,
-      lineUserId,
+      source, pickupTime, lineUserId,
     });
   };
 
   return (
-    <div className="flex flex-col h-full border-l border-line bg-panel/60">
-      <div className="px-5 py-3 border-b border-line shrink-0">
-        <h2 className="font-serif font-black text-base">
+    <div className="flex flex-col h-full border-l border-line bg-panel/60 overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-2.5 border-b border-line shrink-0">
+        <h2 className="font-serif font-black text-sm">
           購物車
           {count > 0 && (
-            <span className="ml-2 text-xs font-mono text-muted">({count} 項)</span>
+            <span className="ml-2 text-xs font-mono text-muted font-normal">({count} 項)</span>
           )}
         </h2>
       </div>
 
-      {/* Line items */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+      {/* Line items — takes all available space */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         {lines.length === 0 ? (
           <div className="text-center text-muted py-10 text-sm">尚未選取品項</div>
         ) : (
-          lines.map((l) => (
-            <div
-              key={l.lineId}
-              className="flex items-center gap-2 bg-panel-2 border border-line rounded-xl px-3 py-2"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold truncate">{l.name}</div>
-                <div className="text-xs text-muted">
-                  {l.groupLabel}
-                  {l.flavor ? ` · ${l.flavor}` : ""}
+          <div className="divide-y divide-line">
+            {lines.map((l) => (
+              <div key={l.lineId} className="flex items-center gap-2 px-3 py-2">
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold truncate leading-tight">{l.name}</div>
+                  <div className="text-[11px] text-muted leading-tight">
+                    <span className="bg-panel-2 border border-line rounded px-1 mr-1">{l.groupLabel}</span>
+                    {l.flavor && <span>{l.flavor}</span>}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
+                {/* Qty controls */}
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => changeQty(l.lineId, -1)}
+                    className="w-6 h-6 rounded border border-line text-text-dim hover:bg-panel-2 text-sm leading-none shrink-0"
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center text-sm font-mono tabular-nums">{l.qty}</span>
+                  <button
+                    onClick={() => changeQty(l.lineId, 1)}
+                    className="w-6 h-6 rounded border border-line text-text-dim hover:bg-panel-2 text-sm leading-none shrink-0"
+                  >
+                    +
+                  </button>
+                </div>
+                {/* Price */}
+                <div className="w-12 text-right font-mono text-sm font-black text-accent-2 shrink-0">
+                  ${l.unitPrice * l.qty}
+                </div>
+                {/* Delete */}
                 <button
-                  onClick={() => changeQty(l.lineId, -1)}
-                  className="w-6 h-6 rounded-full border border-line text-text-dim hover:bg-panel-3 text-sm leading-none"
+                  onClick={() => removeLine(l.lineId)}
+                  className="text-muted hover:text-red-400 text-xs w-5 text-center shrink-0 transition-colors"
                 >
-                  −
-                </button>
-                <span className="w-6 text-center text-sm font-mono tabular-nums">{l.qty}</span>
-                <button
-                  onClick={() => changeQty(l.lineId, 1)}
-                  className="w-6 h-6 rounded-full border border-line text-text-dim hover:bg-panel-3 text-sm leading-none"
-                >
-                  +
+                  ✕
                 </button>
               </div>
-              <div className="w-14 text-right font-mono text-sm font-black text-accent-2 shrink-0">
-                ${l.unitPrice * l.qty}
-              </div>
-              <button
-                onClick={() => removeLine(l.lineId)}
-                className="text-muted hover:text-red-400 text-xs px-1 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Footer */}
-      <div className="border-t border-line px-4 py-4 space-y-3 shrink-0">
-        {/* 訂單來源 */}
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted mb-1.5">來源</p>
-          <div className="flex gap-2">
+      {/* Fixed footer */}
+      <div className="shrink-0 border-t border-line">
+        {/* Subtotal */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-line">
+          <span className="text-xs text-muted">小計</span>
+          <span className="font-mono font-black text-lg text-accent-2">NT${subtotal}</span>
+        </div>
+
+        {/* Source + Payment chips */}
+        <div className="px-3 py-2 space-y-2 border-b border-line">
+          <div className="flex gap-1.5">
             {(["walk_in", "phone"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setSource(s)}
                 className={[
-                  "flex-1 py-1.5 rounded-lg border text-sm font-semibold transition-colors",
+                  "flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-colors",
                   source === s
                     ? "bg-accent text-[#1a0d00] border-accent"
                     : "border-line text-text-dim hover:bg-panel-2",
@@ -119,18 +126,13 @@ export function CartPanel({ onCheckout }: Props) {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* 付款方式 */}
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted mb-1.5">付款</p>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {(["cash", "linepay"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setPaymentMethod(m)}
                 className={[
-                  "flex-1 py-1.5 rounded-lg border text-sm font-semibold transition-colors",
+                  "flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-colors",
                   paymentMethod === m
                     ? "bg-accent text-[#1a0d00] border-accent"
                     : "border-line text-text-dim hover:bg-panel-2",
@@ -142,47 +144,59 @@ export function CartPanel({ onCheckout }: Props) {
           </div>
         </div>
 
-        <input
-          type="text"
-          placeholder="顧客稱呼（選填）"
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-          className="w-full bg-panel-2 border border-line rounded-lg px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:border-accent"
-        />
-        <input
-          type="text"
-          placeholder="LINE ID（選填）"
-          value={lineUserId}
-          onChange={(e) => setLineUserId(e.target.value)}
-          className="w-full bg-panel-2 border border-line rounded-lg px-3 py-2 text-sm placeholder:text-muted focus:outline-none focus:border-accent"
-        />
-        <input
-          type="time"
-          placeholder="取餐時間（選填）"
-          value={pickupTime}
-          onChange={(e) => setPickupTime(e.target.value)}
-          className="w-full bg-panel-2 border border-line rounded-lg px-3 py-2 text-sm text-text-dim focus:outline-none focus:border-accent"
-        />
-        <textarea
-          placeholder="備註（選填）"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={2}
-          className="w-full bg-panel-2 border border-line rounded-lg px-3 py-2 text-sm placeholder:text-muted resize-none focus:outline-none focus:border-accent"
-        />
-
-        <div className="flex items-center justify-between py-1">
-          <span className="text-sm text-muted">小計</span>
-          <span className="font-mono font-black text-xl text-accent-2">NT${subtotal}</span>
+        {/* Collapsible more options */}
+        <div className="border-b border-line">
+          <button
+            onClick={() => setMoreOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-2 text-xs text-muted hover:text-text transition-colors"
+          >
+            <span>更多選項（顧客稱呼 / 備註）</span>
+            <span className={`transition-transform ${moreOpen ? "rotate-180" : ""}`}>▼</span>
+          </button>
+          {moreOpen && (
+            <div className="px-3 pb-3 space-y-2">
+              <input
+                type="text"
+                placeholder="顧客稱呼（選填）"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="w-full bg-panel-2 border border-line rounded-lg px-3 py-1.5 text-xs placeholder:text-muted focus:outline-none focus:border-accent"
+              />
+              <input
+                type="text"
+                placeholder="LINE ID（選填）"
+                value={lineUserId}
+                onChange={(e) => setLineUserId(e.target.value)}
+                className="w-full bg-panel-2 border border-line rounded-lg px-3 py-1.5 text-xs placeholder:text-muted focus:outline-none focus:border-accent"
+              />
+              <input
+                type="time"
+                value={pickupTime}
+                onChange={(e) => setPickupTime(e.target.value)}
+                className="w-full bg-panel-2 border border-line rounded-lg px-3 py-1.5 text-xs text-text-dim focus:outline-none focus:border-accent"
+              />
+              <textarea
+                placeholder="備註（選填）"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                className="w-full bg-panel-2 border border-line rounded-lg px-3 py-1.5 text-xs placeholder:text-muted resize-none focus:outline-none focus:border-accent"
+              />
+            </div>
+          )}
         </div>
 
-        <button
-          onClick={handleCheckout}
-          disabled={!canCheckout}
-          className="w-full py-3 rounded-xl bg-gradient-to-b from-accent-2 to-accent text-[#1a0d00] font-black text-base hover:brightness-105 disabled:opacity-40 active:scale-[0.98] transition-all shadow"
-        >
-          確認收款 NT${subtotal}
-        </button>
+        {/* CTA */}
+        <div className="px-3 py-3">
+          <button
+            onClick={handleCheckout}
+            disabled={!canCheckout}
+            className="w-full rounded-xl bg-gradient-to-b from-accent-2 to-accent text-[#1a0d00] font-black text-base hover:brightness-105 disabled:opacity-40 active:scale-[0.98] transition-all shadow"
+            style={{ height: 56 }}
+          >
+            確認收款 NT${subtotal}
+          </button>
+        </div>
       </div>
     </div>
   );
