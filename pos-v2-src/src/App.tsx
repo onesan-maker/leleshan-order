@@ -7,6 +7,7 @@ import { useCartStore } from "./stores/cart.store";
 import { useUIStore } from "./stores/ui.store";
 import { submitOrder } from "./services/order.service";
 import { appendToOrder } from "./services/order-append.service";
+import { publishOpsSession, clearOpsSession } from "./services/ops-session.service";
 import { TopBar } from "./components/TopBar";
 import { FlavorBar } from "./components/FlavorBar";
 import { MenuSection } from "./components/MenuSection";
@@ -45,7 +46,12 @@ export default function App() {
     const s = readSession();
     setSession(s);
     setChecked(true);
-    if (s) void ensureFirebaseAuth(s);
+    if (s) {
+      void ensureFirebaseAuth(s);
+      void publishOpsSession(s, "login").catch((e) =>
+        console.warn("[POS v2] publishOpsSession failed:", e)
+      );
+    }
   }, []);
 
   useMenuSubscription(session?.storeId);
@@ -121,7 +127,12 @@ export default function App() {
       <TopBar
         session={session}
         storeName={appConfig.store.name}
-        onLogout={() => { clearSession(); auth.signOut().catch(() => {}); redirectToLogin(); }}
+        onLogout={() => {
+          clearOpsSession(session.storeId).catch(() => {});
+          clearSession();
+          auth.signOut().catch(() => {});
+          redirectToLogin();
+        }}
         onSwitchEmployee={() => setShowShiftModal(true)}
       />
 
@@ -169,7 +180,12 @@ export default function App() {
       {showShiftModal && (
         <ShiftSwitchModal
           session={session}
-          onSwitch={(newSession) => { setSession(newSession); }}
+          onSwitch={(newSession) => {
+          setSession(newSession);
+          void publishOpsSession(newSession, "switch").catch((e) =>
+            console.warn("[POS v2] publishOpsSession switch failed:", e)
+          );
+        }}
           onClose={() => setShowShiftModal(false)}
         />
       )}
