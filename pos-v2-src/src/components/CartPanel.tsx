@@ -61,30 +61,40 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
       {/* Line items */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {lines.length === 0 ? (
-          <div className="text-center text-muted py-10 text-sm">尚未選取品項</div>
+          <div className="flex flex-col items-center justify-center h-full py-10 text-muted gap-2">
+            <span className="text-3xl opacity-30">🛍</span>
+            <span className="text-sm">尚未選取品項</span>
+            <span className="text-xs opacity-60">點左側品項加入</span>
+          </div>
         ) : (
           <div className="divide-y divide-line">
             {lines.map((l) => (
-              <div key={l.lineId} className="flex items-center gap-2 px-3 py-2">
+              <div key={l.lineId} className="flex items-center gap-2 px-3 py-2.5">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate leading-tight">{l.name}</div>
-                  <div className="text-[11px] text-muted leading-tight">
-                    <span className="bg-panel-2 border border-line rounded px-1 mr-1">{l.groupLabel}</span>
-                    {l.flavor && <span>{l.flavor}</span>}
-                    {l.staple && <span className="ml-1 text-text-dim">{l.staple}</span>}
+                  <div className="text-sm font-bold truncate leading-tight">{l.name}</div>
+                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                    <span className="rounded-full bg-accent/10 text-accent-2 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
+                      {l.groupLabel}
+                    </span>
+                    {l.flavor && (
+                      <span className="text-[11px] text-muted">{l.flavor}</span>
+                    )}
+                    {l.staple && (
+                      <span className="text-[11px] text-muted">{l.staple}</span>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-0.5 shrink-0">
+                <div className="flex items-center bg-panel-2 rounded-md px-0.5 gap-0 shrink-0">
                   <button
                     onClick={() => changeQty(l.lineId, -1)}
-                    className="w-6 h-6 rounded border border-line text-text-dim hover:bg-panel-2 text-sm leading-none shrink-0"
+                    className="w-7 h-7 flex items-center justify-center text-text-dim hover:text-text text-base leading-none transition-colors"
                   >
                     −
                   </button>
                   <span className="w-6 text-center text-sm font-mono tabular-nums">{l.qty}</span>
                   <button
                     onClick={() => changeQty(l.lineId, 1)}
-                    className="w-6 h-6 rounded border border-line text-text-dim hover:bg-panel-2 text-sm leading-none shrink-0"
+                    className="w-7 h-7 flex items-center justify-center text-text-dim hover:text-text text-base leading-none transition-colors"
                   >
                     +
                   </button>

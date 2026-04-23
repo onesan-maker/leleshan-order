@@ -1,9 +1,9 @@
 import { useUIStore } from "@/stores/ui.store";
 
-const TYPE_CLASSES = {
-  ok: "bg-ready/20 border-ready/40 text-ready",
-  err: "bg-red-500/10 border-red-500/30 text-red-400",
-  info: "bg-panel-2 border-line text-text-dim",
+const CONFIGS = {
+  ok:   { bar: "bg-ready",    icon: "✓", text: "text-ready" },
+  err:  { bar: "bg-pending",  icon: "✕", text: "text-red-400" },
+  info: { bar: "bg-preparing", icon: "ℹ", text: "text-preparing" },
 };
 
 export function Toast() {
@@ -11,20 +11,24 @@ export function Toast() {
 
   if (!toast.visible) return null;
 
+  const cfg = CONFIGS[toast.type];
+
   return (
-    <div
-      className={[
-        "fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl border shadow-xl text-sm font-semibold max-w-sm",
-        TYPE_CLASSES[toast.type],
-      ].join(" ")}
-    >
-      <span className="flex-1">{toast.message}</span>
-      <button
-        onClick={hideToast}
-        className="opacity-60 hover:opacity-100 text-xs leading-none"
-      >
-        ✕
-      </button>
+    <div className="fixed bottom-6 right-6 z-50 toast-slide-in" style={{ width: 300 }}>
+      <div className="flex items-stretch rounded-xl border border-line bg-panel shadow-2xl overflow-hidden">
+        <div className={`w-1 shrink-0 ${cfg.bar}`} />
+        <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
+          <span className={`text-base font-bold shrink-0 ${cfg.text}`}>{cfg.icon}</span>
+          <span className="text-sm font-semibold text-text flex-1 leading-snug">{toast.message}</span>
+          <button
+            onClick={hideToast}
+            className="text-muted hover:text-text text-xs shrink-0 transition-colors"
+            aria-label="關閉"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

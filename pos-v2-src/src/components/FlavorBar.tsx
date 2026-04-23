@@ -11,10 +11,10 @@ export function FlavorBar() {
         <div
           key={p.id}
           className={[
-            "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm shrink-0 transition-colors",
+            "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm shrink-0 transition-all duration-100",
             p.id === activePartId
-              ? "border-accent bg-accent/10 text-text"
-              : "border-line bg-panel text-text-dim",
+              ? "border-accent bg-accent/10 text-text ring-2 ring-accent/40"
+              : "border-line bg-panel-2 text-muted hover:text-text",
           ].join(" ")}
         >
           <button
@@ -55,7 +55,7 @@ export function FlavorBar() {
 
       <button
         onClick={addPart}
-        className="shrink-0 px-3 py-1.5 rounded-xl border border-dashed border-line text-muted hover:border-accent hover:text-accent text-sm transition-colors"
+        className="shrink-0 px-3 py-1.5 rounded-xl border border-dashed border-subtle text-muted hover:border-accent hover:text-accent text-sm transition-colors opacity-60 hover:opacity-100"
       >
         ＋新增口味組
       </button>

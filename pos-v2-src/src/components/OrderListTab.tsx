@@ -93,7 +93,17 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
           <div className="text-center text-muted py-16 text-sm">點擊「載入」查看今日訂單</div>
         )}
         {loading && (
-          <div className="text-center text-muted py-16 text-sm">載入中…</div>
+          <div className="divide-y divide-line">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-3">
+                <div className="h-4 w-10 rounded bg-panel-2 animate-pulse" />
+                <div className="h-4 w-20 rounded bg-panel-2 animate-pulse" />
+                <div className="h-4 w-12 rounded bg-panel-2 animate-pulse" />
+                <div className="h-4 w-16 rounded bg-panel-2 animate-pulse ml-auto" />
+                <div className="h-4 w-14 rounded bg-panel-2 animate-pulse" />
+              </div>
+            ))}
+          </div>
         )}
         {error && (
           <div className="text-center py-8 text-xs text-red-400 px-4">載入失敗：{error}</div>

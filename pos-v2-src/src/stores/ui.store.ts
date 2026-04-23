@@ -16,9 +16,10 @@ export const useUIStore = create<UIState>((set) => ({
   showToast: (message, type = "info") => {
     if (hideTimer) window.clearTimeout(hideTimer);
     set({ toast: { message, type, visible: true } });
+    const delay = type === "err" ? 5000 : 3000;
     hideTimer = window.setTimeout(() => {
       set((s) => ({ toast: { ...s.toast, visible: false } }));
-    }, 3000);
+    }, delay);
   },
 
   hideToast: () => {
