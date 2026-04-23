@@ -13,7 +13,7 @@ export function FlavorBar() {
           className={[
             "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm shrink-0 transition-all duration-100",
             p.id === activePartId
-              ? "border-accent bg-accent/10 text-text ring-2 ring-accent/40"
+              ? "border-2 border-accent bg-accent/15 text-accent-2 font-bold shadow-[0_0_0_3px_rgba(249,115,22,0.1)]"
               : "border-line bg-panel-2 text-muted hover:text-text",
           ].join(" ")}
         >

@@ -116,7 +116,7 @@ export function MenuSection() {
                     "text-left rounded-xl border transition-all duration-150",
                     soldOut
                       ? "opacity-50 cursor-not-allowed border-line bg-panel grayscale"
-                      : "border-line bg-panel hover:border-accent/60 hover:bg-panel-2 hover:-translate-y-0.5 hover:shadow-lg active:scale-95",
+                      : "border-line bg-panel hover:border-accent/30 hover:shadow-lg hover:shadow-accent/10 hover:-translate-y-0.5 active:translate-y-0 active:scale-95",
                   ].join(" ")}
                   style={{ padding: "8px 10px" }}
                 >

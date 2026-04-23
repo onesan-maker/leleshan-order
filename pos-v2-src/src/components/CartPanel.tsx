@@ -61,53 +61,52 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
       {/* Line items */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {lines.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full py-10 text-muted gap-2">
-            <span className="text-3xl opacity-30">🛍</span>
-            <span className="text-sm">尚未選取品項</span>
-            <span className="text-xs opacity-60">點左側品項加入</span>
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-muted py-12">
+            <div className="text-4xl opacity-40">🛒</div>
+            <div className="text-sm">尚未選取品項</div>
+            <div className="text-xs opacity-60">點左側品項加入購物車</div>
           </div>
         ) : (
-          <div className="divide-y divide-line">
+          <div>
             {lines.map((l) => (
-              <div key={l.lineId} className="flex items-center gap-2 px-3 py-2.5">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold truncate leading-tight">{l.name}</div>
-                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                    <span className="rounded-full bg-accent/10 text-accent-2 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
-                      {l.groupLabel}
-                    </span>
-                    {l.flavor && (
-                      <span className="text-[11px] text-muted">{l.flavor}</span>
-                    )}
-                    {l.staple && (
-                      <span className="text-[11px] text-muted">{l.staple}</span>
-                    )}
+              <div key={l.lineId} className="px-3 py-2.5 border-b border-line last:border-b-0">
+                {/* Row 1: name + group pill + price */}
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 min-w-0 text-sm font-semibold leading-tight truncate">{l.name}</div>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-accent/10 text-accent-2 text-[10px] font-mono font-bold border border-accent/20 shrink-0">
+                    {l.groupLabel}
+                  </span>
+                  <div className="font-mono text-sm font-black text-accent-2 shrink-0 w-12 text-right">
+                    ${l.unitPrice * l.qty}
                   </div>
                 </div>
-                <div className="flex items-center bg-panel-2 rounded-md px-0.5 gap-0 shrink-0">
+                {/* Row 2: flavor/staple + qty controls + delete */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 text-[11px] text-muted leading-tight">
+                    {[l.flavor, l.staple].filter(Boolean).join(" / ") || <span className="opacity-30">—</span>}
+                  </div>
+                  <div className="inline-flex items-center gap-0.5 bg-panel-2 rounded-lg p-0.5 border border-line shrink-0">
+                    <button
+                      onClick={() => changeQty(l.lineId, -1)}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-text-dim hover:bg-panel-3 hover:text-text text-sm leading-none transition-colors"
+                    >
+                      −
+                    </button>
+                    <span className="w-5 text-center text-xs font-mono tabular-nums">{l.qty}</span>
+                    <button
+                      onClick={() => changeQty(l.lineId, 1)}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-text-dim hover:bg-panel-3 hover:text-text text-sm leading-none transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
                   <button
-                    onClick={() => changeQty(l.lineId, -1)}
-                    className="w-7 h-7 flex items-center justify-center text-text-dim hover:text-text text-base leading-none transition-colors"
+                    onClick={() => removeLine(l.lineId)}
+                    className="text-muted hover:text-red-400 text-xs w-5 text-center shrink-0 transition-colors"
                   >
-                    −
-                  </button>
-                  <span className="w-6 text-center text-sm font-mono tabular-nums">{l.qty}</span>
-                  <button
-                    onClick={() => changeQty(l.lineId, 1)}
-                    className="w-7 h-7 flex items-center justify-center text-text-dim hover:text-text text-base leading-none transition-colors"
-                  >
-                    +
+                    ✕
                   </button>
                 </div>
-                <div className="w-12 text-right font-mono text-sm font-black text-accent-2 shrink-0">
-                  ${l.unitPrice * l.qty}
-                </div>
-                <button
-                  onClick={() => removeLine(l.lineId)}
-                  className="text-muted hover:text-red-400 text-xs w-5 text-center shrink-0 transition-colors"
-                >
-                  ✕
-                </button>
               </div>
             ))}
           </div>
