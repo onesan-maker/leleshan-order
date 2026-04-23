@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { MenuItem } from "@/services/menu.service";
-import { needsSpecModal } from "@/lib/posRules";
+import { needsSpecModal, needsFlavorAssist } from "@/lib/posRules";
 
 export interface CartLine {
   lineId: string;
@@ -44,6 +44,7 @@ interface CartState {
   lineUserId: string;
 
   pendingSpec: MenuItem | null;
+  pendingSpecMode: "full" | "flavorOnly";
   appendTarget: AppendTarget | null;
 
   addPart(): string;
@@ -137,6 +138,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   pickupTime: "",
   lineUserId: "",
   pendingSpec: null,
+  pendingSpecMode: "full",
   appendTarget: null,
 
   addPart: () => {
@@ -168,12 +170,17 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   addItem: (item) => {
     if (needsSpecModal(item.posType as string)) {
-      set({ pendingSpec: item });
+      set({ pendingSpec: item, pendingSpecMode: "full" });
       return;
     }
     const { activePartId, parts, lines } = get();
     const part = parts.find((p) => p.id === activePartId);
     if (!part) return;
+    // Align with vanilla: inherit mode + part has no flavor → flavor-only assist modal
+    if (needsFlavorAssist(item.posType as string, part.flavorName)) {
+      set({ pendingSpec: item, pendingSpecMode: "flavorOnly" });
+      return;
+    }
     set({ lines: addLineToState(lines, item, activePartId, part.label, part.flavorName, "") });
   },
 
@@ -196,7 +203,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     });
   },
 
-  cancelSpec: () => set({ pendingSpec: null }),
+  cancelSpec: () => set({ pendingSpec: null, pendingSpecMode: "full" }),
 
   changeQty: (lineId, delta) =>
     set((s) => ({
@@ -220,6 +227,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       pickupTime: "",
       lineUserId: "",
       pendingSpec: null,
+      pendingSpecMode: "full",
       appendTarget: null,
     }),
 

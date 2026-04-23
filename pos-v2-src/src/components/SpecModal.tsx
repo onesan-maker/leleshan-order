@@ -4,8 +4,11 @@ import { useMenuStore } from "@/stores/menu.store";
 
 export function SpecModal() {
   const pendingSpec = useCartStore((s) => s.pendingSpec);
+  const pendingSpecMode = useCartStore((s) => s.pendingSpecMode);
   const confirmSpec = useCartStore((s) => s.confirmSpec);
   const cancelSpec = useCartStore((s) => s.cancelSpec);
+  const activePartId = useCartStore((s) => s.activePartId);
+  const setPartFlavor = useCartStore((s) => s.setPartFlavor);
   const flavors = useMenuStore((s) => s.flavors);
   const staples = useMenuStore((s) => s.staples);
 
@@ -15,6 +18,8 @@ export function SpecModal() {
 
   if (!pendingSpec) return null;
 
+  const isFlavorOnly = pendingSpecMode === "flavorOnly";
+
   const itemFlavors: string[] = Array.isArray((pendingSpec as Record<string, unknown>).flavorOptions)
     ? (pendingSpec as Record<string, unknown>).flavorOptions as string[]
     : [];
@@ -23,11 +28,18 @@ export function SpecModal() {
   const itemStaples: string[] = Array.isArray((pendingSpec as Record<string, unknown>).stapleOptions)
     ? (pendingSpec as Record<string, unknown>).stapleOptions as string[]
     : [];
-  const stapleList = itemStaples.length ? itemStaples : staples;
+  const stapleList = isFlavorOnly ? [] : (itemStaples.length ? itemStaples : staples);
 
   const handleConfirm = () => {
     if (!flavor && flavorList.length > 0) { setError("請選擇口味"); return; }
     if (!staple && stapleList.length > 0) { setError("請選擇主食"); return; }
+
+    if (isFlavorOnly) {
+      // Write chosen flavor back to the active part so subsequent inherit items share it
+      const matchedFlavor = flavors.find((f) => f.name === flavor);
+      setPartFlavor(activePartId, matchedFlavor?.id ?? null, flavor);
+    }
+
     confirmSpec(flavor, staple);
     setFlavor("");
     setStaple("");
@@ -46,7 +58,7 @@ export function SpecModal() {
       <div className="bg-panel border border-line rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
         {/* Header */}
         <div className="px-5 py-4 border-b border-line">
-          <div className="text-xs text-muted mb-0.5">選擇規格</div>
+          <div className="text-xs text-muted mb-0.5">{isFlavorOnly ? "選擇口味" : "選擇規格"}</div>
           <div className="font-serif font-black text-base">{pendingSpec.name}</div>
           <div className="font-mono text-accent-2 text-sm font-bold">${pendingSpec.price}</div>
         </div>
@@ -75,8 +87,8 @@ export function SpecModal() {
             </div>
           )}
 
-          {/* Staple */}
-          {stapleList.length > 0 && (
+          {/* Staple — hidden in flavorOnly mode */}
+          {!isFlavorOnly && stapleList.length > 0 && (
             <div>
               <div className="text-xs font-semibold text-text-dim mb-2">主食 <span className="text-red-400">*</span></div>
               <div className="grid grid-cols-3 gap-1.5">

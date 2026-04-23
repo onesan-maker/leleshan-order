@@ -21,7 +21,17 @@ export function getTypeRule(posType: string | undefined): TypeRule {
   return TYPE_RULES[posType ?? ""] ?? DEFAULT_RULE;
 }
 
+// "full" spec modal: posType=set (flavor required + staple required)
 export function needsSpecModal(posType: string | undefined): boolean {
   const rule = getTypeRule(posType);
   return rule.flavorMode === "required" || rule.stapleMode === "required";
+}
+
+// Align with vanilla buildProductOptionPayload:
+// inherit mode + part has no flavor selected → open flavor-only assist modal
+// (same trigger as vanilla's requireFlavor=true path for inherit)
+export function needsFlavorAssist(posType: string | undefined, partFlavor: string): boolean {
+  if (partFlavor) return false;
+  const rule = getTypeRule(posType);
+  return rule.flavorMode === "inherit";
 }
