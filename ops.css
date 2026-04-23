@@ -846,20 +846,20 @@ button {
    全部以 .kds- 前綴，不影響既有 .ops- 樣式
    ═════════════════════════════════════════════ */
 :root {
-  --kds-bg: #0a0d14;
-  --kds-panel: #121620;
-  --kds-panel-2: #1a2030;
-  --kds-line: #242c40;
-  --kds-text: #ffffff;
-  --kds-text-dim: #c8cedc;
-  --kds-muted: #6b7489;
-  --kds-pending: #ef4444;
-  --kds-pending-2: #dc2626;
-  --kds-accepted: #f97316;
-  --kds-preparing: #3b82f6;
-  --kds-ready: #10b981;
-  --kds-ready-2: #059669;
-  --kds-line-brand: #06c755;
+  --kds-bg:        var(--bg);
+  --kds-panel:     var(--panel);
+  --kds-panel-2:   var(--panel-2);
+  --kds-line:      var(--line);
+  --kds-text:      var(--text);
+  --kds-text-dim:  var(--text-dim);
+  --kds-muted:     var(--muted);
+  --kds-pending:   var(--pending);
+  --kds-pending-2: var(--pending-2);
+  --kds-accepted:  var(--accepted);
+  --kds-preparing: var(--preparing);
+  --kds-ready:     var(--ready);
+  --kds-ready-2:   var(--ready-2);
+  --kds-line-brand: var(--line-brand);
 }
 
 /* ─── KDS 全螢幕覆蓋（v3 原型）─── */
