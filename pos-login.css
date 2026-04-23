@@ -1,0 +1,288 @@
+/* pos-login.css — POS v2 color scheme, numpad layout */
+:root {
+  --pl-bg:       #0a0d14;
+  --pl-panel:    rgba(18, 22, 32, 0.92);
+  --pl-panel-2:  #1a2030;
+  --pl-border:   rgba(255, 255, 255, 0.08);
+  --pl-line:     #242c40;
+  --pl-accent:   #f97316;
+  --pl-accent-2: #fb923c;
+  --pl-text:     #ffffff;
+  --pl-text-dim: #c8cedc;
+  --pl-muted:    #6b7489;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+
+body {
+  background: var(--pl-bg);
+  color: var(--pl-text);
+  font-family: "Noto Sans TC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% -10%, rgba(249, 115, 22, .12), transparent 65%),
+    radial-gradient(ellipse 50% 40% at 50% 110%, rgba(234, 88, 12, .08), transparent 60%);
+}
+
+.pl-bg-grid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.055;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, #000 40%, transparent 85%);
+}
+
+/* Shell */
+.pl-shell {
+  position: relative;
+  z-index: 1;
+  width: min(440px, 100vw - 24px);
+  padding: 16px 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Panel */
+.pl-panel {
+  width: 100%;
+  background: var(--pl-panel);
+  border: 1px solid var(--pl-border);
+  border-radius: 24px;
+  padding: 28px 24px 24px;
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 32px rgba(249, 115, 22, 0.06);
+}
+
+/* Brand */
+.pl-brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.pl-brand-mark {
+  display: inline-block;
+  width: 4px;
+  height: 24px;
+  background: var(--pl-accent);
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 10px;
+  margin-bottom: 2px;
+}
+.pl-brand-name {
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  background: linear-gradient(135deg, var(--pl-accent-2), var(--pl-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.pl-brand-sub {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--pl-text-dim);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+/* Fields */
+.pl-fields {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.pl-field {
+  flex: 1;
+}
+.pl-field-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--pl-muted);
+  margin-bottom: 5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Real inputs (kept for JS compatibility, styled visibly) */
+.pl-input {
+  width: 100%;
+  height: 52px;
+  border-radius: 12px;
+  border: 1.5px solid var(--pl-line);
+  background: var(--pl-panel-2);
+  color: var(--pl-text);
+  padding: 0 14px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: 0.15em;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  text-align: center;
+}
+.pl-input::placeholder {
+  color: var(--pl-muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  font-family: "Noto Sans TC", sans-serif;
+}
+.pl-input:focus {
+  border-color: var(--pl-accent);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
+}
+
+/* Numpad */
+.pl-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.pl-key {
+  height: 66px;
+  border-radius: 12px;
+  border: 1px solid var(--pl-line);
+  background: var(--pl-panel-2);
+  color: var(--pl-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.pl-key:hover {
+  background: #242c40;
+  border-color: rgba(249, 115, 22, 0.4);
+}
+.pl-key:active {
+  transform: scale(0.93);
+  background: rgba(249, 115, 22, 0.12);
+}
+.pl-key--del {
+  color: var(--pl-muted);
+  font-size: 1.1rem;
+}
+.pl-key--confirm {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.45);
+  color: var(--pl-accent);
+  font-size: 1.1rem;
+}
+.pl-key--confirm:hover {
+  background: rgba(249, 115, 22, 0.22);
+  border-color: var(--pl-accent);
+}
+
+/* Submit */
+.pl-submit {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 52px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(180deg, var(--pl-accent-2) 0%, var(--pl-accent) 100%);
+  color: #1a0d00;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.3);
+}
+.pl-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(249, 115, 22, 0.4);
+  filter: brightness(1.05);
+}
+.pl-submit:active {
+  transform: scale(0.98);
+}
+.pl-submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none;
+}
+.pl-submit.is-loading::after {
+  content: "";
+  position: absolute;
+  right: 16px;
+  top: calc(50% - 9px);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(26, 13, 0, 0.25);
+  border-top-color: #1a0d00;
+  animation: pl-spin 0.8s linear infinite;
+}
+
+/* Error */
+.pl-error {
+  margin-top: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.pl-error.hidden { display: none; }
+
+/* Shake — applied to .pl-fields on error */
+.pl-fields.pl-shake {
+  animation: pl-shake 0.32s ease-out;
+}
+
+/* Footer */
+.pl-footer {
+  font-size: 0.75rem;
+  color: var(--pl-muted);
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* Animations */
+@keyframes pl-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pl-shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-7px); }
+  40%       { transform: translateX(7px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+/* Mobile adjustments */
+@media (max-height: 700px) {
+  .pl-panel { padding: 20px 20px 18px; }
+  .pl-brand { margin-bottom: 16px; }
+  .pl-key { height: 58px; }
+}

@@ -4,13 +4,16 @@
   var pinInput;
   var submitBtn;
   var errorEl;
+  var plFields;
+  var plActiveField = "id"; // "id" or "pin"
 
   document.addEventListener("DOMContentLoaded", function () {
-    form = document.getElementById("pos-login-form");
-    idInput = document.getElementById("employee-id");
-    pinInput = document.getElementById("employee-pin");
+    form      = document.getElementById("pos-login-form");
+    idInput   = document.getElementById("employee-id");
+    pinInput  = document.getElementById("employee-pin");
     submitBtn = document.getElementById("pos-login-submit");
-    errorEl = document.getElementById("pos-login-error");
+    errorEl   = document.getElementById("pos-login-error");
+    plFields  = document.getElementById("pl-fields");
     if (!form || !idInput || !pinInput || !submitBtn || !errorEl) return;
 
     if (!firebase.apps.length) {
@@ -24,7 +27,56 @@
     }
 
     form.addEventListener("submit", onSubmit);
+
+    // --- Numpad ---
+    pl_setActiveField("id"); // highlight employee-id on load
+
+    document.querySelectorAll(".pl-key[data-digit]").forEach(function (key) {
+      key.addEventListener("click", function () {
+        var digit = key.getAttribute("data-digit");
+        if (plActiveField === "id") {
+          if (idInput.value.length < 3) {
+            idInput.value += digit;
+            if (idInput.value.length === 3) pl_setActiveField("pin");
+          }
+        } else {
+          if (pinInput.value.length < 4) {
+            pinInput.value += digit;
+          }
+        }
+      });
+    });
+
+    var keyDel = document.getElementById("pl-key-del");
+    keyDel && keyDel.addEventListener("click", function () {
+      if (plActiveField === "pin") {
+        if (pinInput.value.length > 0) {
+          pinInput.value = pinInput.value.slice(0, -1);
+        } else {
+          pl_setActiveField("id");
+        }
+      } else {
+        idInput.value = idInput.value.slice(0, -1);
+      }
+    });
+
+    var keyConfirm = document.getElementById("pl-key-confirm");
+    keyConfirm && keyConfirm.addEventListener("click", function () {
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    });
+
+    // Tap field to switch focus
+    idInput  && idInput.addEventListener("click", function () { pl_setActiveField("id"); });
+    pinInput && pinInput.addEventListener("click", function () { pl_setActiveField("pin"); });
   });
+
+  function pl_setActiveField(field) {
+    plActiveField = field;
+    if (idInput)  idInput.style.borderColor  = field === "id"  ? "var(--pl-accent)" : "";
+    if (pinInput) pinInput.style.borderColor = field === "pin" ? "var(--pl-accent)" : "";
+    if (idInput)  idInput.style.boxShadow    = field === "id"  ? "0 0 0 3px rgba(249,115,22,.18)" : "";
+    if (pinInput) pinInput.style.boxShadow   = field === "pin" ? "0 0 0 3px rgba(249,115,22,.18)" : "";
+  }
 
   function setError(message) {
     if (!errorEl) return;
@@ -35,6 +87,12 @@
     }
     errorEl.textContent = message;
     errorEl.classList.remove("hidden");
+    // Shake the input fields
+    if (plFields) {
+      plFields.classList.remove("pl-shake");
+      void plFields.offsetWidth; // force reflow to restart animation
+      plFields.classList.add("pl-shake");
+    }
   }
 
   function setSubmitting(isSubmitting) {
