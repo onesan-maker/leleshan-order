@@ -3,13 +3,13 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 
 export default defineConfig({
-  base: "/pos-v2/",
+  base: "/pos/",
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
   build: {
-    outDir: "../pos-v2",
+    outDir: "../pos",
     emptyOutDir: true,
     target: "es2020",
     sourcemap: false,

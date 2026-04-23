@@ -13,11 +13,11 @@
 ## Git 操作規範
 - 新頁面或新檔案不得長期保持 untracked，建立後應立即納入 Git 追蹤。
 
-## POS v2（`/pos-v2`）開發規範
+## POS 開發規範
 
-- 原始碼位於 `pos-v2-src/`，build 產出在 `pos-v2/`（**已進 git**）
-- 任何 `pos-v2-src/` 的修改後，必須執行 `npm --prefix pos-v2-src run build` 並把 `pos-v2/` 的變更一起 commit
+- 原始碼位於 `pos-src/`，build 產出在 `pos/`（**已進 git**）
+- 任何 `pos-src/` 的修改後，必須執行 `npm --prefix pos-src run build` 並把 `pos/` 的變更一起 commit
 - 本專案唯一部署目標為 `leleshan-system`
-- 禁止修改 vanilla POS（`pos.html`、`pos.js`、`pos-admin.*`、`pos-login.*`、`pos-session.js`）
+- 禁止修改 `pos-session.js`、`order-helpers.js`、`order-status-labels.js`、`ops-session-sync.js`
+- `pos-admin.*` 暫保留（Week 3+ 後規劃重寫）
 - 禁止修改 `kds.*`、`ops.css`、`shared/*.css`
-- W2 只做骨架與 auth bridge，菜單／購物車／結帳留待 W3

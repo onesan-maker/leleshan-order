@@ -35,11 +35,11 @@
       },
       {
         "source": "pos",
-        "destination": "/pos-v2/index.html"
+        "destination": "/pos/index.html"
       },
       {
         "source": "pos/**",
-        "destination": "/pos-v2/index.html"
+        "destination": "/pos/index.html"
       },
       {
         "source": "kds",
@@ -96,14 +96,6 @@
       {
         "source": "admin/**",
         "destination": "/admin.html"
-      },
-      {
-        "source": "pos-v2",
-        "destination": "/pos-v2/index.html"
-      },
-      {
-        "source": "pos-v2/**",
-        "destination": "/pos-v2/index.html"
       },
       {
         "source": "**",

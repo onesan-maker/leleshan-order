@@ -78,9 +78,9 @@ functions/.env
 functions/.env.local
 functions/.runtimeconfig.json
 
-# POS v2: source deps only; build output (pos-v2/) is committed
-pos-v2-src/node_modules/
-pos-v2-src/dist/
+# POS: source deps only; build output (pos/) is committed
+pos-src/node_modules/
+pos-src/dist/
 
 # Local assistant / machine settings
 .claude/settings.local.json
@@ -91,5 +91,5 @@ Lib/
 Scripts/
 !scripts/
 !scripts/check-encoding.js
-!pos-v2-src/src/lib/
+!pos-src/src/lib/
 pyvenv.cfg
