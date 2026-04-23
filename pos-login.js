@@ -145,7 +145,8 @@
         storeId: payload.storeId,
         sessionToken: payload.sessionToken,
         loginAt: payload.loginAt || new Date().toISOString(),
-        expiresAt: payload.expiresAt || null
+        expiresAt: payload.expiresAt || null,
+        customToken: payload.customToken || null,
       });
       console.log("[POS_DIAG] login.total (submit→redirect)", (performance.now() - tStart).toFixed(2) + "ms");
       window.location.replace("/pos-v2/");

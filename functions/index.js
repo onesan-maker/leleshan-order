@@ -1468,13 +1468,36 @@ exports.verifyPosSession = functions
       throw new functions.https.HttpsError("unauthenticated", "session 已過期");
     }
 
+    // Re-issue a fresh custom token so the client can maintain Firebase Auth context.
+    const storeId = session.storeId || "";
+    const customUid = `pos-emp-${storeId}-${session.employeeId}`;
+    let customToken = null;
+    try {
+      customToken = await admin.auth().createCustomToken(customUid, {
+        storeId,
+        employeeId: session.employeeId,
+        employeeName: session.employeeName || "",
+        role: "pos_staff",
+      });
+      await db.collection("admins").doc(customUid).set({
+        role: "admin",
+        storeId,
+        name: session.employeeName || "",
+        source: "pos_auth",
+        updatedAt: nowTs(),
+      }, { merge: true });
+    } catch (authErr) {
+      console.error("[verifyPosSession] customToken issue failed (non-fatal):", authErr);
+    }
+
     return {
       ok: true,
       employeeId: session.employeeId,
       employeeName: session.employeeName || "",
-      storeId: session.storeId || "",
+      storeId,
       loginAt: session.loginAt && session.loginAt.toDate ? session.loginAt.toDate().toISOString() : null,
-      expiresAt: expiresAt.toISOString()
+      expiresAt: expiresAt.toISOString(),
+      customToken,
     };
   });
 
@@ -1750,14 +1773,41 @@ exports.posEmployeeLogin = functions
       revokedAt: null
     }, { merge: true });
 
+    // Issue a Firebase custom token so the employee can use Firebase Auth
+    // in pages that require it (KDS, packing, pickup-board).
+    // UID is stable across re-logins for the same employee.
+    const storeId = employee.storeId || "";
+    const customUid = `pos-emp-${storeId}-${employee.employeeId}`;
+    let customToken = null;
+    try {
+      customToken = await admin.auth().createCustomToken(customUid, {
+        storeId,
+        employeeId: employee.employeeId,
+        employeeName: employee.name || "",
+        role: "pos_staff",
+      });
+      // Upsert an admins doc so staff-auth.js + Firestore rules (canReadOrders) work.
+      // role "admin" scoped to storeId lets the employee read/update their store's orders.
+      await db.collection("admins").doc(customUid).set({
+        role: "admin",
+        storeId,
+        name: employee.name || "",
+        source: "pos_auth",
+        updatedAt: nowTs(),
+      }, { merge: true });
+    } catch (authErr) {
+      console.error("[POS Login] customToken issue failed (non-fatal):", authErr);
+    }
+
     return {
       ok: true,
       employeeId: employee.employeeId,
       employeeName: employee.name || "",
-      storeId: employee.storeId || "",
+      storeId,
       sessionToken,
       loginAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString()
+      expiresAt: expiresAt.toISOString(),
+      customToken,
     };
   });
 

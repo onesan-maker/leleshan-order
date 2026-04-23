@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { signInWithCustomToken } from "firebase/auth";
 import { readSession, clearSession, redirectToLogin, type PosSession } from "./lib/session";
-import { appConfig } from "./lib/firebase";
+import { appConfig, auth } from "./lib/firebase";
 import { useMenuSubscription } from "./hooks/useMenuSubscription";
 import { useCartStore } from "./stores/cart.store";
 import { useUIStore } from "./stores/ui.store";
@@ -19,6 +20,21 @@ import type { TodayOrder } from "./services/order-list.service";
 
 type MainTab = "order" | "orders";
 
+async function ensureFirebaseAuth(session: PosSession) {
+  if (auth.currentUser) return; // already signed in (Firebase Auth persisted)
+  if (!session.customToken) {
+    console.warn("[POS v2] no customToken in session — KDS auth unavailable until next login");
+    return;
+  }
+  try {
+    await signInWithCustomToken(auth, session.customToken);
+    console.log("[POS v2] Firebase Auth signed in as pos staff");
+  } catch (err) {
+    // Soft failure: POS operations still work via session token
+    console.warn("[POS v2] signInWithCustomToken failed (token may be expired):", err);
+  }
+}
+
 export default function App() {
   const [session, setSession] = useState<PosSession | null>(null);
   const [checked, setChecked] = useState(false);
@@ -26,8 +42,10 @@ export default function App() {
   const [showShiftModal, setShowShiftModal] = useState(false);
 
   useEffect(() => {
-    setSession(readSession());
+    const s = readSession();
+    setSession(s);
     setChecked(true);
+    if (s) void ensureFirebaseAuth(s);
   }, []);
 
   useMenuSubscription(session?.storeId);
@@ -103,7 +121,7 @@ export default function App() {
       <TopBar
         session={session}
         storeName={appConfig.store.name}
-        onLogout={() => { clearSession(); redirectToLogin(); }}
+        onLogout={() => { clearSession(); auth.signOut().catch(() => {}); redirectToLogin(); }}
         onSwitchEmployee={() => setShowShiftModal(true)}
       />
 

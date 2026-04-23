@@ -19,6 +19,7 @@ export interface PosSession {
   sessionToken: string;
   loginAt: string | number;        // ISO string 或 timestamp，vanilla 用 new Date() 解析兩者皆可
   expiresAt?: string | number;     // optional；未提供時走 16h fallback
+  customToken?: string | null;     // Firebase custom token for Auth (issued on login)
 }
 
 const SESSION_KEY = "leleshan_pos_employee_session_v1";

@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
+import { getAuth } from "firebase/auth";
 
 function getConfig() {
   if (!window.APP_CONFIG) {
@@ -14,6 +15,7 @@ const app = getApps().length ? getApps()[0] : initializeApp(config.firebaseConfi
 
 export const db = getFirestore(app);
 export const functions = getFunctions(app, config.functionsRegion);
+export const auth = getAuth(app);
 export const appConfig = config;
 
 // Fix-2: patch the compat shim so vanilla order-helpers.js can call
