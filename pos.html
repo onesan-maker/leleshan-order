@@ -856,6 +856,26 @@
   </style>
 </head>
 <body class="ops-page">
+  <!-- POS v2 upgrade banner — dismiss stored in sessionStorage -->
+  <div id="pos-v2-banner" style="display:none;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;background:linear-gradient(90deg,#ea580c,#f97316);color:#1a0d00;font-size:.85rem;font-weight:700;font-family:'Noto Sans TC',sans-serif;line-height:1.4;">
+    <span>🚀 新版 POS 已上線！體驗更快更順暢的介面。</span>
+    <span style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+      <a href="/pos-v2/" style="padding:5px 14px;border-radius:8px;background:#1a0d00;color:#fb923c;text-decoration:none;font-weight:900;white-space:nowrap;">前往新版</a>
+      <button id="pos-v2-banner-close" type="button" style="background:none;border:none;cursor:pointer;color:#1a0d00;font-size:1.1rem;line-height:1;padding:2px 4px;opacity:.7;" title="關閉">✕</button>
+    </span>
+  </div>
+  <script>
+    (function(){
+      var b=document.getElementById('pos-v2-banner');
+      if(b&&!sessionStorage.getItem('pos-v2-banner-dismissed')){
+        b.style.display='flex';
+        document.getElementById('pos-v2-banner-close').addEventListener('click',function(){
+          b.style.display='none';
+          sessionStorage.setItem('pos-v2-banner-dismissed','1');
+        });
+      }
+    })();
+  </script>
   <div id="auth-loading" class="ops-login-guard">正在驗證 POS 員工登入...</div>
   <div class="ops-shell">
     <header class="ops-topbar">
