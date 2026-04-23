@@ -18,6 +18,14 @@
     ],
     "rewrites": [
       {
+        "source": "pos-v2",
+        "destination": "/404.html"
+      },
+      {
+        "source": "pos-v2/**",
+        "destination": "/404.html"
+      },
+      {
         "source": "pos-login",
         "destination": "/pos-login.html"
       },
