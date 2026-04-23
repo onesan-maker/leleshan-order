@@ -34,8 +34,9 @@ export function SpecModal() {
     if (!flavor && flavorList.length > 0) { setError("請選擇口味"); return; }
     if (!staple && stapleList.length > 0) { setError("請選擇主食"); return; }
 
-    if (isFlavorOnly) {
-      // Write chosen flavor back to the active part so subsequent inherit items share it
+    // Align with vanilla setUpdatesPartFlavor=true: any flavor selection (full or flavorOnly mode)
+    // writes back to the active part so subsequent inherit-mode items auto-inherit it.
+    if (flavor) {
       const matchedFlavor = flavors.find((f) => f.name === flavor);
       setPartFlavor(activePartId, matchedFlavor?.id ?? null, flavor);
     }
