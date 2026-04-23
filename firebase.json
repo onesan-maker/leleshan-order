@@ -35,11 +35,11 @@
       },
       {
         "source": "pos",
-        "destination": "/pos.html"
+        "destination": "/pos-v2/index.html"
       },
       {
         "source": "pos/**",
-        "destination": "/pos.html"
+        "destination": "/pos-v2/index.html"
       },
       {
         "source": "kds",

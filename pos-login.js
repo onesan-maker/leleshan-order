@@ -22,7 +22,7 @@
 
     var current = window.LeLeShanPosSession && window.LeLeShanPosSession.get();
     if (window.LeLeShanPosSession && window.LeLeShanPosSession.isValid(current)) {
-      window.location.replace("/pos-v2/");
+      window.location.replace("/pos");
       return;
     }
 
@@ -149,7 +149,7 @@
         customToken: payload.customToken || null,
       });
       console.log("[POS_DIAG] login.total (submit→redirect)", (performance.now() - tStart).toFixed(2) + "ms");
-      window.location.replace("/pos-v2/");
+      window.location.replace("/pos");
     } catch (error) {
       var code = (error && error.code) || "";
       if (code === "failed-precondition" || code === "functions/failed-precondition") {
