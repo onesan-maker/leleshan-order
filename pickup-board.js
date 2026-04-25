@@ -172,8 +172,17 @@
     tick();
     pollTimer = setInterval(tick, POLL_INTERVAL);
 
-    // 顯示看板時隱藏游標
-    document.body.style.cursor = 'none';
+    // 滑鼠靜止 3 秒後自動隱藏游標（移動時恢復）
+    var cursorTimeout = null;
+    function showCursor() {
+      document.body.style.cursor = 'default';
+      if (cursorTimeout) clearTimeout(cursorTimeout);
+      cursorTimeout = setTimeout(function () {
+        document.body.style.cursor = 'none';
+      }, 3000);
+    }
+    document.addEventListener('mousemove', showCursor);
+    showCursor();
 
     // 首次點擊解鎖 AudioContext（瀏覽器自動播放策略）
     document.addEventListener('click', function () {
