@@ -1,64 +1,70 @@
 <!DOCTYPE html>
+<!-- UTF-8 required: 禁止使用未指定編碼工具覆蓋本檔 -->
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
+  <script>window.LELESHAN_HUB_URL = 'http://100.72.80.2:8080';</script>
+  <script>
+    window.playNotifyDing = function () {
+      try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.0);
+        osc.start();
+        osc.stop(ctx.currentTime + 1.0);
+      } catch (e) { console.warn('[notify] sound failed:', e); }
+    };
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>樂樂山 取餐看板</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/shared/tokens.css?v=20260422-w1">
-  <link rel="stylesheet" href="/shared/components.css?v=20260422-w1">
-  <link rel="stylesheet" href="/ops.css?v=20260420-2">
-  <link rel="stylesheet" href="/pickup-board-refresh.css?v=20260422-w1">
-</head>
-<body class="board-page">
-  <div class="ops-page">
-    <div class="board-shell">
-
-      <header class="ops-topbar board-topbar">
-        <div class="board-brand">
-          <div class="board-brand__store">樂樂山</div>
-          <h1 class="board-brand__title">取餐看板</h1>
-          <div class="board-brand__sub">請留意您的取餐號碼</div>
-        </div>
-        <div class="board-header-right">
-          <div id="board-clock" class="board-clock"></div>
-          <div class="board-header-hint">餐點完成後請至櫃台取餐</div>
-        </div>
-      </header>
-
-      <div id="board-error" class="ops-error hidden"></div>
-
-      <main class="board-grid">
-        <section class="board-column board-column--processing">
-          <div class="board-col-head">
-            <div class="board-col-head__dot"></div>
-            <h2>製作中</h2>
-          </div>
-          <div id="board-processing" class="board-column__list"></div>
-        </section>
-        <section class="board-column board-column--ready">
-          <div class="board-col-head">
-            <div class="board-col-head__dot"></div>
-            <h2>可取餐</h2>
-          </div>
-          <div id="board-ready" class="board-column__list"></div>
-        </section>
-      </main>
-
-      <div id="board-recent-wrap" class="board-recent-wrap hidden">
-        <div class="board-recent-label">最近完成</div>
-        <div id="board-recent" class="board-recent"></div>
-      </div>
-
-    </div>
-  </div>
-
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pickup-board-refresh.css?v=20260425-w8-5">
   <script src="/config.public.js?v=20260413-1"></script>
-  <script src="/order-helpers.js?v=20260421-parallel-cap-v27"></script>
-  <script src="/pickup-board.js?v=20260421-sync-kds-v1"></script>
+</head>
+<body class="pb-page">
+  <header class="pb-header">
+    <div class="pb-brand">&#x1F372; 樂樂山 湯滷川味</div>
+    <div class="pb-meta">
+      <span class="pb-live">&#x25CF; LIVE</span>
+      <span class="pb-clock" id="pb-clock">00:00:00</span>
+    </div>
+  </header>
+
+  <main class="pb-main">
+    <section class="pb-section pb-section-ready">
+      <h2 class="pb-section-title">
+        <span class="pb-section-bar"></span>可取餐
+      </h2>
+      <div class="pb-numbers" id="pb-ready">
+        <div class="pb-empty">目前無可取餐訂單</div>
+      </div>
+    </section>
+
+    <section class="pb-section pb-section-preparing">
+      <h2 class="pb-section-title">
+        <span class="pb-section-bar"></span>製作中
+      </h2>
+      <div class="pb-numbers" id="pb-preparing">
+        <div class="pb-empty">目前無製作中訂單</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pb-footer">
+    <span id="pb-queue-info">目前等候 0 單</span>
+    <span class="pb-spacer"></span>
+    <span id="pb-status-indicator" class="pb-status pb-status-online">&#x25CF; 連線中</span>
+  </footer>
+
+  <script src="/pickup-board.js?v=20260425-w8-5"></script>
 </body>
 </html>

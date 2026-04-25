@@ -1,170 +1,231 @@
-/* ──────────────────────────────────────────────────────────────
-   pickup-board.html 視覺升級覆蓋層
-   目標：10 公尺外可讀、可取餐時段能抓住目光
-   ────────────────────────────────────────────────────────────── */
+/* pickup-board-refresh.css — W8-5 顧客取餐看板 暗色主題
+   黑底 + 暖琥珀橘 + 大字。距離 1.5-3 公尺可讀。 */
 
-body.board-page {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  min-height: 100vh;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-.board-shell {
-  max-width: 1920px; margin: 0 auto;
-  padding: 20px 28px 40px;
-  min-height: 100vh;
-  display: flex; flex-direction: column;
+.pb-page {
+  background: #0a0d14;
+  color: #f5f7fa;
+  font-family: "Noto Sans TC", system-ui, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.board-topbar {
-  background: linear-gradient(180deg, var(--panel), var(--panel-2));
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  padding: 22px 32px;
-  margin-bottom: 22px;
-  display: flex; align-items: center; justify-content: space-between;
-  box-shadow: var(--shadow-md);
+/* ── Header ─────────────────────────────────────────────────── */
+.pb-header {
+  flex-shrink: 0;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid rgba(249, 115, 22, .3);
+  background: linear-gradient(180deg, rgba(249, 115, 22, .08), transparent);
 }
-.board-brand__store {
-  font-family: var(--font-serif);
-  font-size: 1rem; font-weight: 700;
-  color: var(--accent-2);
-  letter-spacing: .08em;
+
+.pb-brand {
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: .05em;
 }
-.board-brand__title {
-  font-family: var(--font-serif);
-  font-size: 2.4rem; font-weight: 900;
-  color: var(--text);
-  letter-spacing: -.5px;
-  margin: 4px 0;
+
+.pb-meta {
+  display: flex;
+  gap: 24px;
+  align-items: center;
 }
-.board-brand__sub {
-  color: var(--muted);
-  font-size: .92rem;
+
+.pb-live {
+  color: #ef4444;
+  font-size: .95rem;
+  font-weight: 700;
+  animation: pb-pulse 2s infinite;
 }
-.board-header-right { text-align: right; }
-.board-clock {
-  font-family: var(--font-mono);
-  font-size: 2.6rem; font-weight: 900;
-  color: var(--text);
+
+@keyframes pb-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+.pb-clock {
+  font-family: "Roboto Mono", monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: .04em;
-  line-height: 1;
-}
-.board-header-hint {
-  color: var(--muted);
-  font-size: .92rem;
-  margin-top: 6px;
 }
 
-.board-grid {
+/* ── Main grid ───────────────────────────────────────────────── */
+.pb-main {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px;
+  grid-template-rows: 1.3fr 1fr;
+  gap: 16px;
+  padding: 20px 28px;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.board-column {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  padding: 22px 24px;
-  display: flex; flex-direction: column;
-  min-height: 500px;
-}
-.board-column--processing { border-top: 3px solid var(--accepted); }
-.board-column--ready      {
-  border-top: 3px solid var(--ready);
-  background: linear-gradient(180deg, rgba(16, 185, 129, .08), var(--panel) 30%);
+.pb-section {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  padding: 18px 24px;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.board-col-head {
-  display: flex; align-items: center; gap: 12px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 18px;
-}
-.board-col-head h2 {
-  font-family: var(--font-serif);
-  font-size: 1.8rem; font-weight: 900;
-  color: var(--text);
-  margin: 0;
-}
-.board-col-head__dot {
-  width: 12px; height: 12px; border-radius: 50%;
-  box-shadow: 0 0 12px currentColor;
-}
-.board-column--processing .board-col-head__dot { background: var(--accepted); color: var(--accepted); }
-.board-column--ready      .board-col-head__dot {
-  background: var(--ready); color: var(--ready);
-  animation: pulse-ready 1.6s ease-in-out infinite;
-}
-@keyframes pulse-ready {
-  0%, 100% { box-shadow: 0 0 12px var(--ready-glow); }
-  50%      { box-shadow: 0 0 24px var(--ready); }
+.pb-section-ready {
+  background: linear-gradient(135deg, rgba(34, 197, 94, .14), rgba(16, 185, 129, .07));
+  border: 2px solid rgba(34, 197, 94, .4);
 }
 
-.board-column__list {
+.pb-section-preparing {
+  background: rgba(59, 130, 246, .07);
+  border: 1px solid rgba(59, 130, 246, .22);
+}
+
+.pb-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 14px;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.pb-section-bar {
+  display: inline-block;
+  width: 6px;
+  height: 28px;
+  border-radius: 3px;
+}
+
+.pb-section-ready .pb-section-bar    { background: #22c55e; }
+.pb-section-preparing .pb-section-bar { background: #3b82f6; }
+
+/* ── Numbers grid ────────────────────────────────────────────── */
+.pb-numbers {
+  flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 14px;
   align-content: start;
+  overflow: hidden;
 }
 
-/* 取餐號碼卡 — 依 pickup-board.js render 的 class 微調 */
-.board-card,
-.board-pickup-card {
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: 18px 14px;
+.pb-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  color: rgba(255, 255, 255, .22);
+  font-weight: 500;
+}
+
+/* ── Number card ─────────────────────────────────────────────── */
+.pb-card {
+  background: rgba(0, 0, 0, .35);
+  border-radius: 14px;
+  padding: 22px 16px;
   text-align: center;
-  transition: all var(--t-med) var(--ease-out);
-}
-.board-column--ready .board-card,
-.board-column--ready .board-pickup-card {
-  background: linear-gradient(180deg, rgba(16, 185, 129, .18), var(--panel-2) 70%);
-  border-color: rgba(16, 185, 129, .4);
-  box-shadow: 0 8px 24px rgba(16, 185, 129, .18);
-  animation: rise-ready .5s var(--ease-out);
-}
-@keyframes rise-ready {
-  from { opacity: 0; transform: translateY(8px) scale(.98); }
-  to   { opacity: 1; transform: translateY(0)   scale(1); }
+  border: 1px solid rgba(255, 255, 255, .07);
 }
 
-.board-card__number,
-.board-pickup-number {
-  font-family: var(--font-mono);
-  font-size: 3.6rem; font-weight: 900; line-height: 1;
-  color: var(--text);
+.pb-card-number {
+  font-family: "Roboto Mono", monospace;
+  font-size: 4.8rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .02em;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.02em;
-}
-.board-column--ready .board-card__number,
-.board-column--ready .board-pickup-number {
-  color: var(--ready);
-  text-shadow: 0 0 24px var(--ready-glow);
-}
-.board-card__meta,
-.board-pickup-meta {
-  color: var(--muted);
-  font-size: .82rem;
-  margin-top: 8px;
+  margin-bottom: 6px;
 }
 
-.board-column__empty,
-.board-empty {
-  text-align: center;
-  color: var(--muted);
-  padding: 40px 20px;
+.pb-card-time {
   font-size: 1rem;
+  color: rgba(255, 255, 255, .55);
+  font-weight: 500;
 }
 
+/* Ready 卡片：金色強調 */
+.pb-section-ready .pb-card {
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  border: 2px solid #fcd34d;
+  box-shadow: 0 4px 20px rgba(249, 115, 22, .4);
+  animation: pb-breathe 3s ease-in-out infinite;
+}
+
+.pb-section-ready .pb-card.pb-card-just-ready {
+  animation: pb-just-ready 5s ease-out;
+}
+
+.pb-section-ready .pb-card-number {
+  color: #1a0d00;
+}
+
+/* Preparing 卡片：藍色低調 */
+.pb-section-preparing .pb-card {
+  background: rgba(59, 130, 246, .14);
+  border: 1px solid rgba(59, 130, 246, .3);
+}
+
+.pb-section-preparing .pb-card-number {
+  color: #93c5fd;
+}
+
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes pb-breathe {
+  0%, 100% { box-shadow: 0 4px 20px rgba(249, 115, 22, .4); }
+  50%       { box-shadow: 0 6px 32px rgba(252, 211, 77, .7), 0 0 0 2px rgba(252, 211, 77, .3); }
+}
+
+@keyframes pb-just-ready {
+  0% {
+    transform: scale(.45) translateY(40px);
+    opacity: 0;
+    box-shadow: none;
+  }
+  18% {
+    transform: scale(1.28) translateY(0);
+    opacity: 1;
+    box-shadow: 0 0 70px rgba(252, 211, 77, .95), 0 0 140px rgba(249, 115, 22, .5);
+  }
+  32% { transform: scale(1.08); }
+  46% { transform: scale(1.18); box-shadow: 0 0 50px rgba(252, 211, 77, .7); }
+  62% { transform: scale(1.06); }
+  78% { transform: scale(1.12); box-shadow: 0 0 35px rgba(252, 211, 77, .5); }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 20px rgba(249, 115, 22, .4);
+  }
+}
+
+/* ── Footer ──────────────────────────────────────────────────── */
+.pb-footer {
+  flex-shrink: 0;
+  padding: 12px 28px;
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, .55);
+  border-top: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(0, 0, 0, .18);
+}
+
+.pb-spacer { flex: 1; }
+
+.pb-status-online { color: #22c55e; }
+.pb-status-offline { color: #ef4444; font-weight: 700; }
+
+/* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .board-grid { grid-template-columns: 1fr; }
-  .board-brand__title { font-size: 1.8rem; }
-  .board-clock { font-size: 2rem; }
-  .board-card__number, .board-pickup-number { font-size: 2.8rem; }
+  .pb-brand { font-size: 1.3rem; }
+  .pb-clock { font-size: 1.1rem; }
+  .pb-card-number { font-size: 3.4rem; }
+  .pb-numbers { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
