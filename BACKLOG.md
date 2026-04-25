@@ -1,11 +1,34 @@
 # 樂樂山專案待辦 BACKLOG
 
-最後更新：2026-04-26
+最後更新：2026-04-26 03:30
 
 > 這份檔案的存在是為了讓 Claude（任何對話、任何時刻）都能看到「目前還沒做完的事」，
 > 避免依賴對話 context、避免遺忘。
 >
 > 凡是接手這個專案的 Claude Code，**第一件事是讀這份 BACKLOG.md + AGENTS.md**。
+
+---
+
+## ⚡ 下次工作 session 入口（明天起床先讀這個）
+
+業主習慣：凌晨 3:30 收工，下午 2 點起床。
+
+**明天第一件事**：
+1. 買好的實體網路線接準系統（WiFi → Ethernet）
+2. 在準系統 `ipconfig /all` 查 Ethernet 介面的新 IP
+3. 回報新 IP 給對話 Claude，更新 W11-B 的 LAN fallback URL
+4. 進 router（TP-Link AX1500，192.168.0.1）的「網路 → DHCP 伺服器 → 位址保留」設定 Ethernet MAC 綁定新 IP（或繼續用 WiFi MAC 綁 192.168.0.180）
+
+**設備網路狀態（截至 2026-04-26 03:30）**：
+- 準系統 Hub：店裡 WiFi，IP `192.168.0.180`（DHCP 動態，未保留）
+- Tailscale IP：`100.72.80.2`（永遠不變）
+- POS / KDS / Pickup Board：已接 W11-B 雙 IP fallback（主 Tailscale、備 192.168.0.180）
+
+**待辦的網路強化（高優先）**：
+- [ ] 接實體網路線到準系統
+- [ ] router 設保留 IP（Ethernet 或 WiFi MAC 綁 192.168.0.180）
+- [ ] 確認新 IP 後更新 W11-B 的 hub-client.ts 與 kds-hub-client.js
+- [ ] 韌性實測：拔網路線測 POS / KDS 撐 5 分鐘（W11 韌性測試）
 
 ---
 
@@ -30,9 +53,8 @@
 
 ## 高優先（影響核心使用體驗）
 
-- [ ] **W11 韌性測試**：實測拔網路線、Hub 當機、Tailscale 斷線情境
+- [ ] **W11 韌性實測**：明天接實體網路線後，實測拔網路線 5 分鐘看 POS/KDS 是否撐住、Hub Sync Daemon 在網路恢復後是否補推訂單
 - [ ] **W12 Firestore Rules 安全審計**：W4 發現過漏洞（追加被擋），系統性掃描
-- [ ] **KDS UI 對標**：套用 W10-B 的設計風格到 KDS（vanilla HTML/JS）
 - [ ] **取餐看板 UI 對標**：套用 W10-B 的設計風格到 pickup-board
 
 ## 中優先（功能完整度）
@@ -53,8 +75,6 @@
   - 推播通知
   - 會員系統整合
   - 其他
-- [ ] **Hub 監控進階**：sync history 時間軸（目前只有當前狀態）
-- [ ] **Hub 自動備份**：data/hub.db 每日備份到 USB / 雲端
 
 ---
 
@@ -74,6 +94,10 @@
 - ✅ W9-A Hub 營運 API（cancel / admin endpoints）
 - ✅ W9-B Admin 監控面板（功能版，視覺待後續對標）
 - ✅ W10-B POS UI 全面對標 design/pos_redesign.html
+- ✅ W10-B Hotfix（emoji icon + 購物車自動捲動）（commit 4267e3d）
+- ✅ W10-C KDS UI 對標 + V2→V1 字樣更換（commit 04dd511）
+- ✅ W11-A Hub 每日備份 + 同步歷史時間軸 + CSV 匯出
+- ✅ W11-B POS / KDS / Pickup Board 雙 IP Hub fallback（Tailscale 主、店內區網備）
 
 ---
 
