@@ -31,6 +31,8 @@
   var adminState = {
     autoSeedAttempted: false
   };
+  var HUB_URL = (window.LELESHAN_HUB_URL || 'http://100.72.80.2:8080');
+  var hubMonitorTimer = null;
   var giftPromoRules = []; // in-memory rules for the admin UI editor
   var OWNER_ROLE = "owner";
   var ADMIN_ROLE = "admin";
@@ -451,6 +453,11 @@
   function show(name) {
     if (name === "employees" && !canManage()) {
       name = "dashboard";
+    }
+    // 離開 hub 頁時清掉輪詢 timer
+    if (name !== "hub" && hubMonitorTimer) {
+      clearInterval(hubMonitorTimer);
+      hubMonitorTimer = null;
     }
     el.views.forEach(function (view) {
       view.classList.toggle("hidden", view.id !== "view-" + name);
@@ -979,6 +986,9 @@
         break;
       case "kds-timing":
         renderKdsTimingSummary();
+        break;
+      case "hub":
+        renderHubMonitor();
         break;
       default:
         break;
@@ -4569,6 +4579,136 @@
     } catch (e) {
       console.error("[AdminLine] saveLineNotificationSetting failed.", e);
       msg((e && e.message) || "設定更新失敗");
+    }
+  }
+
+  // ── Hub 監控面板 ───────────────────────────────────────────────
+
+  function hubLabelStatus(s) {
+    return { accepted: '已接單', preparing: '製作中', ready: '可取餐', completed: '已完成', cancelled: '已取消' }[s] || s;
+  }
+
+  function hubLabelSource(s) {
+    return { pos: 'POS', phone: '電話', liff: 'LIFF', line: 'LINE' }[s] || (s || '—');
+  }
+
+  function renderHubMonitor() {
+    if (hubMonitorTimer) { clearInterval(hubMonitorTimer); hubMonitorTimer = null; }
+
+    var syncBtn = document.getElementById('hub-trigger-sync');
+    if (syncBtn) {
+      syncBtn.onclick = async function () {
+        syncBtn.disabled = true;
+        syncBtn.textContent = '同步中…';
+        try {
+          var res = await fetch(HUB_URL + '/sync/trigger', { method: 'POST', signal: AbortSignal.timeout(10000) });
+          var d = await res.json();
+          var stats = d.stats || d;
+          alert('同步完成：' + JSON.stringify(stats));
+          loadHubData();
+        } catch (e) {
+          alert('觸發失敗：' + e.message);
+        } finally {
+          syncBtn.disabled = false;
+          syncBtn.textContent = '手動觸發同步';
+        }
+      };
+    }
+
+    loadHubData();
+    hubMonitorTimer = setInterval(loadHubData, 5000);
+  }
+
+  async function loadHubData() {
+    function safeText(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val;
+    }
+    function safeHTML(id, html) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    }
+
+    try {
+      var results = await Promise.all([
+        fetch(HUB_URL + '/health',                          { signal: AbortSignal.timeout(5000) }).then(function (r) { return r.json(); }),
+        fetch(HUB_URL + '/admin/daily-summary',             { signal: AbortSignal.timeout(5000) }).then(function (r) { return r.json(); }),
+        fetch(HUB_URL + '/sync/status',                     { signal: AbortSignal.timeout(5000) }).then(function (r) { return r.json(); }),
+        fetch(HUB_URL + '/admin/orders/recent?limit=20',    { signal: AbortSignal.timeout(5000) }).then(function (r) { return r.json(); }),
+      ]);
+
+      var health  = results[0];
+      var summary = results[1];
+      var sync    = results[2];
+      var recent  = results[3];
+
+      // 狀態卡
+      safeHTML('hub-status', '<span class="hub-status-online">&#x25CF; 運作中</span>');
+      safeText('hub-uptime', '運行時間：' + (health.uptime_human || '--'));
+
+      // 訂單
+      safeText('hub-orders-count', summary.totalOrders != null ? String(summary.totalOrders) : '--');
+      safeText('hub-orders-revenue', 'NT$' + Number(summary.totalRevenue || 0).toLocaleString());
+
+      // 同步
+      safeText('hub-pending', summary.unsyncedCount != null ? String(summary.unsyncedCount) : '--');
+      safeText('hub-synced',  sync.totalSynced != null ? String(sync.totalSynced) : '0');
+
+      // 同步區塊
+      var lastRun = sync.lastRunAt ? new Date(sync.lastRunAt).toLocaleString('zh-TW') : '--';
+      safeHTML('hub-sync-block',
+        '<p>上次執行：' + esc(lastRun) + '</p>' +
+        '<p>上次成功同步：' + esc(String(sync.lastSyncCount || 0)) + ' 筆</p>' +
+        '<p>累計成功：' + esc(String(sync.totalSynced || 0)) + ' 筆</p>' +
+        '<p>累計失敗：' + esc(String(sync.totalFailed || 0)) + ' 筆</p>' +
+        (sync.lastError ? '<p class="hub-sync-error">最後錯誤：' + esc(sync.lastError) + '</p>' : '')
+      );
+
+      // 狀態分布
+      var byStatus = Array.isArray(summary.byStatus) ? summary.byStatus : [];
+      safeHTML('hub-by-status',
+        byStatus.length
+          ? byStatus.map(function (s) {
+              return '<div class="hub-status-pill hub-status-pill--' + esc(s.status) + '">' +
+                '<span class="hub-sp-name">' + esc(hubLabelStatus(s.status)) + '</span>' +
+                '<span class="hub-sp-count">' + esc(String(s.count)) + '</span>' +
+                '</div>';
+            }).join('')
+          : '<p style="color:var(--admin-muted)">尚無訂單</p>'
+      );
+
+      // 最近訂單
+      var orders = Array.isArray(recent.orders) ? recent.orders.slice(0, 15) : [];
+      safeHTML('hub-recent-orders',
+        orders.length
+          ? '<div class="hub-order-table">' +
+              '<div class="hub-order-row hub-order-row--head">' +
+                '<span>號碼</span><span>狀態</span><span>來源</span><span>顧客</span>' +
+                '<span>金額</span><span>雲端</span><span>時間</span>' +
+              '</div>' +
+              orders.map(function (o) {
+                var t = o.created_at ? new Date(o.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '--';
+                return '<div class="hub-order-row">' +
+                  '<span class="hub-col-pickup">#' + esc(String(o.pickup_number || '---')) + '</span>' +
+                  '<span class="hub-col-status hub-col-status--' + esc(o.status) + '">' + esc(hubLabelStatus(o.status)) + '</span>' +
+                  '<span class="hub-col-source">' + esc(hubLabelSource(o.source)) + '</span>' +
+                  '<span class="hub-col-name">' + esc(o.customer_name || '現場') + '</span>' +
+                  '<span class="hub-col-total">NT$' + esc(String(Number(o.total || 0).toLocaleString())) + '</span>' +
+                  '<span class="hub-col-sync">' + (o.synced_to_cloud ? '&#x2713;' : '&#x25CB;') + '</span>' +
+                  '<span class="hub-col-time">' + esc(t) + '</span>' +
+                  '</div>';
+              }).join('') +
+            '</div>'
+          : '<p style="color:var(--admin-muted)">尚無訂單</p>'
+      );
+
+      // 最後更新
+      safeText('hub-monitor-updated', '最後更新：' + new Date().toLocaleTimeString('zh-TW'));
+
+    } catch (e) {
+      console.error('[Hub monitor] loadHubData failed:', e);
+      safeHTML('hub-status', '<span class="hub-status-offline">&#x25CF; 無法連線</span>');
+      safeText('hub-uptime', e.message || '請確認 Hub 是否運行中');
     }
   }
 

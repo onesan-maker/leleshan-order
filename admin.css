@@ -1289,3 +1289,178 @@ button {
   text-align: center;
   color: #a08b76;
 }
+
+/* ── Hub 監控面板 ─────────────────────────────────────────────── */
+.hub-monitor-page {
+  padding: 4px 0 32px;
+  color: var(--admin-ink);
+}
+
+.hub-monitor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.hub-monitor-header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.hub-monitor-ts {
+  color: var(--admin-muted);
+  font-size: .82rem;
+  font-family: monospace;
+}
+
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.hub-card {
+  background: #1a1210;
+  border: 1px solid rgba(249, 115, 22, .25);
+  border-radius: 14px;
+  padding: 18px 20px;
+  color: #f5f7fa;
+}
+
+.hub-card-label {
+  font-size: .8rem;
+  color: rgba(255, 255, 255, .55);
+  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.hub-card-value {
+  font-size: 2.2rem;
+  font-weight: 900;
+  font-family: "Roboto Mono", monospace;
+  line-height: 1;
+  color: #fcd34d;
+}
+
+.hub-card-status .hub-card-value {
+  font-size: 1.2rem;
+  font-family: inherit;
+}
+
+.hub-card-sub {
+  font-size: .78rem;
+  color: rgba(255, 255, 255, .45);
+  margin-top: 6px;
+}
+
+.hub-status-online { color: #22c55e; font-weight: 700; }
+.hub-status-offline { color: #ef4444; font-weight: 700; }
+
+.hub-section {
+  margin-bottom: 28px;
+}
+
+.hub-section h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--admin-ink);
+}
+
+.hub-sync-status {
+  background: #1a1210;
+  border: 1px solid rgba(249, 115, 22, .18);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: .88rem;
+  line-height: 1.75;
+  color: #f5f7fa;
+}
+
+.hub-sync-status p { margin: 0; }
+.hub-sync-error { color: #ef4444 !important; }
+
+.hub-btn {
+  margin-top: 12px;
+  background: #f97316;
+  color: #1a0d00;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: .9rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.hub-btn:hover { filter: brightness(1.1); }
+.hub-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.hub-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.hub-status-pill {
+  background: #1a1210;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hub-sp-name { font-size: .78rem; color: rgba(255, 255, 255, .55); }
+.hub-sp-count { font-size: 1.5rem; font-weight: 800; font-family: monospace; color: #fcd34d; }
+
+.hub-status-pill--accepted  .hub-sp-count { color: #fbbf24; }
+.hub-status-pill--preparing .hub-sp-count { color: #60a5fa; }
+.hub-status-pill--ready     .hub-sp-count { color: #34d399; }
+.hub-status-pill--completed .hub-sp-count { color: #94a3b8; }
+.hub-status-pill--cancelled .hub-sp-count { color: #f87171; }
+
+.hub-order-table {
+  font-size: .85rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(249, 115, 22, .15);
+}
+
+.hub-order-row {
+  display: grid;
+  grid-template-columns: 54px 72px 54px 1fr 80px 28px 52px;
+  gap: 10px;
+  padding: 8px 12px;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, .05);
+  background: #1a1210;
+  color: #f5f7fa;
+}
+
+.hub-order-row--head {
+  background: rgba(249, 115, 22, .12);
+  font-size: .75rem;
+  font-weight: 700;
+  color: rgba(249, 115, 22, .85);
+  padding: 6px 12px;
+}
+
+.hub-order-row:last-child { border-bottom: none; }
+
+.hub-col-pickup { font-family: monospace; font-weight: 700; color: #f97316; }
+.hub-col-status { font-size: .72rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,.08); text-align: center; }
+.hub-col-status--ready     { background: rgba(52, 211, 153, .2); color: #34d399; }
+.hub-col-status--completed { background: rgba(148, 163, 184, .15); color: #94a3b8; }
+.hub-col-status--cancelled { background: rgba(248, 113, 113, .2); color: #f87171; }
+.hub-col-source { color: rgba(255,255,255,.45); font-size: .78rem; }
+.hub-col-name   { color: rgba(255,255,255,.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-col-total  { font-family: monospace; font-weight: 700; text-align: right; }
+.hub-col-sync   { text-align: center; color: rgba(255,255,255,.4); }
+.hub-col-time   { font-family: monospace; color: rgba(255,255,255,.4); font-size: .78rem; }

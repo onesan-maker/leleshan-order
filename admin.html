@@ -3,6 +3,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
+  <script>window.LELESHAN_HUB_URL = 'http://100.72.80.2:8080';</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>樂樂山營運後台 v1</title>
   <link rel="stylesheet" href="/admin.css?v=20260412-2">
@@ -35,6 +36,7 @@
         <a href="/admin/promotions" data-view="promotions">優惠管理</a>
         <a href="/admin/settings" data-view="settings">營業狀態設定</a>
         <a href="/admin/kds-timing" data-view="kds-timing">KDS 出餐時間規則</a>
+        <a href="/admin/hub" data-view="hub">Hub 監控</a>
       </nav>
       <button id="admin-logout-btn" class="admin-logout-btn" type="button">登出</button>
     </aside>
@@ -299,6 +301,54 @@
             <label><span>每消費多少元</span><input id="point-rule-amount" type="number" placeholder="例如：100" value="100"></label>
             <label><span>得幾點</span><input id="point-rule-points" type="number" placeholder="例如：1" value="1"></label>
             <p id="point-rule-status" style="color:var(--admin-muted);font-size:0.88rem;"></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-hub" class="admin-view hidden">
+        <div class="hub-monitor-page">
+          <header class="hub-monitor-header">
+            <h2>Hub 監控面板</h2>
+            <span id="hub-monitor-updated" class="hub-monitor-ts">最後更新：--:--:--</span>
+          </header>
+
+          <div class="hub-grid">
+            <div class="hub-card hub-card-status">
+              <div class="hub-card-label">Hub 狀態</div>
+              <div class="hub-card-value" id="hub-status">--</div>
+              <div class="hub-card-sub" id="hub-uptime">--</div>
+            </div>
+            <div class="hub-card">
+              <div class="hub-card-label">今日訂單</div>
+              <div class="hub-card-value" id="hub-orders-count">--</div>
+              <div class="hub-card-sub" id="hub-orders-revenue">--</div>
+            </div>
+            <div class="hub-card">
+              <div class="hub-card-label">待同步</div>
+              <div class="hub-card-value" id="hub-pending">--</div>
+              <div class="hub-card-sub">未推到 Firestore</div>
+            </div>
+            <div class="hub-card">
+              <div class="hub-card-label">已同步總計</div>
+              <div class="hub-card-value" id="hub-synced">--</div>
+              <div class="hub-card-sub">本次啟動以來</div>
+            </div>
+          </div>
+
+          <div class="hub-section">
+            <h3>同步狀態</h3>
+            <div class="hub-sync-status" id="hub-sync-block">讀取中...</div>
+            <button id="hub-trigger-sync" class="hub-btn" type="button">手動觸發同步</button>
+          </div>
+
+          <div class="hub-section">
+            <h3>狀態分布（今日）</h3>
+            <div id="hub-by-status" class="hub-status-grid"></div>
+          </div>
+
+          <div class="hub-section">
+            <h3>最近訂單</h3>
+            <div id="hub-recent-orders"></div>
           </div>
         </div>
       </section>
