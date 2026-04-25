@@ -45,3 +45,10 @@ body::before {
   color: #1a0d00;
   transform: scale(1.08);
 }
+
+/* color emoji font fallback — ensures Windows shows color emoji, not outline */
+.item-emoji {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+    "Noto Color Emoji", sans-serif;
+  filter: saturate(1.1);
+}

@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { useMenuStore } from "@/stores/menu.store";
 import { useCartStore } from "@/stores/cart.store";
 import type { MenuItem, Combo } from "@/services/menu.service";
+import { getItemEmoji } from "@/lib/itemEmoji";
 
 const COMBO_CAT_ID = "__combos__";
 
@@ -236,6 +237,14 @@ function ItemCard({ item, soldOut, isCombo, delay, onAdd }: CardProps) {
           }}
         />
       )}
+
+      {/* Emoji icon — 24px per design spec, left-aligned */}
+      <span
+        className="item-emoji select-none relative z-10 block"
+        style={{ fontSize: 24, lineHeight: 1, marginBottom: 10 }}
+      >
+        {getItemEmoji(item.name)}
+      </span>
 
       {/* Item name */}
       <div

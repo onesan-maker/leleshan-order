@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useCartStore, type FlavorPart, type CartLine } from "@/stores/cart.store";
 
 export interface CheckoutPayload {
@@ -27,6 +27,21 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
   } = useCartStore();
 
   const [moreOpen, setMoreOpen] = useState(false);
+
+  /* ── Auto-scroll to bottom when a new line is added ── */
+  const itemsScrollRef   = useRef<HTMLDivElement>(null);
+  const prevLineCountRef = useRef(lines.length);
+
+  useEffect(() => {
+    if (lines.length > prevLineCountRef.current && itemsScrollRef.current) {
+      // 50 ms delay ensures DOM has rendered the new row before scrolling
+      const el = itemsScrollRef.current;
+      setTimeout(() => {
+        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      }, 50);
+    }
+    prevLineCountRef.current = lines.length;
+  }, [lines.length]);
 
   const subtotal   = getSubtotal();
   const count      = getItemCount();
@@ -85,7 +100,7 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
       </div>
 
       {/* ── Line items ──────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "10px 22px" }}>
+      <div ref={itemsScrollRef} className="flex-1 overflow-y-auto min-h-0" style={{ padding: "10px 22px" }}>
         {lines.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-muted py-12">
             <div
