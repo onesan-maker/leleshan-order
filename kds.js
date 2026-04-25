@@ -256,6 +256,11 @@
   // 本分頁 session 內已嘗試鎖定過的 orderId，避免重複觸發 transaction
   var lockAttemptIds = new Set();
 
+  // ── Hub 輪詢 ─────────────────────────────────────────────────
+  var HUB_URL = window.LELESHAN_HUB_URL || 'http://100.72.80.2:8080';
+  var POLL_INTERVAL = 3000;
+  var pollTimer = null;
+
   function resolveStationFromQuery() {
     var qs = new URLSearchParams(window.location.search);
     var raw = String(qs.get("kds") || "").toLowerCase();
@@ -561,6 +566,97 @@
     showConnectionBanner(text, preset.tone);
   }
 
+  function todayBusinessDate() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  async function fetchHubOrders(storeId, businessDate) {
+    try {
+      var url = HUB_URL + '/orders?storeId=' + encodeURIComponent(storeId) + '&date=' + businessDate;
+      var res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      return data.orders || [];
+    } catch (e) {
+      console.warn('[KDS] Hub fetch failed:', e.message);
+      return null;
+    }
+  }
+
+  function hubOrderToKdsFormat(hubOrder) {
+    var payload = hubOrder.payload || {};
+    var result = Object.assign({}, payload);
+    result.id = hubOrder.id;
+    result.pickupNumber = hubOrder.pickup_number;
+    result.status = hubOrder.status;
+    if (!result.customer_name && hubOrder.customer_name) result.customer_name = hubOrder.customer_name;
+    if (!result.source && hubOrder.source) result.source = hubOrder.source;
+    if (hubOrder.total != null) result.total = hubOrder.total;
+    if (!result.created_at && hubOrder.created_at) {
+      var ms = new Date(hubOrder.created_at).getTime();
+      result.created_at = isNaN(ms) ? hubOrder.created_at : { seconds: Math.floor(ms / 1000) };
+    }
+    return result;
+  }
+
+  function handleOrdersUpdate(hubOrders) {
+    var orders = hubOrders.map(hubOrderToKdsFormat);
+    if (state.connectionState !== 'connected') setConnectionState('connected');
+    state.orders = orders;
+    if (el.lastUpdate) el.lastUpdate.textContent = '更新：' + new Date().toLocaleTimeString('zh-TW', { hour12: false });
+
+    var currentMap = buildOrderMap(orders);
+    if (!hasInitializedSoundBaseline) {
+      previousOrderMap = currentMap;
+      hasInitializedSoundBaseline = true;
+      console.log('[KDS_SOUND] baseline initialized, ids:', orders.map(function (o) { return o.id; }));
+    } else {
+      var newlyAppeared = getNewlyAppearedOrders(orders, previousOrderMap);
+      newlyAppeared.forEach(function (order) {
+        var shouldPlay = isNewAcceptedOrder(order);
+        console.log('[KDS_SOUND] evaluate new doc', { id: order.id, source: order.source, status: order.status, shouldPlay: shouldPlay });
+        if (shouldPlay && isSoundEnabled()) {
+          try { playNewOrderBeep(); } catch (e) {}
+        }
+      });
+      previousOrderMap = currentMap;
+    }
+    render();
+  }
+
+  function updateHubStatus(online) {
+    var indicator = document.getElementById('hub-status-indicator');
+    if (!indicator) return;
+    indicator.classList.toggle('hub-online', online);
+    indicator.classList.toggle('hub-offline', !online);
+    indicator.title = online ? '本機 Hub 連線中' : '本機 Hub 連線異常';
+  }
+
+  function startHubPolling(storeId) {
+    stopHubPolling();
+    var tick = async function () {
+      var businessDate = todayBusinessDate();
+      var orders = await fetchHubOrders(storeId, businessDate);
+      if (orders !== null) {
+        handleOrdersUpdate(orders);
+        updateHubStatus(true);
+      } else {
+        updateHubStatus(false);
+      }
+    };
+    tick();
+    pollTimer = setInterval(tick, POLL_INTERVAL);
+  }
+
+  function stopHubPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
   function start(context) {
     state.storeId = context.storeId;
     state.context = context;
@@ -612,52 +708,8 @@
       console.warn("[KDS] settings subscribe exception", e);
     }
 
-    window.LeLeShanOrders.subscribeStoreOrders({
-      db:      context.db,
-      storeId: state.storeId,
-      onData:  function (orders) {
-        if (state.connectionState !== "connected") {
-          setConnectionState("connected");
-        }
-        state.orders = orders;
-        if (el.lastUpdate) el.lastUpdate.textContent = "更新：" + new Date().toLocaleTimeString("zh-TW", { hour12: false });
-
-        // ── P2-B 音效：snapshot diff + 狀態轉換偵測 ──────────────
-        var currentMap = buildOrderMap(orders);
-
-        console.log("[KDS_SOUND] snapshot check", {
-          initialized: hasInitializedSoundBaseline,
-          total: orders.length,
-          previousCount: previousOrderMap.size
-        });
-
-        if (!hasInitializedSoundBaseline) {
-          previousOrderMap = currentMap;
-          hasInitializedSoundBaseline = true;
-          console.log("[KDS_SOUND] baseline initialized, ids:", orders.map(function (o) { return o.id; }));
-        } else {
-          var newlyAppeared = getNewlyAppearedOrders(orders, previousOrderMap);
-          // 新進 accepted LINE 訂單：播一次提示音
-          newlyAppeared.forEach(function (order) {
-            var shouldPlay = isNewAcceptedOrder(order);
-            console.log("[KDS_SOUND] evaluate new doc", { id: order.id, source: order.source, status: order.status, shouldPlay: shouldPlay });
-            if (shouldPlay && isSoundEnabled()) {
-              try { playNewOrderBeep(); } catch (e) {}
-            }
-          });
-          previousOrderMap = currentMap;
-        }
-
-        // 第一次看到活躍工作單且尚未鎖定估時 → 觸發一次性 transaction 寫回
-        tickEnsureLocks();
-
-        render();
-      },
-      onError: function (error) {
-        setConnectionState("cloud_disconnected");
-        handleError(error);
-      }
-    });
+    // 訂單來源改為本機 Hub，每 3 秒輪詢（store_runtime 仍走 Firestore）
+    startHubPolling(state.storeId);
 
     el.list.addEventListener("click", function (event) {
       // Handle status-change buttons first
@@ -699,11 +751,8 @@
   var _cancelModalOrderId = null;
 
   function showCancelModal(orderId) {
-    _cancelModalOrderId = orderId;
-    var modal = document.getElementById("kds-cancel-modal");
-    if (modal) modal.hidden = false;
-    var dismissBtn = document.getElementById("kds-cancel-dismiss");
-    if (dismissBtn) dismissBtn.focus();
+    // Hub 尚未實作取消，暫以提示代替
+    alert("取消功能暫不支援，敬請見諒");
   }
 
   function hideCancelModal() {
@@ -733,42 +782,29 @@
   }
 
   async function changeStatus(orderId, nextStatus, cancelReason) {
-    var ctx = state.context;
-    if (!ctx) return;
+    if (!state.context) return;
     var sess = state.currentSession;
     if (!sess || !sess.sessionActive || !sess.employeeId) {
       handleError(new Error("尚未設定值班員工，請先至 POS 登入或交班"));
       return;
     }
-    var prev = (state.orders.filter(function (o) { return o.id === orderId; })[0] || {}).status || "";
+    // Hub 尚未實作取消，暫不支援
+    if (nextStatus === "cancelled") {
+      alert("取消功能暫不支援，敬請見諒");
+      return;
+    }
     var employeeId = sess.employeeId;
     var employeeName = sess.employeeName || "";
     try {
-      console.log("[KDS] Changing status.", { orderId: orderId, nextStatus: nextStatus, cancelReason: cancelReason || null, by: employeeId });
-      await window.LeLeShanOrders.updateOrderStatus({
-        db:          ctx.db,
-        orderId:     orderId,
-        storeId:     state.storeId,
-        nextStatus:  nextStatus,
-        cancelReason: cancelReason || null,
-        actorType:   "staff",
-        actorUid:    "emp:" + employeeId,
-        actorName:   employeeName
+      console.log("[KDS] Changing status via Hub.", { orderId: orderId, nextStatus: nextStatus, by: employeeId });
+      var res = await fetch(HUB_URL + '/orders/' + encodeURIComponent(orderId) + '/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus, actorId: employeeId, actorName: employeeName }),
+        signal: AbortSignal.timeout(5000)
       });
-      if (window.LeLeShanOrderLog) {
-        window.LeLeShanOrderLog.logOrderAction(ctx.db, {
-          orderId:      orderId,
-          storeId:      state.storeId,
-          action:       window.LeLeShanOrderLog.actionFor(nextStatus),
-          statusBefore: prev,
-          statusAfter:  nextStatus,
-          employeeId:   employeeId,
-          employeeName: employeeName,
-          station:      state.station,
-          deviceType:   "kds",
-          cancelReason: cancelReason || null
-        });
-      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      // 樂觀更新：等下一輪 poll（3s）自動反映
     } catch (error) {
       console.error("[KDS] changeStatus failed.", error);
       handleError(error);
