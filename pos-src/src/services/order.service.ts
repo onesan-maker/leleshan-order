@@ -1,8 +1,7 @@
-import { collection, doc, runTransaction, writeBatch, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import type { CartLine, FlavorPart } from "@/stores/cart.store";
 import type { PosSession } from "@/lib/session";
 import type { OrderItemInput } from "@/types/legacy-helpers";
+import { hubClient, HubUnavailableError } from "@/lib/hub-client";
 
 const SOURCE_LABELS: Record<string, string> = {
   walk_in: "現場顧客",
@@ -11,8 +10,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 function todayStr(): string {
   const now = new Date();
-  const tzOffset = 8 * 60;
-  const local = new Date(now.getTime() + (tzOffset + now.getTimezoneOffset()) * 60000);
+  const local = new Date(now.getTime() + (8 * 60 + now.getTimezoneOffset()) * 60000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
 }
@@ -58,7 +56,6 @@ export async function submitOrder(input: SubmitInput): Promise<SubmitResult> {
   if (!window.LeLeShanOrders) throw new Error("LeLeShanOrders helpers not loaded");
 
   const storeId = session.storeId;
-  const date = todayStr();
   const items = linesToItems(lines);
   const total = items.reduce((s, i) => s + (i.subtotal ?? 0), 0);
 
@@ -81,11 +78,24 @@ export async function submitOrder(input: SubmitInput): Promise<SubmitResult> {
   const displayLabel = SOURCE_LABELS[source] || "現場顧客";
   const displayName = `${displayLabel}${customer !== "現場顧客" ? " " + customer : ""}`;
 
-  const orderRef = doc(collection(db, "orders"));
-  const counterRef = doc(db, "order_counters", date);
+  // Step 1: get pickup number from Hub
+  let pickupInfo: { pickupNumber: string; pickupSequence: number; businessDate: string };
+  try {
+    pickupInfo = await hubClient.getPickupNumber(storeId);
+  } catch (e) {
+    if (e instanceof HubUnavailableError) throw new Error("本機服務異常，請聯繫店家");
+    throw e;
+  }
 
+  const { pickupNumber, pickupSequence, businessDate } = pickupInfo;
+  const date = businessDate || todayStr();
+  const clientRef = crypto.randomUUID();
+  const orderId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  // Step 2: build payload via helpers, then replace FieldValue sentinels with ISO timestamps
   const payload = window.LeLeShanOrders.buildCreatePayload({
-    id: orderRef.id,
+    id: orderId,
     storeId,
     customer_name: customer,
     source: "pos",
@@ -106,61 +116,30 @@ export async function submitOrder(input: SubmitInput): Promise<SubmitResult> {
     scheduled_pickup_at: pickupTime ? `${date}T${pickupTime}:00+08:00` : "",
     isTest: false,
     groups: groups.length > 0 ? groups : null,
-  });
+  }) as Record<string, unknown>;
 
-  (payload as Record<string, unknown>).isPaid = true;
-  (payload as Record<string, unknown>).accepted_at = serverTimestamp();
-  (payload as Record<string, unknown>).acceptedAt = serverTimestamp();
+  // Replace Firestore FieldValue sentinels (non-JSON-serializable) with ISO strings
+  payload.created_at = now;
+  payload.updated_at = now;
+  payload.accepted_at = now;
+  payload.acceptedAt = now;
 
-  let pickupNumber = "";
+  // Hub-specific fields
+  payload.clientRef = clientRef;
+  payload.pickupNumber = pickupNumber;
+  payload.pickupSequence = pickupSequence;
+  payload.businessDate = businessDate;
+  payload.employeeId = session.employeeId;
+  payload.employeeName = session.employeeName;
 
-  await runTransaction(db, async (tx) => {
-    const counterDoc = await tx.get(counterRef);
-    const seq = counterDoc.exists()
-      ? ((counterDoc.data() as { seq?: number }).seq ?? 0) + 1
-      : 1;
-    pickupNumber = String(seq).padStart(3, "0");
-
-    tx.set(counterRef, { seq, date, updatedAt: serverTimestamp() }, { merge: true });
-
-    (payload as Record<string, unknown>).pickupNumber = pickupNumber;
-    (payload as Record<string, unknown>).pickupSequence = seq;
-    tx.set(orderRef, payload as Parameters<typeof tx.set>[1]);
-
-    const eventRef = doc(collection(db, "order_events"));
-    tx.set(
-      eventRef,
-      window.LeLeShanOrders!.buildOrderEventPayload({
-        orderId: orderRef.id,
-        storeId,
-        type: "order_created",
-        actorType: "staff",
-        actorId: `emp:${session.employeeId}`,
-        actorName: session.employeeName,
-        fromStatus: null,
-        toStatus: "accepted",
-        message: `POS v2 現場建單，取餐號碼 ${pickupNumber}`,
-      }) as Parameters<typeof tx.set>[1],
-    );
-  });
-
+  // Step 3: write order to Hub (Hub handles Firestore sync)
+  let result: { id: string };
   try {
-    const itemsPayload = window.LeLeShanOrders!.buildOrderItemsPayload({
-      orderId: orderRef.id,
-      storeId,
-      source: "pos",
-      items,
-    });
-    if (Array.isArray(itemsPayload) && itemsPayload.length) {
-      const batch = writeBatch(db);
-      itemsPayload.forEach((d) => {
-        batch.set(doc(collection(db, "order_items")), d as Parameters<typeof batch.set>[1]);
-      });
-      await batch.commit();
-    }
+    result = await hubClient.createOrder(payload);
   } catch (e) {
-    console.warn("[POS v2] order_items write failed (non-fatal).", e);
+    if (e instanceof HubUnavailableError) throw new Error("本機服務異常，請聯繫店家");
+    throw e;
   }
 
-  return { orderId: orderRef.id, pickupNumber };
+  return { orderId: result.id, pickupNumber };
 }

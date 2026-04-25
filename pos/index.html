@@ -15,7 +15,7 @@
     window.firebase.firestore.FieldValue = {
       serverTimestamp: function () {
         if (typeof window.__posv2_sts !== "function") {
-          throw new Error("[POS v2] serverTimestamp shim not ready; firebase.ts must load before helpers are invoked");
+          throw new Error("[POS] serverTimestamp shim not ready; firebase.ts must load before helpers are invoked");
         }
         return window.__posv2_sts();
       }
@@ -23,8 +23,8 @@
   </script>
   <script src="/order-helpers.js"></script>
   <script src="/order-status-labels.js"></script>
-  <script type="module" crossorigin src="/pos/assets/index-CKD0dL4X.js"></script>
-  <link rel="stylesheet" crossorigin href="/pos/assets/index-CD1vswDD.css">
+  <script type="module" crossorigin src="/pos/assets/index-Bnvi-G6H.js"></script>
+  <link rel="stylesheet" crossorigin href="/pos/assets/index-BbKpvCB5.css">
 </head>
 <body>
   <div id="root"></div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { PosSession } from "@/lib/session";
+import { useHubStatusStore } from "@/stores/hub-status.store";
 
 interface Props {
   session: PosSession;
@@ -25,9 +26,30 @@ function useOnline() {
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
   }, []);
   return online;
+}
+
+function HubIndicator() {
+  const { isHealthy, lastCheckAt } = useHubStatusStore();
+  const tip = lastCheckAt
+    ? `最後連線 ${lastCheckAt.toLocaleTimeString("zh-TW")}`
+    : "尚未檢查";
+
+  return (
+    <span title={tip} className="flex items-center gap-1">
+      <span
+        className={`inline-block w-2 h-2 rounded-full ${isHealthy ? "bg-ready" : "bg-pending"}`}
+      />
+      {!isHealthy && (
+        <span className="text-[10px] font-semibold text-pending">本機離線</span>
+      )}
+    </span>
+  );
 }
 
 export function TopBar({ session, storeName, onLogout, onSwitchEmployee }: Props) {
@@ -39,10 +61,11 @@ export function TopBar({ session, storeName, onLogout, onSwitchEmployee }: Props
       <div className="flex items-center gap-3">
         <h1 className="font-serif text-lg font-black flex items-center gap-2">
           <span className="w-1 h-5 bg-accent rounded-sm inline-block" />
-          POS v2
+          POS
         </h1>
         <span className="text-xs font-mono text-muted tracking-wide">{storeName}</span>
         <span className="font-mono text-sm tabular-nums text-text-dim">{time}</span>
+        <HubIndicator />
         {!online && (
           <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-[10px] font-semibold">
             離線中

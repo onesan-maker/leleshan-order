@@ -8,6 +8,7 @@ import { useUIStore } from "./stores/ui.store";
 import { submitOrder } from "./services/order.service";
 import { appendToOrder } from "./services/order-append.service";
 import { publishOpsSession, clearOpsSession } from "./services/ops-session.service";
+import { useHubStatusStore } from "./stores/hub-status.store";
 import { TopBar } from "./components/TopBar";
 import { FlavorBar } from "./components/FlavorBar";
 import { MenuSection } from "./components/MenuSection";
@@ -24,15 +25,15 @@ type MainTab = "order" | "orders";
 async function ensureFirebaseAuth(session: PosSession) {
   if (auth.currentUser) return; // already signed in (Firebase Auth persisted)
   if (!session.customToken) {
-    console.warn("[POS v2] no customToken in session — KDS auth unavailable until next login");
+    console.warn("[POS] no customToken in session — KDS auth unavailable until next login");
     return;
   }
   try {
     await signInWithCustomToken(auth, session.customToken);
-    console.log("[POS v2] Firebase Auth signed in as pos staff");
+    console.log("[POS] Firebase Auth signed in as pos staff");
   } catch (err) {
     // Soft failure: POS operations still work via session token
-    console.warn("[POS v2] signInWithCustomToken failed (token may be expired):", err);
+    console.warn("[POS] signInWithCustomToken failed (token may be expired):", err);
   }
 }
 
@@ -49,9 +50,11 @@ export default function App() {
     if (s) {
       void ensureFirebaseAuth(s);
       void publishOpsSession(s, "login").catch((e) =>
-        console.warn("[POS v2] publishOpsSession failed:", e)
+        console.warn("[POS] publishOpsSession failed:", e)
       );
+      useHubStatusStore.getState().startMonitoring();
     }
+    return () => { useHubStatusStore.getState().stopMonitoring(); };
   }, []);
 
   useMenuSubscription(session?.storeId);
@@ -183,7 +186,7 @@ export default function App() {
           onSwitch={(newSession) => {
           setSession(newSession);
           void publishOpsSession(newSession, "switch").catch((e) =>
-            console.warn("[POS v2] publishOpsSession switch failed:", e)
+            console.warn("[POS] publishOpsSession switch failed:", e)
           );
         }}
           onClose={() => setShowShiftModal(false)}
