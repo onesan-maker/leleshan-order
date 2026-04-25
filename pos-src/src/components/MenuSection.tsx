@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useMenuStore } from "@/stores/menu.store";
 import { useCartStore } from "@/stores/cart.store";
 import type { MenuItem, Combo } from "@/services/menu.service";
@@ -15,131 +15,275 @@ function comboAsMenuItem(c: Combo): MenuItem {
   } as MenuItem;
 }
 
-function SkeletonTabs() {
-  return (
-    <>
-      {[80, 56, 72, 64, 60].map((w, i) => (
-        <div key={i} className="h-7 rounded bg-panel-2 animate-pulse shrink-0" style={{ width: w }} />
-      ))}
-    </>
-  );
-}
-
+/* ── Skeletons ─────────────────────────────────────────── */
 function SkeletonCards() {
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))" }}>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-line bg-panel animate-pulse" style={{ height: 74 }} />
+    <div
+      className="grid gap-2.5"
+      style={{ gridTemplateColumns: "repeat(auto-fill,minmax(168px,1fr))" }}
+    >
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-line bg-panel-2 animate-pulse"
+          style={{ minHeight: 108 }}
+        />
       ))}
     </div>
   );
 }
 
-export function MenuSection() {
+/* ── Props ──────────────────────────────────────────────── */
+interface Props {
+  /** Category id to scroll to (set by Sidebar click, consumed once). */
+  scrollTarget: string | null;
+  onScrollTargetConsumed(): void;
+  /** Called with the topmost visible section id as user scrolls. */
+  onSectionVisible(id: string): void;
+  searchQuery: string;
+}
+
+/* ── Component ──────────────────────────────────────────── */
+export function MenuSection({
+  scrollTarget,
+  onScrollTargetConsumed,
+  onSectionVisible,
+  searchQuery,
+}: Props) {
   const categories = useMenuStore((s) => s.categories);
-  const items = useMenuStore((s) => s.items);
-  const combos = useMenuStore((s) => s.combos);
-  const loaded = useMenuStore((s) => s.loaded);
-  const addItem = useCartStore((s) => s.addItem);
+  const items      = useMenuStore((s) => s.items);
+  const combos     = useMenuStore((s) => s.combos);
+  const loaded     = useMenuStore((s) => s.loaded);
+  const addItem    = useCartStore((s) => s.addItem);
 
-  const [activeCatId, setActiveCatId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const allCategories = combos.length > 0
-    ? [{ id: COMBO_CAT_ID, name: "套餐", storeId: "", enabled: true, sort: -1 }, ...categories]
-    : categories;
+  const allCategories = [
+    ...(combos.length > 0 ? [{ id: COMBO_CAT_ID, name: "套餐", en: "SET MEALS", isCombo: true }] : []),
+    ...categories.map((c) => ({ id: c.id, name: c.name, en: "", isCombo: false })),
+  ];
 
-  const effectiveCatId = activeCatId ?? allCategories[0]?.id ?? null;
+  /* ── Programmatic scroll (from Sidebar click) ──────── */
+  useEffect(() => {
+    if (!scrollTarget || !scrollRef.current) return;
+    const el = scrollRef.current.querySelector<HTMLElement>(
+      `[data-cat-id="${scrollTarget}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    onScrollTargetConsumed();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollTarget]);
 
-  const filtered: MenuItem[] = effectiveCatId === COMBO_CAT_ID
-    ? combos.map(comboAsMenuItem)
-    : items.filter((i) => i.categoryId === effectiveCatId);
+  /* ── IntersectionObserver — highlight active cat ────── */
+  const onSectionVisibleRef = useRef(onSectionVisible);
+  useEffect(() => { onSectionVisibleRef.current = onSectionVisible; }, [onSectionVisible]);
 
-  // Item counts per category for tab badges
-  const countMap = new Map<string, number>();
-  if (combos.length > 0) countMap.set(COMBO_CAT_ID, combos.length);
-  for (const cat of categories) {
-    countMap.set(cat.id, items.filter((i) => i.categoryId === cat.id).length);
-  }
+  useEffect(() => {
+    if (!loaded || !scrollRef.current) return;
+    const root = scrollRef.current;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) {
+          const id = visible[0].target.getAttribute("data-cat-id");
+          if (id) onSectionVisibleRef.current(id);
+        }
+      },
+      { root, threshold: 0, rootMargin: "-20px 0px -55% 0px" },
+    );
+
+    root.querySelectorAll("[data-cat-id]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [loaded, allCategories.length]);
+
+  /* ── Search filter ──────────────────────────────────── */
+  const q = searchQuery.trim().toLowerCase();
+
+  /* ── Render ─────────────────────────────────────────── */
+  return (
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto"
+      style={{ padding: "22px 28px 60px" }}
+    >
+      {!loaded ? (
+        <SkeletonCards />
+      ) : (
+        allCategories.map((cat) => {
+          const rawItems: MenuItem[] = cat.isCombo
+            ? combos.map(comboAsMenuItem)
+            : items.filter((i) => i.categoryId === cat.id);
+
+          const filtered = q
+            ? rawItems.filter((i) => i.name.toLowerCase().includes(q))
+            : rawItems;
+
+          if (filtered.length === 0 && q) return null; // hide empty sections in search mode
+
+          return (
+            <section
+              key={cat.id}
+              data-cat-id={cat.id}
+              id={`cat-${cat.id}`}
+              style={{ marginBottom: 28, scrollMarginTop: 10 }}
+            >
+              {/* Section header */}
+              <div
+                className="flex items-baseline gap-3 border-b border-line-soft"
+                style={{ marginBottom: 14, paddingBottom: 10 }}
+              >
+                <h2
+                  className="font-serif font-black text-text"
+                  style={{ fontSize: 18, letterSpacing: -0.3 }}
+                >
+                  {cat.name}
+                </h2>
+                {cat.en && (
+                  <span
+                    className="font-mono text-muted uppercase"
+                    style={{ fontSize: 10, letterSpacing: 2 }}
+                  >
+                    {cat.en}
+                  </span>
+                )}
+                <span
+                  className="flex-1 self-center"
+                  style={{
+                    height: 1,
+                    background: "linear-gradient(90deg, #262a36, transparent)",
+                  }}
+                />
+                <span className="font-mono text-muted" style={{ fontSize: 11 }}>
+                  {filtered.length} items
+                </span>
+              </div>
+
+              {/* Item grid */}
+              <div
+                className="grid gap-2.5"
+                style={{ gridTemplateColumns: "repeat(auto-fill,minmax(168px,1fr))" }}
+              >
+                {filtered.map((item, idx) => {
+                  const soldOut  = item.isSoldOut === true;
+                  const isCombo  = cat.isCombo;
+                  return (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      soldOut={soldOut}
+                      isCombo={isCombo}
+                      delay={idx * 15}
+                      onAdd={() => addItem(item)}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ── ItemCard — extracted for clarity ──────────────────── */
+interface CardProps {
+  item: MenuItem;
+  soldOut: boolean;
+  isCombo: boolean;
+  delay: number;
+  onAdd(): void;
+}
+
+function ItemCard({ item, soldOut, isCombo, delay, onAdd }: CardProps) {
+  const handleClick = useCallback(() => {
+    if (!soldOut) onAdd();
+  }, [soldOut, onAdd]);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* Category tab bar — sticky */}
-      <div className="flex gap-0.5 px-3 overflow-x-auto shrink-0 bg-panel border-b border-line sticky top-0 z-10" style={{ minHeight: 44 }}>
-        {!loaded ? (
-          <div className="flex items-center gap-2 py-2">
-            <SkeletonTabs />
-          </div>
-        ) : allCategories.map((c) => {
-          const cnt = countMap.get(c.id) ?? 0;
-          const isActive = c.id === effectiveCatId;
-          return (
-            <button
-              key={c.id}
-              onClick={() => setActiveCatId(c.id)}
-              className={[
-                "shrink-0 px-3 self-stretch text-[0.85rem] transition-colors whitespace-nowrap",
-                isActive
-                  ? "bg-accent text-[#1a0d00] font-black rounded-md"
-                  : "font-semibold text-text-dim hover:text-text",
-              ].join(" ")}
-            >
-              {c.name}
-              {cnt > 0 && (
-                <span className={["ml-1 text-[10px] font-normal", isActive ? "opacity-70" : "text-muted"].join(" ")}>
-                  ({cnt})
-                </span>
-              )}
-            </button>
-          );
-        })}
+    <button
+      onClick={handleClick}
+      disabled={soldOut}
+      className={[
+        "pos-item-card pos-item-rise relative text-left rounded-xl border",
+        "flex flex-col transition-all duration-150",
+        soldOut
+          ? "opacity-50 cursor-not-allowed border-line bg-panel-2 grayscale"
+          : isCombo
+            ? "border-[rgba(255,138,61,.25)] cursor-pointer hover:border-[rgba(255,138,61,.5)] hover:-translate-y-px"
+            : "border-line bg-panel-2 cursor-pointer hover:border-[rgba(255,138,61,.35)] hover:-translate-y-px hover:bg-panel-3 active:translate-y-0",
+      ].join(" ")}
+      style={{
+        padding: "14px 14px 12px",
+        minHeight: 108,
+        animationDelay: `${delay}ms`,
+        boxShadow: "0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -12px rgba(0,0,0,.6)",
+        background: isCombo && !soldOut
+          ? "linear-gradient(145deg,rgba(255,138,61,.12),#181b24 70%)"
+          : undefined,
+      }}
+    >
+      {/* Hover shimmer overlay */}
+      {!soldOut && (
+        <span
+          className="absolute inset-0 rounded-xl pointer-events-none opacity-0 transition-opacity duration-200 hover:opacity-100"
+          style={{
+            background:
+              "radial-gradient(circle at 80% -20%, rgba(255,138,61,.12), transparent 60%)",
+          }}
+        />
+      )}
+
+      {/* Item name */}
+      <div
+        className="font-medium text-text leading-snug mb-auto relative z-10"
+        style={{ fontSize: 14, lineHeight: 1.3 }}
+      >
+        {item.name}
       </div>
 
-      {/* Item grid */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {!loaded ? (
-          <SkeletonCards />
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted gap-2">
-            <span className="text-3xl opacity-30">🧺</span>
-            <span className="text-sm">此分類暫無商品</span>
-          </div>
+      {item.unit && (
+        <div className="text-muted relative z-10" style={{ fontSize: 11, marginBottom: 2 }}>
+          {String(item.unit)}
+        </div>
+      )}
+
+      {/* Price row */}
+      <div
+        className="flex items-baseline justify-between relative z-10"
+        style={{
+          marginTop: 10,
+          paddingTop: 8,
+          borderTop: "1px dashed #262a36",
+        }}
+      >
+        <span className="font-mono font-bold text-accent-2" style={{ fontSize: 15 }}>
+          <span className="text-muted font-normal" style={{ fontSize: 10, marginRight: 2 }}>
+            NT$
+          </span>
+          {item.price}
+        </span>
+
+        {soldOut ? (
+          <span className="text-[10px] bg-red-500/20 text-red-400 rounded px-1">售完</span>
         ) : (
-          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))" }}>
-            {filtered.map((item) => {
-              const soldOut = item.isSoldOut === true;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => !soldOut && addItem(item)}
-                  disabled={soldOut}
-                  className={[
-                    "text-left rounded-xl border transition-all duration-150",
-                    soldOut
-                      ? "opacity-50 cursor-not-allowed border-line bg-panel grayscale"
-                      : "border-line bg-panel hover:border-accent/30 hover:shadow-lg hover:shadow-accent/10 hover:-translate-y-0.5 active:translate-y-0 active:scale-95",
-                  ].join(" ")}
-                  style={{ padding: "8px 10px" }}
-                >
-                  <div className="flex items-start justify-between gap-1 mb-0.5">
-                    <div className="font-semibold leading-tight text-[0.88rem] line-clamp-2 flex-1">
-                      {item.name}
-                    </div>
-                    {soldOut && (
-                      <span className="text-[10px] bg-red-500/20 text-red-400 rounded px-1 shrink-0">售完</span>
-                    )}
-                  </div>
-                  {item.unit && (
-                    <div className="text-[11px] text-muted mb-0.5">{String(item.unit)}</div>
-                  )}
-                  <div className="font-mono font-bold text-accent-2 text-[0.95rem] mt-auto">
-                    ${item.price}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <span
+            className="pos-item-add grid place-items-center rounded-[7px] text-text transition-all duration-150"
+            style={{
+              width: 24,
+              height: 24,
+              fontSize: 18,
+              lineHeight: 1,
+              background: "#2a2f3d",
+            }}
+          >
+            +
+          </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }

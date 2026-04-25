@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>樂樂山 POS v2</title>
   <link rel="icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <script src="/config.public.js"></script>
   <!-- Firebase compat shim: order-helpers.js 是 vanilla compat SDK 寫的，
        在 POS v2 (modular SDK) 環境需先 shim FieldValue.serverTimestamp。
@@ -15,7 +18,7 @@
     window.firebase.firestore.FieldValue = {
       serverTimestamp: function () {
         if (typeof window.__posv2_sts !== "function") {
-          throw new Error("[POS v2] serverTimestamp shim not ready; firebase.ts must load before helpers are invoked");
+          throw new Error("[POS] serverTimestamp shim not ready; firebase.ts must load before helpers are invoked");
         }
         return window.__posv2_sts();
       }

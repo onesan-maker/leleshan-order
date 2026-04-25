@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { signInWithCustomToken } from "firebase/auth";
 import { readSession, clearSession, redirectToLogin, type PosSession } from "./lib/session";
 import { appConfig, auth } from "./lib/firebase";
@@ -9,6 +9,7 @@ import { submitOrder } from "./services/order.service";
 import { appendToOrder } from "./services/order-append.service";
 import { publishOpsSession, clearOpsSession } from "./services/ops-session.service";
 import { useHubStatusStore } from "./stores/hub-status.store";
+import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { FlavorBar } from "./components/FlavorBar";
 import { MenuSection } from "./components/MenuSection";
@@ -23,7 +24,7 @@ import type { TodayOrder } from "./services/order-list.service";
 type MainTab = "order" | "orders";
 
 async function ensureFirebaseAuth(session: PosSession) {
-  if (auth.currentUser) return; // already signed in (Firebase Auth persisted)
+  if (auth.currentUser) return;
   if (!session.customToken) {
     console.warn("[POS] no customToken in session — KDS auth unavailable until next login");
     return;
@@ -32,16 +33,20 @@ async function ensureFirebaseAuth(session: PosSession) {
     await signInWithCustomToken(auth, session.customToken);
     console.log("[POS] Firebase Auth signed in as pos staff");
   } catch (err) {
-    // Soft failure: POS operations still work via session token
     console.warn("[POS] signInWithCustomToken failed (token may be expired):", err);
   }
 }
 
 export default function App() {
-  const [session, setSession] = useState<PosSession | null>(null);
-  const [checked, setChecked] = useState(false);
-  const [activeTab, setActiveTab] = useState<MainTab>("order");
+  const [session,        setSession       ] = useState<PosSession | null>(null);
+  const [checked,        setChecked       ] = useState(false);
+  const [activeTab,      setActiveTab     ] = useState<MainTab>("order");
   const [showShiftModal, setShowShiftModal] = useState(false);
+
+  /* Sidebar ↔ MenuSection state */
+  const [activeCatId,  setActiveCatId ] = useState<string | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<string | null>(null);
+  const [searchQuery,  setSearchQuery ] = useState("");
 
   useEffect(() => {
     const s = readSession();
@@ -50,7 +55,7 @@ export default function App() {
     if (s) {
       void ensureFirebaseAuth(s);
       void publishOpsSession(s, "login").catch((e) =>
-        console.warn("[POS] publishOpsSession failed:", e)
+        console.warn("[POS] publishOpsSession failed:", e),
       );
       useHubStatusStore.getState().startMonitoring();
     }
@@ -59,9 +64,21 @@ export default function App() {
 
   useMenuSubscription(session?.storeId);
 
+  /* Sidebar category click → switch to order tab + scroll */
+  const handleCatClick = useCallback((id: string) => {
+    setActiveTab("order");
+    setActiveCatId(id);
+    setScrollTarget(id);
+  }, []);
+
+  const handleScrollTargetConsumed = useCallback(() => setScrollTarget(null), []);
+
+  const handleSectionVisible = useCallback((id: string) => setActiveCatId(id), []);
+
+  /* ── Loading / auth guards ──────────────────────────── */
   if (checked && session && typeof window.LeLeShanOrders?.buildCreatePayload !== "function") {
     return (
-      <div className="min-h-screen grid place-items-center p-8 text-center">
+      <div className="min-h-screen grid place-items-center p-8 text-center relative z-10">
         <div>
           <div className="text-2xl font-serif font-black mb-3">載入訂單模組…</div>
           <div className="text-muted text-sm">如持續看到此訊息，請重新整理頁面</div>
@@ -85,7 +102,8 @@ export default function App() {
           </p>
           <a
             href="/pos-login.html"
-            className="inline-block px-6 py-3 rounded-xl bg-gradient-to-b from-accent-2 to-accent text-[#1a0d00] font-black shadow-lg"
+            className="inline-block px-6 py-3 rounded-xl text-[#1a0d00] font-black shadow-lg"
+            style={{ background: "linear-gradient(180deg, #ffb347, #ff8a3d)" }}
           >
             前往登入頁 →
           </a>
@@ -94,6 +112,7 @@ export default function App() {
     );
   }
 
+  /* ── Checkout handlers ──────────────────────────────── */
   const handleCheckout = async (payload: CheckoutPayload) => {
     try {
       const result = await submitOrder({ session, ...payload });
@@ -115,8 +134,8 @@ export default function App() {
     if (!appendTarget || !lines.length) return;
     try {
       const result = await appendToOrder(session, appendTarget, lines);
-      const label = appendTarget.pickupNumber ? `#${appendTarget.pickupNumber}` : appendTarget.id.slice(-6);
-      const extra = result.wasReady ? "（訂單已回退製作中）" : "";
+      const label  = appendTarget.pickupNumber ? `#${appendTarget.pickupNumber}` : appendTarget.id.slice(-6);
+      const extra  = result.wasReady ? "（訂單已回退製作中）" : "";
       useCartStore.getState().exitAppendMode();
       useUIStore.getState().showToast(`✅ 已追加到訂單 ${label}${extra}`, "ok");
     } catch (e: unknown) {
@@ -125,58 +144,82 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    clearOpsSession(session.storeId).catch(() => {});
+    clearSession();
+    auth.signOut().catch(() => {});
+    redirectToLogin();
+  };
+
+  /* ── Main layout ────────────────────────────────────── */
   return (
-    <div className="h-screen flex flex-col overflow-hidden relative z-10">
-      <TopBar
+    <div
+      className="h-screen overflow-hidden relative z-10"
+      style={{ display: "grid", gridTemplateColumns: "220px 1fr 360px" }}
+    >
+      {/* ── Left: Sidebar ─────────────────────────────── */}
+      <Sidebar
         session={session}
-        storeName={appConfig.store.name}
-        onLogout={() => {
-          clearOpsSession(session.storeId).catch(() => {});
-          clearSession();
-          auth.signOut().catch(() => {});
-          redirectToLogin();
-        }}
+        activeCatId={activeCatId}
+        onCatClick={handleCatClick}
+        onLogout={handleLogout}
         onSwitchEmployee={() => setShowShiftModal(true)}
       />
 
-      {/* Tab bar */}
-      <div className="flex border-b border-line bg-panel/50 shrink-0">
-        {(["order", "orders"] as MainTab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={[
-              "px-5 py-2 text-sm font-semibold border-b-2 transition-colors",
-              activeTab === tab
-                ? "border-accent text-text"
-                : "border-transparent text-text-dim hover:text-text",
-            ].join(" ")}
-          >
-            {tab === "order" ? "點餐" : "今日訂單"}
-          </button>
-        ))}
-      </div>
+      {/* ── Center: Main column ───────────────────────── */}
+      <main className="flex flex-col min-h-0 overflow-hidden bg-bg">
+        <TopBar
+          session={session}
+          storeName={appConfig.store.name}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
 
-      {/* Main content */}
-      {activeTab === "order" ? (
-        <div className="flex-1 grid grid-cols-[1fr_380px] min-h-0 overflow-hidden">
-          <main className="flex flex-col min-h-0 overflow-hidden">
+        {/* Tab row — underline style per design */}
+        <div
+          className="flex items-center gap-1 border-b border-line-soft shrink-0 bg-bg"
+          style={{ padding: "0 28px" }}
+        >
+          {(["order", "orders"] as MainTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={[
+                "py-3.5 px-4 text-sm font-medium border-b-2 transition-colors",
+                activeTab === tab
+                  ? "border-accent text-accent-2"
+                  : "border-transparent text-text-dim hover:text-text",
+              ].join(" ")}
+            >
+              {tab === "order" ? "點餐" : "今日訂單"}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        {activeTab === "order" ? (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <AppendBanner onExit={() => useCartStore.getState().exitAppendMode()} />
             <FlavorBar />
-            <MenuSection />
-          </main>
-          <aside className="flex flex-col min-h-0 overflow-hidden">
-            <CartPanel
-              onCheckout={handleCheckout}
-              onAppendCheckout={handleAppendCheckout}
+            <MenuSection
+              scrollTarget={scrollTarget}
+              onScrollTargetConsumed={handleScrollTargetConsumed}
+              onSectionVisible={handleSectionVisible}
+              searchQuery={searchQuery}
             />
-          </aside>
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <OrderListTab session={session} onEnterAppend={handleEnterAppend} />
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <OrderListTab session={session} onEnterAppend={handleEnterAppend} />
+          </div>
+        )}
+      </main>
+
+      {/* ── Right: Cart ───────────────────────────────── */}
+      <CartPanel
+        onCheckout={handleCheckout}
+        onAppendCheckout={handleAppendCheckout}
+      />
 
       <Toast />
       <SpecModal />
@@ -184,11 +227,11 @@ export default function App() {
         <ShiftSwitchModal
           session={session}
           onSwitch={(newSession) => {
-          setSession(newSession);
-          void publishOpsSession(newSession, "switch").catch((e) =>
-            console.warn("[POS] publishOpsSession switch failed:", e)
-          );
-        }}
+            setSession(newSession);
+            void publishOpsSession(newSession, "switch").catch((e) =>
+              console.warn("[POS] publishOpsSession switch failed:", e),
+            );
+          }}
           onClose={() => setShowShiftModal(false)}
         />
       )}
@@ -196,6 +239,7 @@ export default function App() {
   );
 }
 
+/* ── Append-mode banner ─────────────────────────────────── */
 function AppendBanner({ onExit }: { onExit(): void }) {
   const appendTarget = useCartStore((s) => s.appendTarget);
   if (!appendTarget) return null;
@@ -204,7 +248,7 @@ function AppendBanner({ onExit }: { onExit(): void }) {
     : appendTarget.id.slice(-6);
   const name = appendTarget.customer_name || appendTarget.display_name || "顧客";
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-accent/15 border-b border-accent/30 shrink-0">
+    <div className="flex items-center justify-between px-7 py-2 bg-accent/15 border-b border-accent/30 shrink-0">
       <span className="text-xs font-semibold text-accent">
         追加模式：訂單 {label}（{name}）
       </span>
