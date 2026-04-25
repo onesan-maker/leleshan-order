@@ -1,6 +1,24 @@
-const HUB_URL = (import.meta.env.VITE_HUB_URL as string | undefined) ?? 'http://100.72.80.2:8080';
-const HUB_TIMEOUT = 5000;
+/* ════════════════════════════════════════════════════════════════
+   hub-client.ts — W11-B 雙 IP Hub 連線用戶端（TypeScript / POS）
 
+   主 URL：VITE_HUB_URL env var，預設 http://100.72.80.2:8080  （Tailscale）
+   備 URL：http://192.168.0.180:8080                             （店內區網）
+
+   策略：先試 preferred URL（初始為主），5 s timeout 後 fallback 到備。
+   切換後 sticky，30 s 後才再試主。兩個都失敗才拋 HubUnavailableError。
+   ════════════════════════════════════════════════════════════════ */
+
+const HUB_URLS: [string, ...string[]] = [
+  (import.meta.env.VITE_HUB_URL as string | undefined) ?? 'http://100.72.80.2:8080',
+  'http://192.168.0.180:8080',
+];
+const HUB_TIMEOUT        = 5000;   /* ms — per-URL timeout */
+const PRIMARY_RECHECK_MS = 30_000; /* ms — re-attempt primary after 30 s */
+
+let preferredIdx     = 0;
+let lastPrimaryCheck = 0;
+
+/* ── Error types ────────────────────────────────────────────── */
 export class HubUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -24,6 +42,7 @@ export class HubServerError extends Error {
   }
 }
 
+/* ── Shared types ───────────────────────────────────────────── */
 export interface PickupNumber {
   pickupNumber: string;
   pickupSequence: number;
@@ -56,27 +75,62 @@ export interface HubOrder {
   [key: string]: unknown;
 }
 
+/* ── Internal helpers ───────────────────────────────────────── */
 function todayDateStr(): string {
-  const now = new Date();
+  const now   = new Date();
   const local = new Date(now.getTime() + (8 * 60 + now.getTimezoneOffset()) * 60000);
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const pad   = (n: number) => String(n).padStart(2, '0');
   return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
 }
 
-async function hubFetch(path: string, init?: RequestInit): Promise<Response> {
+/** 嘗試單一 URL；timeout 或網路錯誤均 reject。 */
+async function tryUrl(baseUrl: string, path: string, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HUB_TIMEOUT);
   try {
-    const res = await fetch(`${HUB_URL}${path}`, { ...init, signal: controller.signal });
+    const res = await fetch(`${baseUrl}${path}`, { ...init, signal: controller.signal });
     clearTimeout(timer);
     return res;
   } catch (e) {
     clearTimeout(timer);
-    if (e instanceof Error && e.name === 'AbortError') {
-      throw new HubUnavailableError('Hub request timed out after 5s');
-    }
-    throw new HubUnavailableError(`Network error: ${e instanceof Error ? e.message : String(e)}`);
+    throw e;
   }
+}
+
+/** 主要 fetch wrapper：雙 URL fallback + sticky preferred。 */
+async function hubFetch(path: string, init?: RequestInit): Promise<Response> {
+  const now = Date.now();
+  let startIdx = preferredIdx;
+
+  /* 30 s 後嘗試回主 URL（若目前在備） */
+  if (preferredIdx !== 0 && now - lastPrimaryCheck >= PRIMARY_RECHECK_MS) {
+    startIdx        = 0;
+    lastPrimaryCheck = now;
+  }
+
+  /* 嘗試順序：startIdx 優先，其餘依序附後 */
+  const tryOrder: number[] = [startIdx];
+  for (let i = 0; i < HUB_URLS.length; i++) {
+    if (i !== startIdx) tryOrder.push(i);
+  }
+
+  let lastErr: unknown;
+  for (const idx of tryOrder) {
+    try {
+      const res = await tryUrl(HUB_URLS[idx], path, init);
+      if (preferredIdx !== idx) {
+        console.log('[hubClient] switched to', HUB_URLS[idx]);
+        preferredIdx = idx;
+      }
+      return res;
+    } catch (e) {
+      lastErr = e;
+      console.warn('[hubClient]', HUB_URLS[idx] + path, 'failed:', e instanceof Error ? e.message : e);
+    }
+  }
+
+  const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  throw new HubUnavailableError(`All Hub URLs unavailable. Last: ${msg}`);
 }
 
 async function parseResponse<T>(res: Response): Promise<T> {
@@ -93,6 +147,15 @@ async function parseResponse<T>(res: Response): Promise<T> {
   throw new HubServerError(`Hub server error: HTTP ${res.status}`);
 }
 
+/* ── Public URL helpers ─────────────────────────────────────── */
+export function getCurrentHubUrl(): string {
+  return HUB_URLS[preferredIdx];
+}
+export function getAllHubUrls(): readonly string[] {
+  return HUB_URLS;
+}
+
+/* ── hubClient object ───────────────────────────────────────── */
 export const hubClient = {
   async isHealthy(): Promise<boolean> {
     try {
@@ -122,7 +185,7 @@ export const hubClient = {
   },
 
   async getTodayOrders(storeId: string, date?: string): Promise<HubOrder[]> {
-    const d = date ?? todayDateStr();
+    const d   = date ?? todayDateStr();
     const res = await hubFetch(`/orders?date=${d}&storeId=${encodeURIComponent(storeId)}`);
     const data = await parseResponse<{ orders: HubOrder[] }>(res);
     return data.orders;

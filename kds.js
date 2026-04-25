@@ -257,7 +257,7 @@
   var lockAttemptIds = new Set();
 
   // ── Hub 輪詢 ─────────────────────────────────────────────────
-  var HUB_URL = window.LELESHAN_HUB_URL || 'http://100.72.80.2:8080';
+  // W11-B: 雙 URL fallback 由 kds-hub-client.js 的 window.LELESHAN_HUB 處理
   var POLL_INTERVAL = 3000;
   var pollTimer = null;
 
@@ -576,8 +576,8 @@
 
   async function fetchHubOrders(storeId, businessDate) {
     try {
-      var url = HUB_URL + '/orders?storeId=' + encodeURIComponent(storeId) + '&date=' + businessDate;
-      var res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      var path = '/orders?storeId=' + encodeURIComponent(storeId) + '&date=' + businessDate;
+      var res = await window.LELESHAN_HUB.fetch(path);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var data = await res.json();
       return data.orders || [];
@@ -799,11 +799,10 @@
     var employeeName = sess.employeeName || "";
     try {
       console.log("[KDS] Changing status via Hub.", { orderId: orderId, nextStatus: nextStatus, by: employeeId });
-      var res = await fetch(HUB_URL + '/orders/' + encodeURIComponent(orderId) + '/status', {
+      var res = await window.LELESHAN_HUB.fetch('/orders/' + encodeURIComponent(orderId) + '/status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus, actorId: employeeId, actorName: employeeName }),
-        signal: AbortSignal.timeout(5000)
+        body: JSON.stringify({ status: nextStatus, actorId: employeeId, actorName: employeeName })
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       // 樂觀更新：等下一輪 poll（3s）自動反映

@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var HUB_URL = window.LELESHAN_HUB_URL || 'http://100.72.80.2:8080';
+  // W11-B: 雙 URL fallback 由 kds-hub-client.js 的 window.LELESHAN_HUB 處理
   var POLL_INTERVAL = 3000;
   var READY_LIMIT = 6;
   var PREPARING_LIMIT = 8;
@@ -122,12 +122,10 @@
 
   function fetchOrders(callback) {
     var date = todayBusinessDate();
-    var url = HUB_URL + '/orders?storeId=' + encodeURIComponent(STORE_ID) + '&date=' + date;
-    var ctrl = new AbortController();
-    var timeoutId = setTimeout(function () { ctrl.abort(); }, 5000);
-    fetch(url, { signal: ctrl.signal })
+    var path = '/orders?storeId=' + encodeURIComponent(STORE_ID) + '&date=' + date;
+    // W11-B: timeout + fallback 由 window.LELESHAN_HUB.fetch 內部處理
+    window.LELESHAN_HUB.fetch(path)
       .then(function (res) {
-        clearTimeout(timeoutId);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
@@ -135,7 +133,6 @@
         callback(null, data.orders || []);
       })
       .catch(function (e) {
-        clearTimeout(timeoutId);
         console.warn('[pickup-board] Hub fetch failed:', e.message);
         callback(e, null);
       });
