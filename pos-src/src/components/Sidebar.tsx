@@ -66,7 +66,7 @@ export function Sidebar({
           className="font-mono text-muted uppercase"
           style={{ fontSize: 10, letterSpacing: 2 }}
         >
-          POS · v2
+          POS · v1
         </span>
       </div>
 

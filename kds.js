@@ -631,9 +631,11 @@
   function updateHubStatus(online) {
     var indicator = document.getElementById('hub-status-indicator');
     if (!indicator) return;
-    indicator.classList.toggle('hub-online', online);
-    indicator.classList.toggle('hub-offline', !online);
+    // W10-C: pill style — toggle .offline class (kds-refresh.css handles color)
+    indicator.classList.toggle('offline', !online);
     indicator.title = online ? '本機 Hub 連線中' : '本機 Hub 連線異常';
+    var text = document.getElementById('hub-status-text');
+    if (text) text.textContent = online ? '本機 Hub 連線中' : '本機 Hub 離線';
   }
 
   function startHubPolling(storeId) {

@@ -8,10 +8,11 @@
   <title>樂樂山 KDS 廚房出單</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@600;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared/tokens.css?v=20260422-w1">
   <link rel="stylesheet" href="/shared/components.css?v=20260422-w1">
   <link rel="stylesheet" href="/ops.css?v=20260421-lock-timing-v2">
+  <link rel="stylesheet" href="/kds-refresh.css?v=20260426-w10c">
   <style>
     /* 兩欄 KDS board */
     .kds-board--two-col { grid-template-columns: 1fr 1fr !important; }
@@ -91,14 +92,7 @@
     .kds-duty-text { font-weight: 600; }
     .kds-duty-text.kds-duty--empty { color: #b91c1c; }
 
-    /* Hub 狀態指示燈 */
-    .hub-indicator { display: inline-flex; align-items: center; margin-left: 8px; }
-    .hub-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #10b981; box-shadow: 0 0 4px #10b981;
-    }
-    .hub-offline .hub-dot { background: #ef4444; box-shadow: 0 0 4px #ef4444; }
-    .hub-offline::after { content: ' 本機離線'; color: #ef4444; font-size: 12px; margin-left: 4px; }
+    /* Hub 狀態圓點：已由 kds-refresh.css .kds-hub-pill 取代，此段保留但不生效 */
   </style>
 </head>
 <body class="ops-page kds-has-stats-bar kds-locked">
@@ -121,7 +115,7 @@
       </div>
       <span id="kds-last-update" class="kds-bar__update">即時更新中</span>
       <button id="kds-sound-toggle" style="margin-left:10px;background:none;border:none;cursor:pointer;font-size:1.2em;line-height:1;padding:2px 6px;color:inherit;">🔊</button>
-      <span id="hub-status-indicator" class="hub-indicator hub-online" title="本機 Hub 連線中"><span class="hub-dot"></span></span>
+      <span id="hub-status-indicator" class="kds-hub-pill" title="本機 Hub 連線中"><span id="hub-status-text">本機 Hub 連線中</span></span>
     </header>
 
     <section class="ops-panel" style="display:none">

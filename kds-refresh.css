@@ -1,0 +1,343 @@
+/* ═══════════════════════════════════════════════════════════════
+   kds-refresh.css — W10-C KDS 視覺對標 pos_redesign.html
+   設計語言：暖琥珀 #ff8a3d + 暖白 #f5f1e8 + 玻璃感
+   本檔載入在 ops.css 之後，利用 cascade 覆蓋。
+   禁止修改 ops.css、shared/*.css — AGENTS.md 規範
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 1. Body 背景 + 暖色暈染 ──────────────────────────────────── */
+body.ops-page {
+  background: #0a0b10;
+  background-image:
+    radial-gradient(ellipse 70% 45% at 0% 0%,   rgba(255, 138, 61, .08), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 100% 100%, rgba(197,  90, 26, .05), transparent 55%);
+  color: #f5f1e8;
+  font-family: "Noto Sans TC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 2. Topbar — 玻璃感 + 暖琥珀底邊 ──────────────────────────── */
+body.kds-has-stats-bar .ops-topbar {
+  background: rgba(17, 19, 25, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid rgba(255, 138, 61, 0.18);
+}
+
+/* boil / pack station accent underline override */
+body.kds-mode-boil .ops-topbar {
+  box-shadow: inset 0 -3px 0 rgba(255, 138, 61, 0.6);
+  border-bottom: none;
+}
+body.kds-mode-pack .ops-topbar {
+  box-shadow: inset 0 -3px 0 rgba(59, 130, 246, 0.5);
+  border-bottom: none;
+}
+
+/* ── 3. Brand ─────────────────────────────────────────────────── */
+.kds-bar__brand {
+  font-family: "Noto Serif TC", serif;
+  font-weight: 900;
+  font-size: clamp(15px, 1.4vw, 20px);
+  color: #f5f1e8;
+  gap: 10px;
+}
+.kds-bar__logo {
+  background: linear-gradient(135deg, #ff8a3d, #ffb347);
+  box-shadow: 0 2px 8px rgba(255, 138, 61, 0.35);
+  border-radius: 8px;
+}
+
+/* ── 4. Hub status pill ──────────────────────────────────────── */
+.kds-hub-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: "Noto Sans TC", sans-serif;
+  background: rgba(125, 214, 123, 0.12);
+  border: 1px solid rgba(125, 214, 123, 0.30);
+  color: #7dd67b;
+  transition: background .2s, border-color .2s, color .2s;
+}
+.kds-hub-pill::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+.kds-hub-pill.offline {
+  background: rgba(255, 91, 91, 0.12);
+  border-color: rgba(255, 91, 91, 0.30);
+  color: #ff5b5b;
+}
+
+/* ── 5. Stats / duty info ────────────────────────────────────── */
+.kds-bar__info,
+.kds-bar__update,
+.kds-bar__live {
+  color: rgba(245, 241, 232, 0.45);
+  font-size: clamp(10px, 0.9vw, 12px);
+}
+.kds-duty-text { color: rgba(245, 241, 232, 0.75); }
+.kds-duty-text.kds-duty--empty { color: #ff5b5b; }
+
+/* ── 6. Station badge ────────────────────────────────────────── */
+.kds-station-badge {
+  border-radius: 999px;
+}
+body.kds-mode-boil .kds-station-badge {
+  background: rgba(255, 138, 61, 0.14);
+  border: 1px solid rgba(255, 138, 61, 0.30);
+  color: #ffb347;
+}
+body.kds-mode-pack .kds-station-badge {
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.30);
+  color: #93c5fd;
+}
+
+/* ── 7. Column header ────────────────────────────────────────── */
+.kds-col--work .kds-col__head  { border-bottom: 2px solid rgba(255, 138, 61, 0.45); }
+.kds-col--work .kds-col__title { color: #ff8a3d; font-family: "Noto Serif TC", serif; font-weight: 900; }
+.kds-col--ready .kds-col__head { border-bottom: 2px solid rgba(125, 214, 123, 0.45); }
+.kds-col--ready .kds-col__title { color: #7dd67b; font-family: "Noto Serif TC", serif; font-weight: 900; }
+
+/* ── 8. KDS main area ────────────────────────────────────────── */
+.kds-main {
+  background: transparent;
+}
+
+/* ── 9. Order cards — glass base ─────────────────────────────── */
+.kds-card {
+  background: linear-gradient(150deg, rgba(32, 36, 48, 0.90), rgba(17, 19, 25, 0.75));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .04) inset,
+    0 8px 24px -12px rgba(0, 0, 0, .65);
+  overflow: hidden; /* keep — needed for border-radius to clip CTA btn */
+}
+
+/* accepted / preparing — amber tint */
+.kds-card--accepted,
+.kds-card--preparing {
+  border-color: rgba(255, 138, 61, 0.28);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .04) inset,
+    0 4px 20px rgba(255, 138, 61, 0.10);
+}
+
+/* ready — green tint */
+.kds-card--ready {
+  background: linear-gradient(150deg, rgba(30, 60, 40, 0.85), rgba(17, 19, 25, 0.75));
+  border-color: rgba(125, 214, 123, 0.38);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .04) inset,
+    0 4px 20px rgba(125, 214, 123, 0.14);
+}
+
+/* ── 10. Pickup number ───────────────────────────────────────── */
+.kds-card__number {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  color: #ff8a3d;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 20px rgba(255, 138, 61, 0.30);
+}
+.kds-card--ready .kds-card__number {
+  color: #7dd67b;
+  text-shadow: 0 0 20px rgba(125, 214, 123, 0.30);
+}
+/* compact mode number keeps the amber */
+.kds-card--compact .kds-card__number { color: #ffb347; }
+
+/* ── 11. Card meta / customer name ───────────────────────────── */
+.kds-card__hero {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+.kds-card__name {
+  color: #f5f1e8;
+  font-weight: 600;
+}
+.kds-card__meta {
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(245, 241, 232, 0.50);
+}
+
+/* ── 12. Item list ───────────────────────────────────────────── */
+.kds-card__body li {
+  color: #f5f1e8;
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+.kds-card__body li.done {
+  color: rgba(245, 241, 232, 0.28);
+  text-decoration: line-through;
+}
+.kds-card__body li .qty {
+  color: #ffb347;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+}
+
+/* ── 13. Wait-bar (timing badge) ──────────────────────────────── */
+.kds-card__wait-bar {
+  font-family: "JetBrains Mono", monospace;
+  background: rgba(30, 36, 50, 0.70);
+  color: rgba(245, 241, 232, 0.55);
+  border-radius: 6px;
+}
+.kds-card__wait-bar.wait {
+  background: rgba(51, 65, 85, 0.65);
+  color: rgba(245, 241, 232, 0.60);
+}
+.kds-card__wait-bar.warn {
+  background: rgba(180, 83, 9, 0.75);
+  color: #fbbf24;
+}
+.kds-card__wait-bar.crit {
+  background: rgba(185, 28, 28, 0.80);
+  color: #fca5a5;
+}
+
+/* ── 14. CTA buttons ─────────────────────────────────────────── */
+.kds-btn {
+  font-family: "Noto Sans TC", sans-serif;
+}
+
+/* 完成出餐 → warm amber gradient (準備中 → 可取餐) */
+.kds-btn--main.ready {
+  background: linear-gradient(180deg, #ffb347 0%, #ff8a3d 100%);
+  color: #1a0d00;
+  font-family: "Noto Serif TC", serif;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 6px 18px rgba(255, 138, 61, 0.35);
+}
+.kds-btn--main.ready:hover  { filter: brightness(1.08); }
+.kds-btn--main.ready:active { transform: scale(0.97); }
+@keyframes kdsCtaReady {
+  0%, 100% { background: linear-gradient(180deg, #ffb347, #ff8a3d); }
+  50%      { background: linear-gradient(180deg, #ffc96a, #ffad61); }
+}
+
+/* 確認接受 → amber ghost */
+.kds-btn--main.accept {
+  background: linear-gradient(180deg, rgba(255, 138, 61, 0.22), rgba(255, 138, 61, 0.10));
+  border: 1px solid rgba(255, 138, 61, 0.30);
+  color: #ffb347;
+  font-weight: 700;
+  box-shadow: none;
+}
+.kds-btn--main.accept:hover { filter: brightness(1.1); }
+
+/* 已取餐 → sky blue (完成) */
+.kds-btn--main.pickup {
+  background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%);
+  color: #fff;
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 4px 12px rgba(59, 130, 246, 0.30);
+}
+.kds-btn--main.pickup:hover { filter: brightness(1.1); }
+
+/* cancel / sub button */
+.kds-btn--sub {
+  background: transparent;
+  border-left-color: rgba(255, 255, 255, 0.07);
+  color: rgba(245, 241, 232, 0.35);
+}
+.kds-btn--sub:hover { background: rgba(239, 68, 68, 0.12); color: #ff5b5b; }
+
+/* ── 15. Stats bar ───────────────────────────────────────────── */
+.kds-stats-bar {
+  background: rgba(10, 11, 16, 0.92);
+  border-top: 1px solid rgba(255, 138, 61, 0.12);
+  font-family: "JetBrains Mono", monospace;
+}
+.kds-stats-bar__label { color: rgba(245, 241, 232, 0.40); }
+.kds-stats-bar__val   { color: #ff8a3d; font-weight: 700; }
+
+/* ── 16. Lock bar ────────────────────────────────────────────── */
+.kds-lock-bar {
+  background: rgba(120, 53, 15, 0.30);
+  color: #fbbf24;
+  border-bottom-color: rgba(251, 191, 36, 0.18);
+}
+
+/* ── 17. Toast ───────────────────────────────────────────────── */
+.kds-toast {
+  background: linear-gradient(135deg,
+    rgba(125, 214, 123, 0.14),
+    rgba(17, 19, 25, 0.92));
+  border: 1px solid rgba(125, 214, 123, 0.28);
+  color: #7dd67b;
+  font-family: "Noto Sans TC", sans-serif;
+  border-radius: 10px;
+}
+
+/* ── 18. Source chip polish ──────────────────────────────────── */
+.kds-src {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 5px;
+}
+
+/* ── 19. ops-stats panel ─────────────────────────────────────── */
+.ops-panel,
+.ops-stats {
+  background: rgba(17, 19, 25, 0.70);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+.ops-stat { border-color: rgba(255, 255, 255, 0.05); }
+.ops-stat strong { color: #ffb347; font-family: "JetBrains Mono", monospace; }
+
+/* ── 20. Modal polish ────────────────────────────────────────── */
+.kds-modal__box {
+  background: rgba(24, 27, 36, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.kds-modal__header {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+.kds-modal__num {
+  font-family: "Noto Serif TC", serif;
+  color: #f5f1e8;
+}
+.kds-cancel-reason-btn {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 91, 91, 0.20);
+  color: #ff5b5b;
+  background: rgba(255, 91, 91, 0.06);
+  transition: background .15s;
+}
+.kds-cancel-reason-btn:hover {
+  background: rgba(255, 91, 91, 0.16);
+}
+.kds-cancel-modal__dismiss {
+  border-radius: 10px;
+  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 241, 232, 0.60);
+}
+.kds-cancel-modal__dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f1e8;
+}

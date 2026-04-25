@@ -98,7 +98,7 @@ export default function App() {
           <div className="text-4xl mb-2">🔒</div>
           <h1 className="font-serif text-2xl font-black">尚未登入 POS</h1>
           <p className="text-muted text-sm leading-relaxed">
-            POS v2 與 /pos 共用員工登入狀態。請先從登入頁驗證員工身分。
+            POS 與 /pos 共用員工登入狀態。請先從登入頁驗證員工身分。
           </p>
           <a
             href="/pos-login.html"
