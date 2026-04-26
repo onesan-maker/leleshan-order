@@ -54,7 +54,7 @@ export function subscribeCategories(storeId: string, cb: (cats: MenuCategory[]) 
       snap.forEach((d) => rows.push({ id: d.id, ...(d.data() as Omit<MenuCategory, "id">) }));
       cb(rows.filter((r) => r.enabled !== false).sort(bySort));
     },
-    (err) => console.error("[POS v2] subscribeCategories failed:", err),
+    (err) => console.error("[POS] subscribeCategories failed:", err),
   );
 }
 
@@ -99,7 +99,7 @@ export function subscribeMenuItems(storeId: string, cb: (items: MenuItem[]) => v
       itemsNew = snap.docs.map(toRow);
       publish();
     },
-    (err) => console.error("[POS v2] subscribeMenuItems(menu_items) failed:", err),
+    (err) => console.error("[POS] subscribeMenuItems(menu_items) failed:", err),
   );
 
   const unsubLegacy = onSnapshot(
@@ -108,7 +108,7 @@ export function subscribeMenuItems(storeId: string, cb: (items: MenuItem[]) => v
       itemsLegacy = snap.docs.map(toRow);
       publish();
     },
-    (err) => console.error("[POS v2] subscribeMenuItems(menuItems) failed:", err),
+    (err) => console.error("[POS] subscribeMenuItems(menuItems) failed:", err),
   );
 
   return () => {
@@ -151,7 +151,7 @@ export function subscribeCombos(storeId: string, cb: (combos: Combo[]) => void):
           .sort(bySort),
       );
     },
-    (err) => console.error("[POS v2] subscribeCombos failed:", err),
+    (err) => console.error("[POS] subscribeCombos failed:", err),
   );
 }
 
@@ -164,6 +164,6 @@ export function subscribeFlavors(storeId: string, cb: (flavors: Flavor[]) => voi
       snap.forEach((d) => rows.push({ id: d.id, ...(d.data() as Omit<Flavor, "id">) }));
       cb(rows.filter((r) => r.enabled !== false).sort(bySort));
     },
-    (err) => console.error("[POS v2] subscribeFlavors failed:", err),
+    (err) => console.error("[POS] subscribeFlavors failed:", err),
   );
 }

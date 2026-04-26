@@ -1,14 +1,18 @@
 import { useState, useCallback } from "react";
 import type { PosSession } from "@/lib/session";
-import { listTodayOrders, type TodayOrder } from "@/services/order-list.service";
+import { listTodayOrdersFromHub, type TodayOrder } from "@/services/order-list.service";
+import { useUIStore } from "@/stores/ui.store";
+import { RefundModal } from "./RefundModal";
 
 const STATUS_LABELS: Record<string, string> = {
-  new:       "新訂單",
-  accepted:  "已接受",
-  preparing: "製作中",
-  ready:     "備餐完成",
-  completed: "已完成",
-  cancelled: "已取消",
+  new:            "新訂單",
+  accepted:       "已接受",
+  preparing:      "製作中",
+  ready:          "備餐完成",
+  completed:      "已完成",
+  cancelled:      "已取消",
+  refunded:       "部分退款",
+  fully_refunded: "已全退",
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -28,26 +32,37 @@ function tsToTime(val: unknown): string {
   return isNaN(d.getTime()) ? "—" : d.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
 }
 
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "completed":      return "bg-green-500/20 text-green-400";
+    case "cancelled":      return "bg-red-500/20 text-red-400";
+    case "ready":          return "bg-accent/20 text-accent";
+    case "refunded":       return "bg-amber-500/20 text-amber-400";
+    case "fully_refunded": return "bg-orange-700/20 text-orange-400";
+    default:               return "bg-panel-2 border border-line text-muted";
+  }
+}
+
 interface Props {
   session: PosSession;
   onEnterAppend(order: TodayOrder): void;
 }
 
 export function OrderListTab({ session, onEnterAppend }: Props) {
-  const [orders, setOrders] = useState<TodayOrder[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [search, setSearch] = useState("");
+  const [orders,         setOrders        ] = useState<TodayOrder[]>([]);
+  const [loading,        setLoading       ] = useState(false);
+  const [error,          setError         ] = useState<string | null>(null);
+  const [loaded,         setLoaded        ] = useState(false);
+  const [search,         setSearch        ] = useState("");
+  const [refundingOrder, setRefundingOrder] = useState<TodayOrder | null>(null);
+
+  const showToast = useUIStore((s) => s.showToast);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const rows = await listTodayOrders({
-        employeeId: session.employeeId,
-        sessionToken: session.sessionToken,
-      });
+      const rows = await listTodayOrdersFromHub(session.storeId);
       setOrders(rows);
       setLoaded(true);
     } catch (e: unknown) {
@@ -57,18 +72,33 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
     }
   }, [session]);
 
-  const completedSet = new Set(["completed", "cancelled"]);
+  /* 可追加：尚未完成/取消/退款完畢 */
+  const appendableSet = new Set(["new", "accepted", "preparing", "ready"]);
+  /* 可退款：已完成或部分退款 */
+  const refundableSet = new Set(["completed", "refunded"]);
+
   const q = search.trim().toLowerCase();
   const filtered = orders.filter((o) => {
     if (!q) return true;
-    const no = String(o.pickupNumber || "").toLowerCase();
+    const no   = String(o.pickupNumber || "").toLowerCase();
     const name = String(o.customer_name || o.display_name || "").toLowerCase();
-    const id = String(o.id || "").toLowerCase();
+    const id   = String(o.id || "").toLowerCase();
     return no.includes(q) || name.includes(q) || id.includes(q);
   });
 
+  const handleRefundSuccess = (orderId: string, newStatus: string, newRefundedAmount: number) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId ? { ...o, status: newStatus, refunded_amount: newRefundedAmount } : o,
+      ),
+    );
+    setRefundingOrder(null);
+    showToast(`✅ 退款成功 — NT$${newRefundedAmount}`, "ok");
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-line shrink-0">
         <input
@@ -109,7 +139,9 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
           <div className="text-center py-8 text-xs text-red-400 px-4">載入失敗：{error}</div>
         )}
         {loaded && !loading && filtered.length === 0 && (
-          <div className="text-center text-muted py-16 text-sm">{q ? "無符合搜尋的訂單" : "今日尚無訂單"}</div>
+          <div className="text-center text-muted py-16 text-sm">
+            {q ? "無符合搜尋的訂單" : "今日尚無訂單"}
+          </div>
         )}
         {loaded && !loading && filtered.length > 0 && (
           <table className="w-full text-xs">
@@ -126,12 +158,14 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
             </thead>
             <tbody className="divide-y divide-line">
               {filtered.map((o) => {
-                const status = o.status || "new";
-                const canAppend = !completedSet.has(status);
-                const no = o.pickupNumber ? `#${o.pickupNumber}` : o.id.slice(-6);
-                const total = Number(o.total || o.totalAmount || o.subtotal || 0);
-                const name = o.customer_name || o.display_name || "—";
-                const src = o.source || "pos";
+                const status       = o.status || "new";
+                const canAppend    = appendableSet.has(status);
+                const canRefund    = refundableSet.has(status);
+                const no           = o.pickupNumber ? `#${o.pickupNumber}` : o.id.slice(-6);
+                const total        = Number(o.total || o.totalAmount || o.subtotal || 0);
+                const refunded     = Number(o.refunded_amount || 0);
+                const name         = o.customer_name || o.display_name || "—";
+                const src          = o.source || "pos";
                 return (
                   <tr key={o.id} className="hover:bg-panel-2 transition-colors">
                     <td className="px-3 py-2 font-mono font-bold">{no}</td>
@@ -141,28 +175,40 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
                         {SOURCE_LABELS[src] || src}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono font-bold text-accent-2">NT${total}</td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="font-mono font-bold text-accent-2">NT${total}</div>
+                      {refunded > 0 && (
+                        <div className="font-mono text-[10px] text-amber-400">已退 NT${refunded}</div>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <span className={[
                         "px-1.5 py-0.5 rounded text-[10px] font-semibold",
-                        status === "completed" ? "bg-green-500/20 text-green-400" :
-                        status === "cancelled" ? "bg-red-500/20 text-red-400" :
-                        status === "ready"     ? "bg-accent/20 text-accent" :
-                        "bg-panel-2 border border-line text-muted",
+                        statusBadgeClass(status),
                       ].join(" ")}>
                         {STATUS_LABELS[status] || status}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-muted">{tsToTime(o.createdAt)}</td>
                     <td className="px-3 py-2 text-center">
-                      {canAppend && (
-                        <button
-                          onClick={() => onEnterAppend(o)}
-                          className="px-2 py-1 rounded-lg border border-accent/40 text-accent text-[10px] font-semibold hover:bg-accent/10 transition-colors"
-                        >
-                          追加
-                        </button>
-                      )}
+                      <div className="flex items-center justify-center gap-1.5">
+                        {canAppend && (
+                          <button
+                            onClick={() => onEnterAppend(o)}
+                            className="px-2 py-1 rounded-lg border border-accent/40 text-accent text-[10px] font-semibold hover:bg-accent/10 transition-colors"
+                          >
+                            追加
+                          </button>
+                        )}
+                        {canRefund && (
+                          <button
+                            onClick={() => setRefundingOrder(o)}
+                            className="px-2 py-1 rounded-lg border border-amber-500/40 text-amber-400 text-[10px] font-semibold hover:bg-amber-500/10 transition-colors"
+                          >
+                            退款
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -171,6 +217,18 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
           </table>
         )}
       </div>
+
+      {/* Refund Modal */}
+      {refundingOrder && (
+        <RefundModal
+          order={refundingOrder}
+          session={session}
+          onSuccess={(newStatus, newRefundedAmount) =>
+            handleRefundSuccess(refundingOrder.id, newStatus, newRefundedAmount)
+          }
+          onClose={() => setRefundingOrder(null)}
+        />
+      )}
     </div>
   );
 }

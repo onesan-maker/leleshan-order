@@ -75,6 +75,28 @@ export interface HubOrder {
   [key: string]: unknown;
 }
 
+export interface RefundRecord {
+  id: number;
+  amount: number;
+  method: string;
+  reason?: string | null;
+  actor_id?: string | null;
+  actor_name?: string | null;
+  created_at: string;
+}
+
+export interface RefundResult {
+  id: string;
+  status: string;            /* 'refunded' | 'fully_refunded' */
+  refunded_amount: number;
+  refund: RefundRecord;
+}
+
+export interface RefundHistoryResult {
+  orderId: string;
+  refunds: RefundRecord[];
+}
+
 /* ── Internal helpers ───────────────────────────────────────── */
 function todayDateStr(): string {
   const now   = new Date();
@@ -184,9 +206,14 @@ export const hubClient = {
     return parseResponse<OrderCreateResult>(res);
   },
 
-  async getTodayOrders(storeId: string, date?: string): Promise<HubOrder[]> {
-    const d   = date ?? todayDateStr();
-    const res = await hubFetch(`/orders?date=${d}&storeId=${encodeURIComponent(storeId)}`);
+  async getTodayOrders(
+    storeId: string,
+    options?: { date?: string; includeAll?: boolean },
+  ): Promise<HubOrder[]> {
+    const d   = options?.date ?? todayDateStr();
+    let url = `/orders?date=${d}&storeId=${encodeURIComponent(storeId)}`;
+    if (options?.includeAll) url += '&includeAll=1';
+    const res  = await hubFetch(url);
     const data = await parseResponse<{ orders: HubOrder[] }>(res);
     return data.orders;
   },
@@ -198,5 +225,25 @@ export const hubClient = {
       body: JSON.stringify({ status, ...actor }),
     });
     return parseResponse<StatusUpdate>(res);
+  },
+
+  async refundOrder(
+    orderId: string,
+    amount: number,
+    method: string,
+    actor?: Actor,
+    reason?: string,
+  ): Promise<RefundResult> {
+    const res = await hubFetch(`/orders/${encodeURIComponent(orderId)}/refund`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, method, reason, ...actor }),
+    });
+    return parseResponse<RefundResult>(res);
+  },
+
+  async getRefunds(orderId: string): Promise<RefundHistoryResult> {
+    const res = await hubFetch(`/orders/${encodeURIComponent(orderId)}/refunds`);
+    return parseResponse<RefundHistoryResult>(res);
   },
 };

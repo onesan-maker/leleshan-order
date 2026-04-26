@@ -26,7 +26,7 @@ export async function switchEmployee(
     const logoutFn = httpsCallable(functions, "logoutPosSession");
     await logoutFn({ sessionToken: currentSession.sessionToken });
   } catch (e) {
-    console.warn("[POS v2] old session logout on switch failed:", e);
+    console.warn("[POS] old session logout on switch failed:", e);
   }
 
   return {

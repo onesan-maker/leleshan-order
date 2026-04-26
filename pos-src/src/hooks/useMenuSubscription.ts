@@ -29,7 +29,7 @@ export function useMenuSubscription(storeId: string | null | undefined) {
           setStaples(go.staples as string[]);
         }
       })
-      .catch((e) => console.warn("[POS v2] settings read failed:", e));
+      .catch((e) => console.warn("[POS] settings read failed:", e));
 
     const unsubCats = subscribeCategories(storeId, setCategories);
     const unsubItems = subscribeMenuItems(storeId, setItems);
