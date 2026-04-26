@@ -1,6 +1,6 @@
 # 樂樂山專案待辦 BACKLOG
 
-最後更新：2026-04-27（W13-A）
+最後更新：2026-04-28（W14-A）
 
 > 這份檔案的存在是為了讓 Claude（任何對話、任何時刻）都能看到「目前還沒做完的事」，
 > 避免依賴對話 context、避免遺忘。
@@ -13,23 +13,50 @@
 
 業主習慣：凌晨 3:30 收工，下午 2 點起床。
 
-**W13-A 退款流程 — 家用電腦端已完成，準系統 Hub 端待套用**：
-- Git repo 側（家用電腦）已全部完成並部署到 `https://leleshan-system.web.app`
-- 準系統 Hub（`C:\Users\YK\hub\`）需要套用 `hub-patches/W13A-refund-api.js` 的三個部分：
-  1. `initDb()` 加入 `refunds` 表 + `orders.refunded_amount` 欄位
-  2. 路由區加入 `POST /orders/:id/refund` + `GET /orders/:id/refunds`
-  3. `GET /orders` 加入預設隱藏 `cancelled` + `fully_refunded`，支援 `?includeAll=1`
-  4. `pm2 restart hub`
-- 套用後需實測：POS 今日訂單頁「退款」按鈕流程
+**最後一次 session 結束時間**：2026-04-27 凌晨
 
-**設備網路狀態（截至 2026-04-27）**：
-- 準系統 Hub：店裡 HiNet AP 有線，IP `192.168.1.50`（已保留 / 確認）
-- Tailscale IP：`100.72.80.2`（永遠不變）
-- POS / KDS / Pickup Board：W11-B 雙 IP fallback（主 Tailscale、備 192.168.1.50）
+**目前系統能力**（截至此 commit）：
+- ✅ 完整離線優先架構（Hub-first，Tailscale + LAN 雙 IP fallback）
+- ✅ POS / KDS / Pickup Board / Admin 全套 UI 對標 design/pos_redesign.html
+- ✅ 訂單退款（部分/全額）端到端：POS UI + Hub API
+- ✅ 報表頁（KPI / 每日趨勢 / 來源分布 / Top10 / CSV 匯出）
+- ✅ Admin Hub 監控面板
+- ✅ Hub 自動每日備份 + 同步歷史時間軸
+- ✅ Firestore Rules 安全審計（H1~H5、M1/M4、L1 修補 deploy 完成）
+- ✅ 發票模組空殼（POS 結帳填寫 + Admin 管理頁 + Hub 標記 endpoint，未串第三方）
+- ✅ 庫存基礎（Hub schema + endpoints 完備，待 admin UI / POS 自動扣量）
 
-**待辦的網路強化**：
-- [ ] router 設 DHCP 保留 IP（192.168.1.50 綁有線 MAC）——若尚未設
-- [ ] 韌性實測：拔網路線測 POS / KDS 撐 5 分鐘（W11 韌性測試）
+**網路架構**（已穩定）：
+- 中華電信 AP（192.168.1.x 網段）
+- 準系統 Hub：有線 192.168.1.50（中華電信 AP DHCP 保留）
+- TP-Link AX1500：基地台模式（WiFi 訊號延伸，不做 NAT）
+- 全店 POS / KDS / 看板 都在 192.168.1.x 同網段
+- Tailscale 100.72.80.2（跨地點遠端管理）
+- W11-B 雙 IP fallback：主 100.72.80.2、備 192.168.1.50
+
+**生產環境狀態**：
+- 業主餐廳已營運 9 個月，使用 Loyverse + 你訂作為過渡
+- 本系統與生產環境並行，目前所有訂單均為測試
+- 切換到本系統的時機由業主決定（無 deadline 壓力）
+
+**待辦清單依優先序**：
+
+### 高優先（核心功能完整度）
+- [ ] **W14-C 庫存 admin UI**：菜單管理頁加庫存設定 + 補貨 / 異動歷史 / 警告
+- [ ] **W14-D 訂單下單自動扣庫存**：POS 送單時 hook，扣對應 menu_item 的 inventory
+- [ ] **W11 韌性實測**：拔網路線 5 分鐘看 POS / KDS 撐住、Hub 恢復後同步補推
+- [ ] **W13-B 移除過時 line / walk_in source 白名單**（如果確認 Cloud Function 沒在用）
+
+### 中優先（業務流程完整）
+- [ ] **admin 後台 UI 對標 + 重寫**：admin.js 1831 行 vanilla 重寫成 React
+- [ ] **pos-admin 重寫**：菜單管理 / POS 規則設定（vanilla 1831 行）
+- [ ] **發票第三方串接**（業主簽完加值中心後再做）：ECPay / NewebPay / 統一
+- [ ] **退款報表**：日 / 月 / 退款率 / 退款原因分布
+
+### 低優先（擴展功能）
+- [ ] **顧客忠誠度 / 點數系統**：point_transactions 已有 schema，缺 UI
+- [ ] **員工管理 / 班表 / 薪資**：shift_logs 已記錄，缺彙整介面
+- [ ] **LIFF 顧客端優化**：INDEX-01~09（我的訂單、取消訂單、等待時間、推播）
 
 ---
 
@@ -54,16 +81,16 @@
 
 ## 高優先（影響核心使用體驗）
 
-- [ ] **W11 韌性實測**：明天接實體網路線後，實測拔網路線 5 分鐘看 POS/KDS 是否撐住、Hub Sync Daemon 在網路恢復後是否補推訂單
-- [ ] **W12 Firestore Rules 安全審計**：W4 發現過漏洞（追加被擋），系統性掃描
+- [ ] **W14-C 庫存 admin UI**：菜單管理頁加庫存設定 + 補貨 / 異動歷史 / 警告
+- [ ] **W14-D 訂單下單自動扣庫存**：POS 送單時 hook，扣對應 menu_item 的 inventory
+- [ ] **W11 韌性實測**：拔網路線 5 分鐘看 POS / KDS 撐住、Hub 恢復後同步補推
 
 ## 中優先（功能完整度）
 
-- [ ] **admin 後台 UI 對標 + 重寫**：含 Hub 監控頁。admin.js 1831 行 vanilla 重寫成 React
-- [ ] **pos-admin 重寫**：菜單管理 / POS 規則設定（vanilla 1831 行）
-- [ ] **訂單退款流程（Hub 端）**：`hub-patches/W13A-refund-api.js` 套用到準系統 Hub（schema + endpoints + GET /orders filter）
-- [ ] **發票整合**：營運中需要的（電子發票 / 紙本）
-- [ ] **庫存管理**：售完狀態目前手動，缺自動扣庫存
+- [ ] **admin 後台 UI 對標 + 重寫**：admin.js 越來越長，重寫成 React
+- [ ] **pos-admin 重寫**：菜單管理 / POS 規則設定（vanilla）
+- [ ] **發票第三方串接**（業主簽完加值中心後再做）：ECPay / NewebPay / 統一
+- [ ] **退款報表**：日 / 月 / 退款率 / 退款原因分布
 
 ## 低優先（優化與擴展）
 
@@ -73,7 +100,8 @@
   - 等待時間顯示
   - 推播通知
   - 會員系統整合
-  - 其他
+- [ ] **顧客忠誠度 / 點數系統**：point_transactions 已有 schema，缺 UI
+- [ ] **員工管理 / 班表 / 薪資**：shift_logs 已記錄，缺彙整介面
 
 ---
 
@@ -100,7 +128,12 @@
 - ✅ W12 Pickup Board UI 對標（暖琥珀 + 玻璃感，kds-hub-pill 狀態指示）
 - ✅ W12 Admin 報表頁（KPI / 每日折線 / 來源分布 / 熱銷 Top10 / 訂單明細 / CSV 匯出）
 - ✅ W12-Hub `/admin/reports` endpoint（已實作完成）
-- ✅ W13-A 訂單退款流程（POS 端）：RefundModal、hubClient.refundOrder、OrderListTab 退款按鈕 / 狀態標籤 / 已退金額顯示（Hub 端待套用 hub-patches/W13A-refund-api.js）
+- ✅ Pickup Board 動畫遮擋 Hotfix（第 3 次，CSS 加永久警告註解）
+- ✅ W13-A 訂單退款流程（POS UI + Hub API + 端到端驗證）
+- ✅ W13-B Firestore Rules 安全審計 + Deploy（5H + 2M + 1L 修補，含 LIFF unauthenticated 妥協 fallback）
+- ✅ hub-patches/ 清理（W13A patch 已套用後刪除）
+- ✅ W14-A 發票模組空殼（POS / Admin / Hub）
+- ✅ W14-B Hub 庫存基礎（schema + 6 個 endpoints + 路由順序修補）
 
 ---
 
