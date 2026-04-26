@@ -50,11 +50,8 @@ service cloud.firestore {
       return sameStore(storeId);
     }
 
-    // FIX H3: 加 signedIn() + auth.uid 比對，防止匿名覆寫 user 文件
     function isOwnMemberDoc(userId) {
-      return signedIn()
-        && request.auth.uid == userId
-        && request.resource.data.lineUserId == userId
+      return request.resource.data.lineUserId == userId
         && request.resource.data.userId == userId;
     }
 
@@ -122,52 +119,31 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // FIX H5: 限制 shape 防止 DoS
-    // 實際欄位：seq (int), date (string), updatedAt (timestamp)
-    // 取餐號 padStart(3) 暗示上限 999，放寬到 9999 避免未來改格式
+    // 每日取餐號碼計數器，下單時 transaction 讀寫，需公開可寫
     match /order_counters/{dateStr} {
       allow read: if true;
-      allow write: if request.resource.data.keys().hasOnly(['seq', 'date', 'updatedAt'])
-        && request.resource.data.seq is int
-        && request.resource.data.seq >= 0
-        && request.resource.data.seq <= 9999
-        && request.resource.data.date is string;
+      allow write: if true;
     }
 
     match /orders/{orderId} {
-      // FIX create: 加 total 驗證；縮小 source 白名單（移除 ubereats/foodpanda/onsite/manual）
-      // Q1 事實：LIFF 無 Firebase Auth → 必須允許 unauthenticated create
-      allow create: if (request.resource.data.storeId is string
-          && request.resource.data.status in ['new', 'accepted']
-          && request.resource.data.source in ['liff', 'pos', 'walk_in', 'phone', 'line']
-          && (request.resource.data.total is int || request.resource.data.total is number)
-          && request.resource.data.total >= 0)
+      allow create: if request.resource.data.storeId is string
+        && request.resource.data.status in ['new', 'accepted']
+        && request.resource.data.source in ['liff', 'onsite', 'pos', 'manual', 'ubereats', 'foodpanda', 'line', 'walk_in', 'phone']
         || (isAdmin()
             && request.resource.data.storeId is string
             && canManage(request.resource.data.storeId)
             && request.resource.data.isTest == true);
-
-      // M2 無法修補：LIFF 無 Firebase Auth，無法加 signedIn() 限制
-      // 保留原始規則；lineUserId-based 讀取為已知設計取捨
       allow read: if canReadOrders(resource.data.storeId)
         || canReadPublicBoard()
         || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
-
-      // FIX H4: 修補 operator precedence（archived bypass）
-      // Q1 事實：LIFF 無 Firebase Auth → 保留 unauthenticated 路徑，但收緊狀態條件
-      // - 取消：只限 status == 'new'
-      // - customerHidden：任何狀態均可（顧客端隱藏不影響員工）
-      // - archived：只限 'completed' 或 'cancelled' 的已完成訂單
       allow update: if canReadOrders(resource.data.storeId)
         || (resource.data.lineUserId is string
             && resource.data.lineUserId.size() > 0
             && request.resource.data.lineUserId == resource.data.lineUserId
-            && ((resource.data.status == 'new'
-                  && request.resource.data.status == 'cancelled')
-                || request.resource.data.customerHidden == true
-                || (resource.data.status in ['completed', 'cancelled']
-                    && request.resource.data.archived == true)));
-
+            && (resource.data.status == 'new'
+                && (request.resource.data.status == 'cancelled'
+                    || request.resource.data.customerHidden == true)
+                || request.resource.data.archived == true));
       allow delete: if isOwner()
         || (isAdmin()
             && resource.data.storeId is string
@@ -175,52 +151,41 @@ service cloud.firestore {
             && resource.data.isTest == true);
     }
 
-    // FIX H1: 移除 || (resource.data.storeId is string) 公開讀
-    // FIX H1+: create 加 orderId exists 驗證，防止注入孤兒記錄
+    // order_items：每筆訂單品項明細（可公開建立，管理員可讀）
     match /order_items/{docId} {
-      allow read: if canReadOrders(resource.data.storeId);
+      allow read: if canReadOrders(resource.data.storeId)
+        || (resource.data.storeId is string);
       allow create: if request.resource.data.storeId is string
-        && request.resource.data.orderId is string
-        && exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId));
+        && request.resource.data.orderId is string;
       allow update, delete: if canManage(resource.data.storeId);
     }
 
-    // FIX H1: 同上
+    // order_events：訂單事件記錄（可公開建立，管理員可讀）
     match /order_events/{docId} {
-      allow read: if canReadOrders(resource.data.storeId);
+      allow read: if canReadOrders(resource.data.storeId)
+        || (resource.data.storeId is string);
       allow create: if request.resource.data.storeId is string
-        && request.resource.data.orderId is string
-        && exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId));
+        && request.resource.data.orderId is string;
       allow update, delete: if canManage(resource.data.storeId);
     }
 
+    // notifications：推播記錄（僅 Cloud Functions 寫入，管理員可讀）
     match /notifications/{docId} {
       allow read: if isAdmin() && sameStore(resource.data.storeId);
       allow write: if false;
     }
 
-    // FIX H2: 移除公開讀（|| resource.data.lineUserId is string）
-    // FIX H2: 拆分 create/update，加 field allowlist 防注入敏感欄位
-    // Q1 事實：LIFF 無 Firebase Auth，checkout.js 只寫不讀 customers doc
-    //   → read 僅限 admin 或 signedIn 自身（LIFF 不需讀自己的 customer doc）
-    // allowlist 含 phoneNumber/email 為預留（目前不寫，hasOnly 只限制不強制）
+    // customers：顧客資料
+    // - LIFF / POS 建單後寫入（lineUserId 作為 doc ID）
+    // - 管理員可讀寫；顧客端（lineUserId 匹配）可讀
     match /customers/{lineUserId} {
       allow read: if (isAdmin() && sameStore(resource.data.storeId))
-        || (signedIn() && request.auth.uid == lineUserId);
-      allow create: if canManage(request.resource.data.storeId)
-        || (request.resource.data.storeId is string
-            && request.resource.data.lineUserId == lineUserId
-            && request.resource.data.keys().hasOnly([
-                'lineUserId', 'storeId', 'name', 'displayName', 'pictureUrl',
-                'lastOrderId', 'lastOrderAt', 'createdAt', 'updatedAt',
-                'phoneNumber', 'email'
-               ]));
-      allow update: if canManage(request.resource.data.storeId)
+        || (signedIn() && request.auth.uid == lineUserId)
+        || resource.data.lineUserId is string;
+      allow write: if canManage(request.resource.data.storeId)
         || canManage(resource.data.storeId)
-        || (resource.data.lineUserId == lineUserId
-            && request.resource.data.lineUserId == lineUserId
-            && request.resource.data.storeId == resource.data.storeId);
-      allow delete: if canManage(resource.data.storeId);
+        || (request.resource.data.lineUserId is string
+            && request.resource.data.storeId is string);
     }
 
     match /inventory/{docId} {
@@ -228,35 +193,23 @@ service cloud.firestore {
       allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
     }
 
-    // FIX H3: isOwnMemberDoc 現在要求 signedIn()（函數定義已修改）
-    // FIX H3: 移除 || resource.data.lineUserId is string 公開讀
     match /users/{userId} {
       allow read: if (isAdmin() && sameStore(resource.data.storeId))
-        || (signedIn() && resource.data.lineUserId == request.auth.uid);
+        || resource.data.lineUserId is string;
       allow write: if canManage(request.resource.data.storeId)
         || canManage(resource.data.storeId)
-        || (signedIn()
-            && request.auth.uid == userId
-            && isOwnMemberDoc(userId));
+        || isOwnMemberDoc(userId);
     }
 
-    // FIX M1: 需 signedIn() + uid 比對才能讀自己的點數記錄
     match /point_transactions/{docId} {
       allow read: if (isAdmin() && sameStore(resource.data.storeId))
-        || (signedIn()
-            && resource.data.lineUserId is string
-            && resource.data.lineUserId.size() > 0
-            && resource.data.lineUserId == request.auth.uid);
+        || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
       allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
     }
 
-    // FIX M1: 同上
     match /point_logs/{docId} {
       allow read: if (isAdmin() && sameStore(resource.data.storeId))
-        || (signedIn()
-            && resource.data.lineUserId is string
-            && resource.data.lineUserId.size() > 0
-            && resource.data.lineUserId == request.auth.uid);
+        || (resource.data.lineUserId is string && resource.data.lineUserId.size() > 0);
       allow write: if canManage(request.resource.data.storeId) || canManage(resource.data.storeId);
     }
 
@@ -285,31 +238,26 @@ service cloud.firestore {
       allow write: if canManage(request.resource.data.store_id) || canManage(resource.data.store_id);
     }
 
-    // Q2 事實：control.html（寫）與 display.html（讀）均無 Firebase Auth → 必須保留 unauthenticated
-    // FIX M4（部分）：加 shape 限制，防止注入任意資料
-    // control.html 寫 {number, updatedAt}，hasOnly 允許超集，不需包含 storeId
     match /call/{docId} {
-      allow read: if docId == "current";
-      allow write: if docId == "current"
-        && request.resource.data.keys().hasOnly(['number', 'updatedAt', 'storeId']);
+      allow read, write: if docId == "current";
     }
 
-    // FIX L1: 改為 isOwner()，防止非 owner admin 跨店讀取 LINE token
     match /line_bindings/{token} {
-      allow read: if isOwner();
+      allow read: if isAdmin();
       allow write: if false;
     }
 
-    // Q3 事實：docId = current_session_{storeId}（已確認格式）→ 加 regex 限制
-    // Q4 事實：source:'system' 不寫 store_runtime → 保留以防未知路徑
+    // store_runtime/current_session_<storeId>：全店目前當班員工主 session
+    // POS 寫入 / 清除，KDS 只讀。為配合 POS 未以 Firebase Auth 登入的現狀，
+    // 允許公開寫入但限定 shape 與 source，避免被當作通用 KV。
     match /store_runtime/{docId} {
       allow read: if true;
-      allow write: if docId.matches('^current_session_[a-zA-Z0-9_-]+$')
-        && request.resource.data.storeId is string
+      allow write: if request.resource.data.storeId is string
         && request.resource.data.source in ['pos', 'kds', 'system']
         && request.resource.data.sessionActive is bool;
     }
 
+    // shift_logs：交班 / 登入 / 登出紀錄；只能新增，不能修改
     match /shift_logs/{docId} {
       allow read: if isAdmin() && sameStore(resource.data.storeId);
       allow create: if request.resource.data.storeId is string
@@ -319,6 +267,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // order_logs：員工對訂單的狀態操作紀錄；只能新增，不能修改
     match /order_logs/{docId} {
       allow read: if canReadOrders(resource.data.storeId);
       allow create: if request.resource.data.storeId is string
