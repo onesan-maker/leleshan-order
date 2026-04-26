@@ -74,13 +74,13 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
 
   /* 可追加：尚未完成/取消/退款完畢 */
   const appendableSet = new Set(["new", "accepted", "preparing", "ready"]);
-  /* 可退款：已完成或部分退款 */
-  const refundableSet = new Set(["completed", "refunded"]);
+  /* 可退款：已收款且未全退 — ready（備餐完成）也算收款後 */
+  const refundableSet = new Set(["ready", "completed", "refunded"]);
 
   const q = search.trim().toLowerCase();
   const filtered = orders.filter((o) => {
     if (!q) return true;
-    const no   = String(o.pickupNumber || "").toLowerCase();
+    const no   = String(o.pickup_number || o.pickupNumber || "").toLowerCase();
     const name = String(o.customer_name || o.display_name || "").toLowerCase();
     const id   = String(o.id || "").toLowerCase();
     return no.includes(q) || name.includes(q) || id.includes(q);
@@ -161,7 +161,8 @@ export function OrderListTab({ session, onEnterAppend }: Props) {
                 const status       = o.status || "new";
                 const canAppend    = appendableSet.has(status);
                 const canRefund    = refundableSet.has(status);
-                const no           = o.pickupNumber ? `#${o.pickupNumber}` : o.id.slice(-6);
+                const pno          = o.pickup_number || o.pickupNumber;
+                const no           = pno ? `#${pno}` : o.id.slice(-6);
                 const total        = Number(o.total || o.totalAmount || o.subtotal || 0);
                 const refunded     = Number(o.refunded_amount || 0);
                 const name         = o.customer_name || o.display_name || "—";

@@ -96,8 +96,9 @@ function registerRefundEndpoints(app, db) {
       return res.status(404).json({ error: '找不到訂單' });
     }
 
-    // 只有 completed / refunded 可以退款
-    const refundableStatuses = ['completed', 'refunded'];
+    // 只有 ready / completed / refunded 可以退款
+    // ready（備餐完成）= 顧客已付款，可退款（W13-A Hotfix 補充）
+    const refundableStatuses = ['ready', 'completed', 'refunded'];
     if (!refundableStatuses.includes(order.status)) {
       return res.status(409).json({ error: `訂單狀態 ${order.status} 不可退款` });
     }

@@ -4,7 +4,8 @@ import { hubClient } from "@/lib/hub-client";
 
 export interface TodayOrder {
   id: string;
-  pickupNumber?: number;
+  pickup_number?: number;   /* Hub SQLite snake_case */
+  pickupNumber?: number;    /* Firestore / Cloud Function camelCase */
   customer_name?: string;
   display_name?: string;
   status?: string;
