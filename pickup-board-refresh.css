@@ -1,3 +1,32 @@
+/*
+ * ==================================================================
+ * ⚠️  重要：飛入動畫的 overflow / z-index 規則不可移除
+ * ==================================================================
+ *
+ * 「可取餐」區的卡片有 scale 動畫（.pb-card-just-ready）。
+ * 父層 grid container 必須 overflow: visible，否則放大時會被裁切，
+ * 視覺上像「被旁邊卡片遮住」。此問題已在以下版本修過三次：
+ *
+ *   W8-5       — 第一次修（初版 CSS）
+ *   W10-B Hotfix — 第二次修（重寫後又被 overflow:hidden 覆蓋）
+ *   W12 Hotfix  — 第三次修（W12 重寫後再度被覆蓋）
+ *
+ * 下次重寫 CSS 時，務必保留以下規則：
+ *
+ *   .pb-main    { overflow: visible !important; }
+ *   .pb-section { overflow: visible !important; }
+ *   .pb-numbers { overflow: visible !important; }
+ *   .pb-card.pb-card-just-ready {
+ *     position: relative;
+ *     z-index: 100 !important;
+ *     transform-origin: center center;
+ *   }
+ *
+ * keyframe pb-just-ready 的最大 scale 不超過 1.15；
+ * 視覺衝擊用更強的 box-shadow 光暈彌補放大幅度。
+ * ==================================================================
+ */
+
 /* ═══════════════════════════════════════════════════════════════
    pickup-board-refresh.css — W12 取餐看板 UI 對標
    設計語言：W10-B / W10-C 暖琥珀 + 暖白 + 玻璃感
@@ -100,24 +129,26 @@ body.pb-page {
 }
 
 /* ── 4. Main grid ────────────────────────────────────────────── */
+/* ⚠️  overflow: visible 必須保留 — 見頂部警告 */
 .pb-main {
   flex: 1;
   display: grid;
   grid-template-rows: 1.3fr 1fr;
   gap: 16px;
   padding: 20px 28px;
-  overflow: hidden;
+  overflow: visible !important;
   min-height: 0;
 }
 
 /* ── 5. Sections ─────────────────────────────────────────────── */
+/* ⚠️  overflow: visible 必須保留 — 見頂部警告 */
 .pb-section {
   display: flex;
   flex-direction: column;
   border-radius: 18px;
   padding: 20px 24px;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible !important;
 }
 
 .pb-section-ready {
@@ -159,16 +190,18 @@ body.pb-page {
 .pb-section-preparing .pb-section-title  { color: #ffb347; }
 
 /* ── 7. Numbers grid ─────────────────────────────────────────── */
+/* ⚠️  overflow: visible 必須保留 — 見頂部警告 */
 .pb-numbers {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 14px;
   align-content: start;
-  overflow: hidden;
+  overflow: visible !important;
 }
 
-.pb-section-ready .pb-numbers { padding: 8px 0; }
+/* ready 區多一點 padding 緩衝 scale 放大時不超出視口 */
+.pb-section-ready .pb-numbers { padding: 20px 8px; }
 
 .pb-empty {
   grid-column: 1 / -1;
@@ -198,10 +231,11 @@ body.pb-page {
   animation: pb-breathe 3s ease-in-out infinite;
 }
 
+/* ⚠️  z-index + overflow 必須保留 — 見頂部警告 */
 .pb-section-ready .pb-card.pb-card-just-ready {
   animation: pb-just-ready 5s ease-out;
   position: relative;
-  z-index: 100;
+  z-index: 100 !important;
   transform-origin: center center;
   will-change: transform, box-shadow;
 }
