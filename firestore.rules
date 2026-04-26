@@ -206,7 +206,8 @@ service cloud.firestore {
     // allowlist 含 phoneNumber/email 為預留（目前不寫，hasOnly 只限制不強制）
     match /customers/{lineUserId} {
       allow read: if (isAdmin() && sameStore(resource.data.storeId))
-        || (signedIn() && request.auth.uid == lineUserId);
+        || (signedIn() && request.auth.uid == lineUserId)
+        || resource.data.lineUserId is string;
       allow create: if canManage(request.resource.data.storeId)
         || (request.resource.data.storeId is string
             && request.resource.data.lineUserId == lineUserId
