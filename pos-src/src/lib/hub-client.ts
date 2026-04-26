@@ -2,7 +2,7 @@
    hub-client.ts — W11-B 雙 IP Hub 連線用戶端（TypeScript / POS）
 
    主 URL：VITE_HUB_URL env var，預設 http://100.72.80.2:8080  （Tailscale）
-   備 URL：http://192.168.0.180:8080                             （店內區網）
+   備 URL：http://192.168.1.50:8080                              （店內區網）
 
    策略：先試 preferred URL（初始為主），5 s timeout 後 fallback 到備。
    切換後 sticky，30 s 後才再試主。兩個都失敗才拋 HubUnavailableError。
@@ -10,7 +10,7 @@
 
 const HUB_URLS: [string, ...string[]] = [
   (import.meta.env.VITE_HUB_URL as string | undefined) ?? 'http://100.72.80.2:8080',
-  'http://192.168.0.180:8080',
+  'http://192.168.1.50:8080',
 ];
 const HUB_TIMEOUT        = 5000;   /* ms — per-URL timeout */
 const PRIMARY_RECHECK_MS = 30_000; /* ms — re-attempt primary after 30 s */

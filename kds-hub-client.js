@@ -3,7 +3,7 @@
    暴露 window.LELESHAN_HUB，供 kds.js / pickup-board.js 使用。
 
    主 URL：http://100.72.80.2:8080   （Tailscale — 跨地點可達）
-   備 URL：http://192.168.0.180:8080  （店內區網 — 本地永遠可達）
+   備 URL：http://192.168.1.50:8080   （店內區網 — 本地永遠可達）
 
    策略：
    - 每次請求先試「preferred」URL（初始為主）。
@@ -16,7 +16,7 @@
 
   var HUB_URLS = [
     'http://100.72.80.2:8080',    /* 0 — 主 (Tailscale)  */
-    'http://192.168.0.180:8080'   /* 1 — 備 (店內區網)   */
+    'http://192.168.1.50:8080'    /* 1 — 備 (店內區網)   */
   ];
   var HUB_TIMEOUT        = 5000;   /* ms — 每個 URL 的 timeout */
   var PRIMARY_RECHECK_MS = 30000;  /* ms — 30 s 後才再試回主 URL */
