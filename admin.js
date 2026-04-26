@@ -993,6 +993,9 @@
       case "reports":
         renderReports();
         break;
+      case "invoices":
+        renderInvoices();
+        break;
       default:
         break;
     }
@@ -4915,6 +4918,151 @@
     } catch (e) {
       alert('匯出失敗：' + e.message);
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // W14-A: 發票管理 (Invoice Management)
+  // ═══════════════════════════════════════════════════════════
+
+  var _invoicesInitialised = false;
+
+  function renderInvoices() {
+    if (!_invoicesInitialised) {
+      _invoicesInitialised = true;
+      var refreshBtn = document.getElementById('invoices-refresh');
+      var filterSel  = document.getElementById('invoices-filter');
+      if (refreshBtn) refreshBtn.addEventListener('click', loadInvoices);
+      if (filterSel)  filterSel.addEventListener('change', loadInvoices);
+    }
+    loadInvoices();
+  }
+
+  async function loadInvoices() {
+    var statsEl = document.getElementById('invoices-stats');
+    var tableEl = document.getElementById('invoices-table');
+    if (!statsEl || !tableEl) return;
+
+    tableEl.innerHTML = '<div class="reports-empty">載入中…</div>';
+    try {
+      var res = await fetch(HUB_URL + '/admin/orders/recent?limit=200&includeAll=1', {
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      var rawOrders = data.orders || [];
+
+      // Parse invoice from payload_json
+      var orders = rawOrders.map(function(o) {
+        var inv = null;
+        try {
+          var payload = JSON.parse(o.payload_json || '{}');
+          inv = payload.invoice || null;
+        } catch (_) {}
+        return Object.assign({}, o, { invoice: inv });
+      });
+
+      var filter = (document.getElementById('invoices-filter') || {}).value || 'pending';
+      var filtered = filter === 'all'
+        ? orders
+        : orders.filter(function(o) {
+            var status = (o.invoice && o.invoice.status) || 'pending';
+            return status === filter;
+          });
+
+      renderInvoicesStats(orders);
+      renderInvoicesTable(filtered);
+    } catch (e) {
+      console.error('[Invoices] loadInvoices failed:', e);
+      if (statsEl) statsEl.innerHTML = '';
+      if (tableEl) tableEl.innerHTML = '<div class="reports-empty">載入失敗：' + esc(e.message) + '</div>';
+    }
+  }
+
+  function renderInvoicesStats(orders) {
+    var statsEl = document.getElementById('invoices-stats');
+    if (!statsEl) return;
+    var counts = { pending: 0, issued: 0, not_required: 0 };
+    orders.forEach(function(o) {
+      var s = (o.invoice && o.invoice.status) || 'pending';
+      if (counts[s] != null) counts[s]++;
+    });
+    statsEl.innerHTML =
+      '<div class="reports-kpi"><div class="kpi-label">待開</div><div class="kpi-value">' + counts.pending + '</div></div>' +
+      '<div class="reports-kpi"><div class="kpi-label">已開</div><div class="kpi-value">' + counts.issued + '</div></div>' +
+      '<div class="reports-kpi"><div class="kpi-label">不需要</div><div class="kpi-value">' + counts.not_required + '</div></div>';
+  }
+
+  function renderInvoicesTable(orders) {
+    var tableEl = document.getElementById('invoices-table');
+    if (!tableEl) return;
+    if (!orders.length) {
+      tableEl.innerHTML = '<div class="reports-empty">無資料</div>';
+      return;
+    }
+    tableEl.innerHTML =
+      '<table class="reports-table">' +
+      '<thead><tr>' +
+      '<th>取餐號</th><th>顧客</th><th>金額</th><th>載具</th><th>號碼 / 抬頭</th><th>狀態</th><th>操作</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+      orders.map(function(o) {
+        var inv       = o.invoice || {};
+        var status    = inv.status || 'pending';
+        var pno       = o.pickup_number || o.pickupNumber;
+        var noLabel   = pno ? '#' + pno : o.id.slice(-6);
+        var total     = o.total_amount || o.total || 0;
+        var name      = o.customer_name || o.display_name || '現場';
+        var carrierVal = inv.carrier || inv.buyerName || inv.donationCode || '-';
+        var canIssue  = status === 'pending' && inv.carrierType !== 'none';
+        return '<tr>' +
+          '<td class="order-pickup">' + esc(noLabel) + '</td>' +
+          '<td>' + esc(name) + '</td>' +
+          '<td>NT$' + Number(total).toLocaleString() + '</td>' +
+          '<td>' + esc(labelInvoiceCarrier(inv.carrierType)) + '</td>' +
+          '<td>' + esc(carrierVal) + '</td>' +
+          '<td>' + esc(labelInvoiceStatus(status)) + '</td>' +
+          '<td>' + (canIssue
+            ? '<button class="reports-btn-secondary" onclick="window._markInvoiceIssued(\'' + esc(o.id) + '\')">標記已開</button>'
+            : '-') +
+          '</td>' +
+          '</tr>';
+      }).join('') +
+      '</tbody></table>';
+  }
+
+  window._markInvoiceIssued = async function(orderId) {
+    var num = prompt('請輸入發票號碼（手動標記已開）');
+    if (!num) return;
+    try {
+      var res = await fetch(HUB_URL + '/orders/' + orderId + '/invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceNumber: num.trim(),
+          provider: 'manual',
+          status: 'issued',
+          issuedAt: new Date().toISOString()
+        }),
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || 'HTTP ' + res.status);
+      }
+      loadInvoices();
+    } catch (e) {
+      alert('標記失敗：' + e.message + '\n（Hub 尚未套用 W14A 退款 API？）');
+    }
+  };
+
+  function labelInvoiceCarrier(t) {
+    var map = { mobile: '手機條碼', business: '統編', paper: '紙本', donate: '捐贈', none: '不開' };
+    return map[t] || '未指定';
+  }
+
+  function labelInvoiceStatus(s) {
+    var map = { pending: '待開', issued: '已開', voided: '已作廢', failed: '失敗', not_required: '不需要' };
+    return map[s] || s;
   }
 
 })();

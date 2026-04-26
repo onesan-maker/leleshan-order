@@ -1,5 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useCartStore, type FlavorPart, type CartLine } from "@/stores/cart.store";
+import {
+  type InvoiceInfo,
+  type InvoiceCarrierType,
+  DEFAULT_INVOICE,
+  validateMobileCarrier,
+  validateBusinessId,
+  validateDonationCode,
+} from "@/types/invoice";
 
 export interface CheckoutPayload {
   parts: FlavorPart[];
@@ -10,6 +18,7 @@ export interface CheckoutPayload {
   source: "walk_in" | "phone";
   pickupTime: string;
   lineUserId: string;
+  invoice: InvoiceInfo;
 }
 
 interface Props {
@@ -26,7 +35,9 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
     getSubtotal, getItemCount,
   } = useCartStore();
 
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreOpen,   setMoreOpen  ] = useState(false);
+  const [invoice,    setInvoice   ] = useState<InvoiceInfo>(DEFAULT_INVOICE);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
 
   /* ── Auto-scroll to bottom when a new line is added ── */
   const itemsScrollRef   = useRef<HTMLDivElement>(null);
@@ -57,6 +68,7 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
         parts, lines, customerName, note,
         paymentMethod: paymentMethod as "cash" | "linepay",
         source, pickupTime, lineUserId,
+        invoice,
       });
     }
   };
@@ -326,6 +338,13 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
                     className="w-full rounded-lg border border-line text-text placeholder:text-muted resize-none focus:outline-none focus:border-accent transition-colors"
                     style={{ background: "#181b24", padding: "6px 12px", fontSize: 12 }}
                   />
+                  {/* ── Invoice section ──────────────────── */}
+                  <InvoiceSection
+                    invoice={invoice}
+                    open={invoiceOpen}
+                    onToggle={() => setInvoiceOpen((v) => !v)}
+                    onChange={setInvoice}
+                  />
                 </div>
               )}
             </div>
@@ -356,6 +375,159 @@ export function CartPanel({ onCheckout, onAppendCheckout }: Props) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── InvoiceSection sub-component ─────────────────────────────────── */
+
+const CARRIER_LABELS: Record<InvoiceCarrierType, string> = {
+  none:     "不開發票",
+  paper:    "紙本",
+  mobile:   "手機條碼",
+  business: "統編",
+  donate:   "捐贈",
+};
+
+interface InvoiceSectionProps {
+  invoice: InvoiceInfo;
+  open: boolean;
+  onToggle(): void;
+  onChange(inv: InvoiceInfo): void;
+}
+
+function InvoiceSection({ invoice, open, onToggle, onChange }: InvoiceSectionProps) {
+  const setCarrier = (type: InvoiceCarrierType) => {
+    const status = type === "none" ? "not_required" : "pending";
+    onChange({ carrierType: type, status });
+  };
+
+  // Loose validation — warn in placeholder, don't block submission
+  const mobileWarn =
+    invoice.carrierType === "mobile" && invoice.carrier && !validateMobileCarrier(invoice.carrier)
+      ? "格式：/ABC.1234（斜線開頭 + 7 碼）"
+      : undefined;
+  const bizWarn =
+    invoice.carrierType === "business" && invoice.carrier && !validateBusinessId(invoice.carrier)
+      ? "統編應為 8 碼數字"
+      : undefined;
+  const donateWarn =
+    invoice.carrierType === "donate" && invoice.donationCode && !validateDonationCode(invoice.donationCode)
+      ? "捐贈碼應為 3–7 碼數字"
+      : undefined;
+
+  const inputStyle: React.CSSProperties = {
+    background: "#181b24", padding: "6px 12px", fontSize: 12,
+  };
+  const warnStyle: React.CSSProperties = {
+    fontSize: 10, color: "#f59e0b", marginTop: 2,
+  };
+
+  return (
+    <div
+      className="rounded-lg border border-line-soft overflow-hidden"
+      style={{ background: "#181b24" }}
+    >
+      {/* Header row */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between text-text-dim hover:text-text transition-colors"
+        style={{ padding: "8px 12px", fontSize: 12, fontFamily: "inherit", background: "none", border: "none", cursor: "pointer" }}
+      >
+        <span>
+          🧾 發票
+          <span className="ml-2 text-muted" style={{ fontSize: 11 }}>
+            {CARRIER_LABELS[invoice.carrierType]}
+          </span>
+        </span>
+        <span className="transition-transform" style={{ transform: open ? "rotate(180deg)" : undefined }}>
+          ▾
+        </span>
+      </button>
+
+      {/* Expanded content */}
+      {open && (
+        <div style={{ padding: "0 12px 10px", borderTop: "1px solid #1d212b" }}>
+          {/* Carrier type buttons */}
+          <div className="grid gap-1" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginTop: 8 }}>
+            {(["none", "paper", "mobile", "business", "donate"] as InvoiceCarrierType[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setCarrier(t)}
+                className={[
+                  "rounded-md border text-center transition-colors",
+                  invoice.carrierType === t
+                    ? "bg-accent text-[#1a0d00] border-accent font-bold"
+                    : "border-line text-text-dim hover:bg-panel-2",
+                ].join(" ")}
+                style={{ padding: "5px 4px", fontSize: 11, fontFamily: "inherit" }}
+              >
+                {CARRIER_LABELS[t]}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile carrier input */}
+          {invoice.carrierType === "mobile" && (
+            <div style={{ marginTop: 8 }}>
+              <input
+                type="text"
+                placeholder="/ABC.1234"
+                value={invoice.carrier ?? ""}
+                onChange={(e) => onChange({ ...invoice, carrier: e.target.value.toUpperCase() })}
+                maxLength={8}
+                className="w-full rounded-lg border border-line text-text placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+                style={inputStyle}
+              />
+              {mobileWarn && <div style={warnStyle}>⚠ {mobileWarn}</div>}
+            </div>
+          )}
+
+          {/* Business tax ID inputs */}
+          {invoice.carrierType === "business" && (
+            <div style={{ marginTop: 8 }} className="flex flex-col gap-1.5">
+              <input
+                type="text"
+                placeholder="統編 8 碼"
+                value={invoice.carrier ?? ""}
+                onChange={(e) => onChange({ ...invoice, carrier: e.target.value })}
+                maxLength={8}
+                inputMode="numeric"
+                className="w-full rounded-lg border border-line text-text placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+                style={inputStyle}
+              />
+              {bizWarn && <div style={warnStyle}>⚠ {bizWarn}</div>}
+              <input
+                type="text"
+                placeholder="抬頭（選填）"
+                value={invoice.buyerName ?? ""}
+                onChange={(e) => onChange({ ...invoice, buyerName: e.target.value })}
+                className="w-full rounded-lg border border-line text-text placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+                style={inputStyle}
+              />
+            </div>
+          )}
+
+          {/* Donation code input */}
+          {invoice.carrierType === "donate" && (
+            <div style={{ marginTop: 8 }}>
+              <input
+                type="text"
+                placeholder="捐贈碼（如 25885）"
+                value={invoice.donationCode ?? ""}
+                onChange={(e) => onChange({ ...invoice, donationCode: e.target.value })}
+                maxLength={7}
+                inputMode="numeric"
+                className="w-full rounded-lg border border-line text-text placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+                style={inputStyle}
+              />
+              {donateWarn && <div style={warnStyle}>⚠ {donateWarn}</div>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

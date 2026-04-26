@@ -1,6 +1,7 @@
 import type { CartLine, FlavorPart } from "@/stores/cart.store";
 import type { PosSession } from "@/lib/session";
 import type { OrderItemInput } from "@/types/legacy-helpers";
+import type { InvoiceInfo } from "@/types/invoice";
 import { hubClient, HubUnavailableError } from "@/lib/hub-client";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -43,6 +44,7 @@ export interface SubmitInput {
   source: "walk_in" | "phone";
   pickupTime: string;
   lineUserId: string;
+  invoice: InvoiceInfo;
 }
 
 export interface SubmitResult {
@@ -51,7 +53,7 @@ export interface SubmitResult {
 }
 
 export async function submitOrder(input: SubmitInput): Promise<SubmitResult> {
-  const { session, parts, lines, customerName, note, paymentMethod, source, pickupTime, lineUserId } = input;
+  const { session, parts, lines, customerName, note, paymentMethod, source, pickupTime, lineUserId, invoice } = input;
 
   if (!window.LeLeShanOrders) throw new Error("LeLeShanOrders helpers not loaded");
 
@@ -131,6 +133,9 @@ export async function submitOrder(input: SubmitInput): Promise<SubmitResult> {
   payload.businessDate = businessDate;
   payload.employeeId = session.employeeId;
   payload.employeeName = session.employeeName;
+
+  // W14-A: invoice info (stored in payload_json on Hub, synced to Firestore order doc)
+  payload.invoice = invoice;
 
   // Step 3: write order to Hub (Hub handles Firestore sync)
   let result: { id: string };

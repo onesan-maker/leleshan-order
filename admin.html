@@ -41,6 +41,7 @@
         <a href="/admin/kds-timing" data-view="kds-timing">KDS 出餐時間規則</a>
         <a href="/admin/hub" data-view="hub">Hub 監控</a>
         <a href="/admin/reports" data-view="reports">📊 營業報表</a>
+        <a href="/admin/invoices" data-view="invoices">🧾 發票管理</a>
       </nav>
       <button id="admin-logout-btn" class="admin-logout-btn" type="button">登出</button>
     </aside>
@@ -355,6 +356,27 @@
             <div id="hub-recent-orders"></div>
           </div>
         </div>
+      </section>
+
+      <!-- W14-A: Invoice management view -->
+      <section id="view-invoices" class="admin-view hidden">
+        <header class="admin-view-header">
+          <h1>🧾 發票管理</h1>
+          <div class="reports-controls">
+            <select id="invoices-filter">
+              <option value="pending">待開</option>
+              <option value="issued">已開</option>
+              <option value="not_required">不需要</option>
+              <option value="all">全部</option>
+            </select>
+            <button id="invoices-refresh" class="reports-btn-primary" type="button">🔄 更新</button>
+          </div>
+        </header>
+        <div id="invoices-stats" class="reports-kpi-grid"></div>
+        <section class="reports-section">
+          <h2>訂單列表</h2>
+          <div id="invoices-table"></div>
+        </section>
       </section>
 
       <section id="view-reports" class="admin-view hidden">
