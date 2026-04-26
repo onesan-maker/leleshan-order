@@ -1,6 +1,6 @@
 # 樂樂山專案待辦 BACKLOG
 
-最後更新：2026-04-27
+最後更新：2026-04-27（W13-A）
 
 > 這份檔案的存在是為了讓 Claude（任何對話、任何時刻）都能看到「目前還沒做完的事」，
 > 避免依賴對話 context、避免遺忘。
@@ -13,21 +13,22 @@
 
 業主習慣：凌晨 3:30 收工，下午 2 點起床。
 
-**明天第一件事**：
-1. 買好的實體網路線接準系統（WiFi → Ethernet）
-2. 在準系統 `ipconfig /all` 查 Ethernet 介面的新 IP
-3. 回報新 IP 給對話 Claude，更新 W11-B 的 LAN fallback URL
-4. 進 router（TP-Link AX1500，192.168.0.1）的「網路 → DHCP 伺服器 → 位址保留」設定 Ethernet MAC 綁定新 IP（或繼續用 WiFi MAC 綁 192.168.0.180）
+**W13-A 退款流程 — 家用電腦端已完成，準系統 Hub 端待套用**：
+- Git repo 側（家用電腦）已全部完成並部署到 `https://leleshan-system.web.app`
+- 準系統 Hub（`C:\Users\YK\hub\`）需要套用 `hub-patches/W13A-refund-api.js` 的三個部分：
+  1. `initDb()` 加入 `refunds` 表 + `orders.refunded_amount` 欄位
+  2. 路由區加入 `POST /orders/:id/refund` + `GET /orders/:id/refunds`
+  3. `GET /orders` 加入預設隱藏 `cancelled` + `fully_refunded`，支援 `?includeAll=1`
+  4. `pm2 restart hub`
+- 套用後需實測：POS 今日訂單頁「退款」按鈕流程
 
-**設備網路狀態（截至 2026-04-26 03:30）**：
-- 準系統 Hub：店裡 WiFi，IP `192.168.0.180`（DHCP 動態，未保留）
+**設備網路狀態（截至 2026-04-27）**：
+- 準系統 Hub：店裡 HiNet AP 有線，IP `192.168.1.50`（已保留 / 確認）
 - Tailscale IP：`100.72.80.2`（永遠不變）
-- POS / KDS / Pickup Board：已接 W11-B 雙 IP fallback（主 Tailscale、備 192.168.0.180）
+- POS / KDS / Pickup Board：W11-B 雙 IP fallback（主 Tailscale、備 192.168.1.50）
 
-**待辦的網路強化（高優先）**：
-- [ ] 接實體網路線到準系統
-- [ ] router 設保留 IP（Ethernet 或 WiFi MAC 綁 192.168.0.180）
-- [ ] 確認新 IP 後更新 W11-B 的 hub-client.ts 與 kds-hub-client.js
+**待辦的網路強化**：
+- [ ] router 設 DHCP 保留 IP（192.168.1.50 綁有線 MAC）——若尚未設
 - [ ] 韌性實測：拔網路線測 POS / KDS 撐 5 分鐘（W11 韌性測試）
 
 ---
@@ -60,7 +61,7 @@
 
 - [ ] **admin 後台 UI 對標 + 重寫**：含 Hub 監控頁。admin.js 1831 行 vanilla 重寫成 React
 - [ ] **pos-admin 重寫**：菜單管理 / POS 規則設定（vanilla 1831 行）
-- [ ] **訂單退款流程**：目前只有 cancel，缺退款金額處理
+- [ ] **訂單退款流程（Hub 端）**：`hub-patches/W13A-refund-api.js` 套用到準系統 Hub（schema + endpoints + GET /orders filter）
 - [ ] **發票整合**：營運中需要的（電子發票 / 紙本）
 - [ ] **庫存管理**：售完狀態目前手動，缺自動扣庫存
 
@@ -99,6 +100,7 @@
 - ✅ W12 Pickup Board UI 對標（暖琥珀 + 玻璃感，kds-hub-pill 狀態指示）
 - ✅ W12 Admin 報表頁（KPI / 每日折線 / 來源分布 / 熱銷 Top10 / 訂單明細 / CSV 匯出）
 - ✅ W12-Hub `/admin/reports` endpoint（已實作完成）
+- ✅ W13-A 訂單退款流程（POS 端）：RefundModal、hubClient.refundOrder、OrderListTab 退款按鈕 / 狀態標籤 / 已退金額顯示（Hub 端待套用 hub-patches/W13A-refund-api.js）
 
 ---
 
