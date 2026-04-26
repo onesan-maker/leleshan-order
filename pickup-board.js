@@ -111,11 +111,12 @@
   }
 
   function updateStatus(online) {
-    var el = document.getElementById('pb-status-indicator');
-    if (!el) return;
-    el.classList.toggle('pb-status-online', online);
-    el.classList.toggle('pb-status-offline', !online);
-    el.textContent = online ? '\u25CF 連線中' : '\u25CF 本機離線';
+    var pill = document.getElementById('pb-status-indicator');
+    if (!pill) return;
+    // W12: kds-hub-pill — toggle .offline class
+    pill.classList.toggle('offline', !online);
+    var text = document.getElementById('pb-status-text');
+    if (text) text.textContent = online ? '連線中' : '本機離線';
   }
 
   // ── Hub polling ──────────────────────────────────────────────

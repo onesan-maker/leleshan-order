@@ -6,7 +6,10 @@
   <script>window.LELESHAN_HUB_URL = 'http://100.72.80.2:8080';</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>樂樂山營運後台 v1</title>
-  <link rel="stylesheet" href="/admin.css?v=20260412-2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin.css?v=20260427-w12">
 </head>
 <body class="admin-body">
   <section id="admin-access-state" class="admin-auth-body hidden">
@@ -37,6 +40,7 @@
         <a href="/admin/settings" data-view="settings">營業狀態設定</a>
         <a href="/admin/kds-timing" data-view="kds-timing">KDS 出餐時間規則</a>
         <a href="/admin/hub" data-view="hub">Hub 監控</a>
+        <a href="/admin/reports" data-view="reports">📊 營業報表</a>
       </nav>
       <button id="admin-logout-btn" class="admin-logout-btn" type="button">登出</button>
     </aside>
@@ -352,6 +356,52 @@
           </div>
         </div>
       </section>
+
+      <section id="view-reports" class="admin-view hidden">
+        <header class="admin-view-header">
+          <h1>📊 營業報表</h1>
+          <div class="reports-controls">
+            <select id="reports-period">
+              <option value="today">今日</option>
+              <option value="yesterday">昨日</option>
+              <option value="week">最近 7 天</option>
+              <option value="month">最近 30 天</option>
+              <option value="custom">自訂日期</option>
+            </select>
+            <input type="date" id="reports-date-from" hidden />
+            <input type="date" id="reports-date-to" hidden />
+            <button id="reports-export-csv" class="reports-btn-secondary" type="button">匯出 CSV</button>
+            <button id="reports-refresh" class="reports-btn-primary" type="button">🔄 更新</button>
+          </div>
+        </header>
+
+        <div class="reports-kpi-grid">
+          <div class="reports-kpi"><div class="kpi-label">總訂單數</div><div class="kpi-value" id="kpi-total-orders">--</div></div>
+          <div class="reports-kpi"><div class="kpi-label">總營收</div><div class="kpi-value" id="kpi-total-revenue">--</div></div>
+          <div class="reports-kpi"><div class="kpi-label">平均客單價</div><div class="kpi-value" id="kpi-avg-order">--</div></div>
+          <div class="reports-kpi"><div class="kpi-label">取消率</div><div class="kpi-value" id="kpi-cancel-rate">--</div></div>
+        </div>
+
+        <section class="reports-section">
+          <h2>每日營收趨勢</h2>
+          <div id="reports-daily-chart" class="reports-chart"></div>
+        </section>
+
+        <section class="reports-section">
+          <h2>來源分布</h2>
+          <div id="reports-source-bars"></div>
+        </section>
+
+        <section class="reports-section">
+          <h2>熱銷品項 Top 10</h2>
+          <div id="reports-top-items"></div>
+        </section>
+
+        <section class="reports-section">
+          <h2>訂單明細</h2>
+          <div id="reports-orders-table"></div>
+        </section>
+      </section>
     </main>
   </div>
 
@@ -577,6 +627,7 @@
   <script src="/platform-api-placeholders.js?v=20260403-1"></script>
   <script src="/qrcode.min.js"></script>
   <script src="/order-status-labels.js?v=20260418-2"></script>
-  <script src="/admin.js?v=20260421-parallel-cap-v27"></script>
+  <script src="/kds-hub-client.js?v=20260426-w11b"></script>
+  <script src="/admin.js?v=20260427-w12"></script>
 </body>
 </html>

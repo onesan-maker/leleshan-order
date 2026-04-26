@@ -1,125 +1,174 @@
-/* pickup-board-refresh.css — W8-5 顧客取餐看板 暗色主題
-   黑底 + 暖琥珀橘 + 大字。距離 1.5-3 公尺可讀。 */
+/* ═══════════════════════════════════════════════════════════════
+   pickup-board-refresh.css — W12 取餐看板 UI 對標
+   設計語言：W10-B / W10-C 暖琥珀 + 暖白 + 玻璃感
+   可取餐：綠色系 #7dd67b  /  製作中：琥珀系 #ff8a3d
+   ═══════════════════════════════════════════════════════════════ */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-.pb-page {
-  background: #0a0d14;
-  color: #f5f7fa;
+/* ── 1. Body ─────────────────────────────────────────────────── */
+body.pb-page {
+  background: #0a0b10;
+  background-image:
+    radial-gradient(ellipse 60% 50% at 0% 0%,   rgba(255, 138, 61, 0.08), transparent 55%),
+    radial-gradient(ellipse 50% 45% at 100% 100%, rgba(255, 179, 71, 0.05), transparent 55%);
+  color: #f5f1e8;
   font-family: "Noto Sans TC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* ── Header ─────────────────────────────────────────────────── */
+/* ── 2. Header — 玻璃感 + 琥珀底邊 ──────────────────────────── */
 .pb-header {
   flex-shrink: 0;
-  padding: 16px 32px;
+  padding: 14px 32px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 2px solid rgba(249, 115, 22, .3);
-  background: linear-gradient(180deg, rgba(249, 115, 22, .08), transparent);
+  background: rgba(17, 19, 25, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 138, 61, 0.18);
 }
 
 .pb-brand {
-  font-size: 1.8rem;
-  font-weight: 900;
-  letter-spacing: .05em;
+  font-family: "Noto Serif TC", serif;
+  font-weight: 800;
+  font-size: 2.2rem;
+  color: #ff8a3d;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 30px rgba(255, 138, 61, 0.25);
 }
 
 .pb-meta {
   display: flex;
-  gap: 24px;
+  gap: 20px;
   align-items: center;
 }
 
 .pb-live {
-  color: #ef4444;
-  font-size: .95rem;
+  color: #7dd67b;
+  font-size: 0.88rem;
   font-weight: 700;
   animation: pb-pulse 2s infinite;
 }
 
 @keyframes pb-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: .35; }
+  50%       { opacity: .35; }
 }
 
 .pb-clock {
-  font-family: "Roboto Mono", monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 1.5rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
+  color: rgba(245, 241, 232, 0.65);
 }
 
-/* ── Main grid ───────────────────────────────────────────────── */
+/* ── 3. Hub indicator pill (同 KDS W10-C kds-hub-pill) ───────── */
+.kds-hub-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: "Noto Sans TC", sans-serif;
+  background: rgba(125, 214, 123, 0.12);
+  border: 1px solid rgba(125, 214, 123, 0.30);
+  color: #7dd67b;
+  transition: background .2s, border-color .2s, color .2s;
+}
+.kds-hub-pill::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+.kds-hub-pill.offline {
+  background: rgba(255, 91, 91, 0.12);
+  border-color: rgba(255, 91, 91, 0.30);
+  color: #ff5b5b;
+}
+
+/* ── 4. Main grid ────────────────────────────────────────────── */
 .pb-main {
   flex: 1;
   display: grid;
   grid-template-rows: 1.3fr 1fr;
   gap: 16px;
   padding: 20px 28px;
-  overflow: visible !important;
+  overflow: hidden;
   min-height: 0;
 }
 
+/* ── 5. Sections ─────────────────────────────────────────────── */
 .pb-section {
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
-  padding: 18px 24px;
-  overflow: visible !important;
+  border-radius: 18px;
+  padding: 20px 24px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .pb-section-ready {
-  background: linear-gradient(135deg, rgba(34, 197, 94, .14), rgba(16, 185, 129, .07));
-  border: 2px solid rgba(34, 197, 94, .4);
+  background: linear-gradient(150deg, rgba(30, 60, 40, 0.85), rgba(17, 19, 25, 0.75));
+  border: 1px solid rgba(125, 214, 123, 0.35);
+  box-shadow: 0 4px 24px rgba(125, 214, 123, 0.08);
 }
 
 .pb-section-preparing {
-  background: rgba(59, 130, 246, .07);
-  border: 1px solid rgba(59, 130, 246, .22);
+  background: linear-gradient(150deg, rgba(40, 35, 25, 0.85), rgba(17, 19, 25, 0.75));
+  border: 1px solid rgba(255, 138, 61, 0.25);
+  box-shadow: 0 4px 16px rgba(255, 138, 61, 0.06);
 }
 
+/* ── 6. Section titles — serif 大字 ──────────────────────────── */
 .pb-section-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 1.5rem;
-  font-weight: 800;
+  gap: 14px;
+  font-family: "Noto Serif TC", serif;
+  font-size: 2rem;
+  font-weight: 700;
   margin-bottom: 14px;
-  color: #ffffff;
   flex-shrink: 0;
 }
 
 .pb-section-bar {
   display: inline-block;
   width: 6px;
-  height: 28px;
+  height: 36px;
   border-radius: 3px;
+  flex-shrink: 0;
 }
 
-.pb-section-ready .pb-section-bar    { background: #22c55e; }
-.pb-section-preparing .pb-section-bar { background: #3b82f6; }
+.pb-section-ready .pb-section-bar    { background: linear-gradient(180deg, #7dd67b, #4ade80); }
+.pb-section-ready .pb-section-title  { color: #7dd67b; }
 
-/* ── Numbers grid ────────────────────────────────────────────── */
+.pb-section-preparing .pb-section-bar    { background: linear-gradient(180deg, #ff8a3d, #ffb347); }
+.pb-section-preparing .pb-section-title  { color: #ffb347; }
+
+/* ── 7. Numbers grid ─────────────────────────────────────────── */
 .pb-numbers {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 14px;
-  place-content: center start;
-  overflow: visible !important;
+  align-content: start;
+  overflow: hidden;
 }
 
-.pb-section-ready .pb-numbers {
-  padding: 20px 4px;
-}
+.pb-section-ready .pb-numbers { padding: 8px 0; }
 
 .pb-empty {
   grid-column: 1 / -1;
@@ -127,40 +176,25 @@
   align-items: center;
   justify-content: center;
   font-size: 1.4rem;
-  color: rgba(255, 255, 255, .22);
+  color: rgba(245, 241, 232, 0.20);
   font-weight: 500;
 }
 
-/* ── Number card ─────────────────────────────────────────────── */
+/* ── 8. Cards — glass base ───────────────────────────────────── */
 .pb-card {
-  background: rgba(0, 0, 0, .35);
-  border-radius: 14px;
-  padding: 22px 16px;
+  background: linear-gradient(135deg, rgba(30, 32, 40, 0.85), rgba(20, 22, 30, 0.65));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+  padding: 20px 16px;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, .07);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.pb-card-number {
-  font-family: "Roboto Mono", monospace;
-  font-size: 4.8rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: .02em;
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 6px;
-}
-
-.pb-card-time {
-  font-size: 1rem;
-  color: rgba(255, 255, 255, .55);
-  font-weight: 500;
-}
-
-/* Ready 卡片：金色強調 */
+/* 可取餐：綠色光暈 + 呼吸動畫 */
 .pb-section-ready .pb-card {
-  background: linear-gradient(135deg, #f97316, #f59e0b);
-  border: 2px solid #fcd34d;
-  box-shadow: 0 4px 20px rgba(249, 115, 22, .4);
+  border-color: rgba(125, 214, 123, 0.50);
+  background: linear-gradient(135deg, rgba(125, 214, 123, 0.15), rgba(20, 22, 30, 0.65));
+  box-shadow: 0 4px 20px rgba(125, 214, 123, 0.20);
   animation: pb-breathe 3s ease-in-out infinite;
 }
 
@@ -172,73 +206,92 @@
   will-change: transform, box-shadow;
 }
 
-.pb-section-ready .pb-card-number {
-  color: #1a0d00;
+/* 製作中：琥珀色調 */
+.pb-section-preparing .pb-card {
+  border-color: rgba(255, 138, 61, 0.30);
+  box-shadow: 0 4px 16px rgba(255, 138, 61, 0.08);
 }
 
-/* Preparing 卡片：藍色低調 */
-.pb-section-preparing .pb-card {
-  background: rgba(59, 130, 246, .14);
-  border: 1px solid rgba(59, 130, 246, .3);
+/* ── 9. Pickup numbers — JetBrains Mono ─────────────────────── */
+.pb-card-number {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 4.5rem;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+.pb-section-ready .pb-card-number {
+  color: #7dd67b;
+  text-shadow: 0 0 24px rgba(125, 214, 123, 0.40);
 }
 
 .pb-section-preparing .pb-card-number {
-  color: #93c5fd;
+  color: #ffb347;
+  text-shadow: 0 0 20px rgba(255, 138, 61, 0.25);
 }
 
-/* ── Animations ──────────────────────────────────────────────── */
+.pb-card-time {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.95rem;
+  color: rgba(245, 241, 232, 0.50);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* ── 10. Animations ──────────────────────────────────────────── */
 @keyframes pb-breathe {
-  0%, 100% { box-shadow: 0 4px 20px rgba(249, 115, 22, .4); }
-  50%       { box-shadow: 0 6px 32px rgba(252, 211, 77, .7), 0 0 0 2px rgba(252, 211, 77, .3); }
+  0%, 100% { box-shadow: 0 4px 20px rgba(125, 214, 123, 0.20); }
+  50%       { box-shadow: 0 6px 32px rgba(125, 214, 123, 0.45), 0 0 0 2px rgba(125, 214, 123, 0.15); }
 }
 
 @keyframes pb-just-ready {
   0% {
     transform: scale(.6);
     opacity: 0;
-    box-shadow: 0 0 0 0 rgba(252, 211, 77, 0);
+    box-shadow: 0 0 0 0 rgba(125, 214, 123, 0);
   }
   25% {
     transform: scale(1.15);
     opacity: 1;
-    box-shadow: 0 0 80px rgba(252, 211, 77, 1), 0 0 0 6px rgba(252, 211, 77, .4);
+    box-shadow: 0 0 80px rgba(125, 214, 123, 1), 0 0 0 6px rgba(125, 214, 123, 0.4);
   }
   40% {
     transform: scale(1);
-    box-shadow: 0 0 60px rgba(252, 211, 77, .8), 0 0 0 0 rgba(252, 211, 77, 0);
+    box-shadow: 0 0 60px rgba(125, 214, 123, 0.8), 0 0 0 0 rgba(125, 214, 123, 0);
   }
   60% {
     transform: scale(1.08);
-    box-shadow: 0 0 70px rgba(252, 211, 77, .9);
+    box-shadow: 0 0 70px rgba(125, 214, 123, 0.9);
   }
   80% { transform: scale(1); }
   100% {
     transform: scale(1);
-    box-shadow: 0 4px 20px rgba(249, 115, 22, .4);
+    box-shadow: 0 4px 20px rgba(125, 214, 123, 0.20);
   }
 }
 
-/* ── Footer ──────────────────────────────────────────────────── */
+/* ── 11. Footer ──────────────────────────────────────────────── */
 .pb-footer {
   flex-shrink: 0;
-  padding: 12px 28px;
+  padding: 10px 28px;
   display: flex;
   align-items: center;
-  font-size: 1rem;
-  color: rgba(255, 255, 255, .55);
-  border-top: 1px solid rgba(255, 255, 255, .07);
-  background: rgba(0, 0, 0, .18);
+  font-size: 0.9rem;
+  color: rgba(245, 241, 232, 0.40);
+  border-top: 1px solid rgba(255, 138, 61, 0.10);
+  background: rgba(10, 11, 16, 0.92);
+  font-family: "JetBrains Mono", monospace;
 }
 
 .pb-spacer { flex: 1; }
 
-.pb-status-online { color: #22c55e; }
-.pb-status-offline { color: #ef4444; font-weight: 700; }
-
-/* ── Responsive ──────────────────────────────────────────────── */
+/* ── 12. Responsive ──────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .pb-brand { font-size: 1.3rem; }
-  .pb-clock { font-size: 1.1rem; }
+  .pb-brand      { font-size: 1.4rem; }
+  .pb-clock      { font-size: 1.1rem; }
   .pb-card-number { font-size: 3.4rem; }
-  .pb-numbers { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .pb-numbers    { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }

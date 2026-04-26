@@ -990,6 +990,9 @@
       case "hub":
         renderHubMonitor();
         break;
+      case "reports":
+        renderReports();
+        break;
       default:
         break;
     }
@@ -4709,6 +4712,208 @@
       console.error('[Hub monitor] loadHubData failed:', e);
       safeHTML('hub-status', '<span class="hub-status-offline">&#x25CF; 無法連線</span>');
       safeText('hub-uptime', e.message || '請確認 Hub 是否運行中');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // W12 Reports Page
+  // ═══════════════════════════════════════════════════════════════
+
+  var reportsEventsBound = false;
+
+  function renderReports() {
+    if (!reportsEventsBound) {
+      bindReportsEvents();
+      reportsEventsBound = true;
+    }
+    loadReports();
+  }
+
+  function bindReportsEvents() {
+    var periodSel  = document.getElementById('reports-period');
+    var dateFrom   = document.getElementById('reports-date-from');
+    var dateTo     = document.getElementById('reports-date-to');
+    var refreshBtn = document.getElementById('reports-refresh');
+    var exportBtn  = document.getElementById('reports-export-csv');
+
+    if (periodSel) periodSel.addEventListener('change', function () {
+      var isCustom = periodSel.value === 'custom';
+      if (dateFrom) dateFrom.hidden = !isCustom;
+      if (dateTo)   dateTo.hidden   = !isCustom;
+      loadReports();
+    });
+    if (refreshBtn) refreshBtn.addEventListener('click', loadReports);
+    if (exportBtn)  exportBtn.addEventListener('click', exportReportsCSV);
+    if (dateFrom)   dateFrom.addEventListener('change', loadReports);
+    if (dateTo)     dateTo.addEventListener('change', loadReports);
+  }
+
+  function getReportsDateRange() {
+    var period = (document.getElementById('reports-period') || {}).value || 'today';
+    var now    = new Date();
+    var tw     = new Date(now.getTime() + 8 * 3600 * 1000);
+    function ymd(d) { return d.toISOString().slice(0, 10); }
+    switch (period) {
+      case 'yesterday': {
+        var y = new Date(tw); y.setDate(y.getDate() - 1);
+        return { from: ymd(y), to: ymd(y) };
+      }
+      case 'week': {
+        var s7 = new Date(tw); s7.setDate(s7.getDate() - 6);
+        return { from: ymd(s7), to: ymd(tw) };
+      }
+      case 'month': {
+        var s30 = new Date(tw); s30.setDate(s30.getDate() - 29);
+        return { from: ymd(s30), to: ymd(tw) };
+      }
+      case 'custom': {
+        var fromEl = document.getElementById('reports-date-from');
+        var toEl   = document.getElementById('reports-date-to');
+        return {
+          from: (fromEl && fromEl.value) || ymd(tw),
+          to:   (toEl   && toEl.value)   || ymd(tw),
+        };
+      }
+      default: return { from: ymd(tw), to: ymd(tw) };
+    }
+  }
+
+  async function loadReports() {
+    var range = getReportsDateRange();
+
+    // Show loading state
+    ['kpi-total-orders','kpi-total-revenue','kpi-avg-order','kpi-cancel-rate'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = '…';
+    });
+
+    try {
+      var res = await window.LELESHAN_HUB.fetch(
+        '/admin/reports?from=' + range.from + '&to=' + range.to
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      renderReportsKPI(data);
+      renderReportsDailyChart(data.daily || []);
+      renderReportsSources(data.bySource || []);
+      renderReportsTopItems(data.topItems || []);
+      renderReportsOrdersTable((data.orders || []).slice(0, 100));
+    } catch (e) {
+      console.error('[Reports] loadReports failed:', e);
+      ['kpi-total-orders','kpi-total-revenue','kpi-avg-order','kpi-cancel-rate'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+      var chart = document.getElementById('reports-daily-chart');
+      if (chart) chart.innerHTML = '<div class="reports-empty">載入失敗：' + esc(e.message) + '</div>';
+    }
+  }
+
+  function renderReportsKPI(d) {
+    function setKpi(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
+    var total    = d.totalOrders || 0;
+    var revenue  = d.totalRevenue || 0;
+    var cancelled = d.cancelledOrders || 0;
+    var totalInc  = d.totalOrdersIncCancelled || total;
+    setKpi('kpi-total-orders',  String(total));
+    setKpi('kpi-total-revenue', 'NT$' + Number(revenue).toLocaleString());
+    setKpi('kpi-avg-order',     total > 0 ? 'NT$' + Math.round(revenue / total).toLocaleString() : 'NT$0');
+    setKpi('kpi-cancel-rate',   totalInc > 0 ? (cancelled / totalInc * 100).toFixed(1) + '%' : '0%');
+  }
+
+  function renderReportsDailyChart(daily) {
+    var container = document.getElementById('reports-daily-chart');
+    if (!container) return;
+    if (!daily.length) { container.innerHTML = '<div class="reports-empty">無資料</div>'; return; }
+    var max = Math.max.apply(null, daily.map(function (d) { return d.revenue || 0; }));
+    container.innerHTML =
+      '<div class="reports-bars">' +
+      daily.map(function (d) {
+        var h = max > 0 ? Math.round((d.revenue || 0) / max * 180) : 0;
+        return '<div class="reports-bar-col">' +
+          '<div class="reports-bar-value">NT$' + Number(d.revenue || 0).toLocaleString() + '</div>' +
+          '<div class="reports-bar" style="height:' + h + 'px"></div>' +
+          '<div class="reports-bar-label">' + esc(String(d.date || '').slice(5)) + '</div>' +
+          '<div class="reports-bar-count">' + esc(String(d.orders || 0)) + ' 單</div>' +
+          '</div>';
+      }).join('') +
+      '</div>';
+  }
+
+  function renderReportsSources(bySource) {
+    var container = document.getElementById('reports-source-bars');
+    if (!container) return;
+    if (!bySource.length) { container.innerHTML = '<div class="reports-empty">無資料</div>'; return; }
+    var total = bySource.reduce(function (s, x) { return s + (x.revenue || 0); }, 0);
+    container.innerHTML = bySource.map(function (s) {
+      var pct = total > 0 ? (s.revenue || 0) / total * 100 : 0;
+      return '<div class="reports-source-row">' +
+        '<span class="reports-source-name">' + esc(hubLabelSource(s.source)) + '</span>' +
+        '<div class="reports-source-bar-wrap"><div class="reports-source-bar" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+        '<span class="reports-source-count">' + esc(String(s.count || 0)) + ' 單</span>' +
+        '<span class="reports-source-revenue">NT$' + Number(s.revenue || 0).toLocaleString() + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderReportsTopItems(items) {
+    var container = document.getElementById('reports-top-items');
+    if (!container) return;
+    if (!items.length) { container.innerHTML = '<div class="reports-empty">無資料</div>'; return; }
+    container.innerHTML =
+      '<table class="reports-table">' +
+        '<thead><tr><th>排名</th><th>品項</th><th>數量</th><th>營收</th></tr></thead>' +
+        '<tbody>' +
+        items.map(function (it, i) {
+          return '<tr>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td>' + esc(it.name || '—') + '</td>' +
+            '<td>' + esc(String(it.qty || 0)) + '</td>' +
+            '<td>NT$' + Number(it.revenue || 0).toLocaleString() + '</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>';
+  }
+
+  function renderReportsOrdersTable(orders) {
+    var container = document.getElementById('reports-orders-table');
+    if (!container) return;
+    if (!orders.length) { container.innerHTML = '<div class="reports-empty">無訂單</div>'; return; }
+    container.innerHTML =
+      '<table class="reports-table">' +
+        '<thead><tr><th>取餐號</th><th>來源</th><th>狀態</th><th>顧客</th><th>金額</th><th>付款</th><th>建立時間</th></tr></thead>' +
+        '<tbody>' +
+        orders.map(function (o) {
+          var t = o.created_at ? new Date(o.created_at).toLocaleString('zh-TW') : '—';
+          return '<tr>' +
+            '<td class="order-pickup">#' + esc(String(o.pickup_number || '---')) + '</td>' +
+            '<td>' + esc(hubLabelSource(o.source)) + '</td>' +
+            '<td>' + esc(hubLabelStatus(o.status)) + '</td>' +
+            '<td>' + esc(o.customer_name || '現場') + '</td>' +
+            '<td>NT$' + Number(o.total || 0).toLocaleString() + '</td>' +
+            '<td>' + esc(o.payment_method || '—') + '</td>' +
+            '<td>' + esc(t) + '</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>';
+  }
+
+  async function exportReportsCSV() {
+    var range = getReportsDateRange();
+    try {
+      var res = await window.LELESHAN_HUB.fetch(
+        '/admin/orders/csv?from=' + range.from + '&to=' + range.to
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var blob = await res.blob();
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href   = url;
+      a.download = 'orders-' + range.from + '-to-' + range.to + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('匯出失敗：' + e.message);
     }
   }
 
